@@ -30,7 +30,9 @@ export type AttackRider = {
   /** How to determine the base weapon's damage type. Defaults to the legacy fixed value. */
   weaponDamageTypeMode?: "fixed" | "selected" | "extra"
   /** Effective attack and damage modifier when this effect is active. */
-  weaponAttackAttribute?: Attribute | "spellcasting"
+  weaponAttackAttribute?: Attribute | "spellcasting" | "selected"
+  /** Atributo selecionado na ativação, sem substituir a configuração reutilizável. */
+  selectedWeaponAttribute?: Attribute
   /** Optional spellcasting class; otherwise uses the character's best casting attribute. */
   weaponSpellcastingClass?: string
   /** Temporary weapon properties, without mutating the saved inventory item. */
@@ -68,6 +70,7 @@ export function getCharacterWeaponAttackAttribute(character: CharacterTemplate, 
     .filter(rider => rider.weaponAttackAttribute)
     .at(-1)
   if (!override?.weaponAttackAttribute) return original
+  if (override.weaponAttackAttribute === "selected") return override.selectedWeaponAttribute ?? original
   if (override.weaponAttackAttribute !== "spellcasting") return override.weaponAttackAttribute
   const options = (character.get("sheet").classes ?? [])
     .filter(entry => !override.weaponSpellcastingClass || entry.className === override.weaponSpellcastingClass)
@@ -136,6 +139,23 @@ export function getWeaponRiderTransformation(riders: readonly AttackRider[]) {
     thrownLongRange: throwing?.thrownLongRange,
     returnsAfterThrow: returnAfterThrow,
   }
+}
+
+/** Selection is requested for the active option only, not unrelated choices. */
+export function abilityRequiresWeaponAttributeSelection(ability: Ability, optionId?: string): boolean {
+  const option = ability.activationOptions?.find(candidate => candidate.id === optionId)
+  const granted = option?.abilities ?? (option?.ability ? [option.ability] : [])
+  return [
+    ...(ability.bonuses?.attackRiders ?? []),
+    ...granted.flatMap(child => child.bonuses?.attackRiders ?? []),
+  ].some(rider => rider.scope === "weapon" && rider.weaponAttackAttribute === "selected")
+}
+
+/** Store the selected attribute in the active instance while keeping the original rule. */
+export function resolveAttackRiderAttributeSelection(riders: readonly AttackRider[], attribute?: Attribute): AttackRider[] {
+  return riders.map(rider => rider.weaponAttackAttribute === "selected"
+    ? { ...rider, selectedWeaponAttribute: attribute }
+    : rider)
 }
 
 export function optionRequiresWeaponSelection(ability: Ability, optionId?: string): boolean {

@@ -797,6 +797,10 @@ export function useEquipmentAbility(
   itemId: string,
   abilityId: string,
   bonusRollValues?: Record<string, number>,
+  activationOptionId?: string,
+  selectedWeaponId?: string,
+  selectedDamageType?: import("../combat/Damage").DamageType,
+  selectedWeaponAttribute?: import("../sheet/Attribute").Attribute,
 ): CharacterTemplate {
   const ability = getEquipmentAbilities(character).find(
     (current) =>
@@ -814,8 +818,11 @@ export function useEquipmentAbility(
       itemId,
       sourceLabel: `Equipamento: ${sourceItemName}`,
     },
-    undefined,
+    activationOptionId,
     bonusRollValues,
+    selectedWeaponId,
+    selectedDamageType,
+    selectedWeaponAttribute,
   )
 }
 

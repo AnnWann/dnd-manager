@@ -5,7 +5,9 @@ import { Input } from "../../../components/ui/Input"
 import { Modal } from "../../../components/ui/Modal"
 import { Select } from "../../../components/ui/Select"
 import { DAMAGE_TYPE_OPTIONS, type DamageType } from "../../../models/combat/Damage"
-import { getAbilityAttackRiderDamageChoices, optionRequiresWeaponSelection } from "../../../models/combat/AttackRider"
+import { ATTRIBUTES } from "../../../contexts/consts"
+import type { Attribute } from "../../../models/sheet/Attribute"
+import { abilityRequiresWeaponAttributeSelection, getAbilityAttackRiderDamageChoices, optionRequiresWeaponSelection } from "../../../models/combat/AttackRider"
 import { getCharacterConditions } from "../../../models/characters/characterConditionStorage"
 import type {
   Ability,
@@ -52,6 +54,8 @@ export function AbilityResourceActivationModal({
   const damageTypeChoices = getAbilityAttackRiderDamageChoices(ability, optionId)
   const [selectedDamageType, setSelectedDamageType] = useState<DamageType | "">("")
   const [selectedWeaponId, setSelectedWeaponId] = useState("")
+  const [selectedWeaponAttribute, setSelectedWeaponAttribute] = useState<Attribute | "">("")
+  const needsAttribute = abilityRequiresWeaponAttributeSelection(ability, optionId)
   const boundWeaponId = getCharacterConditions(character)
     .filter(condition => condition.sourceAbilityId === (ability.originalAbilityId ?? ability.id))
     .flatMap(condition => condition.grantedAbilities ?? [])
@@ -89,13 +93,14 @@ export function AbilityResourceActivationModal({
   }, [ability.resourceUpcast?.enabled, baseLevel, maximumLevel, pactLevel, selectedUsesPact])
 
   const selection = useMemo<AbilityResourceSelection | undefined>(() => {
-    if (!(ability.resourceCosts?.length) && !ability.resourceUpcast?.enabled && !effectiveDamageType) return undefined
+    if (!(ability.resourceCosts?.length) && !ability.resourceUpcast?.enabled && !effectiveDamageType && !selectedWeaponAttribute) return undefined
     return {
       activationLevel,
       damageType: effectiveDamageType ? effectiveDamageType as DamageType : undefined,
+      weaponAttribute: needsAttribute && selectedWeaponAttribute ? selectedWeaponAttribute : undefined,
       alternatives: Object.keys(alternatives).length ? alternatives : undefined,
     }
-  }, [ability.resourceCosts?.length, ability.resourceUpcast?.enabled, activationLevel, alternatives, effectiveDamageType])
+  }, [ability.resourceCosts?.length, ability.resourceUpcast?.enabled, activationLevel, alternatives, effectiveDamageType, needsAttribute, selectedWeaponAttribute])
 
   const payment = canPayAbilityResourceCosts(character, ability, selection)
   const optionRequired = (ability.activationOptions?.length ?? 0) > 0
@@ -103,7 +108,7 @@ export function AbilityResourceActivationModal({
     const raw = manualRollValues[entry.key]?.trim() ?? ""
     return raw !== "" && Number.isFinite(Number(raw))
   })
-  const canConfirm = payment.ok && (!optionRequired || Boolean(optionId)) && manualRollsValid && (!damageTypeChoices.length || Boolean(effectiveDamageType)) && (!needsWeapon || Boolean(boundWeaponId || selectedWeaponId))
+  const canConfirm = payment.ok && (!optionRequired || Boolean(optionId)) && manualRollsValid && (!damageTypeChoices.length || Boolean(effectiveDamageType)) && (!needsWeapon || Boolean(boundWeaponId || selectedWeaponId)) && (!needsAttribute || Boolean(selectedWeaponAttribute))
 
   return (
     <Modal title={`Usar habilidade — ${ability.name}`} onClose={onClose} className="max-w-xl">
@@ -130,6 +135,15 @@ export function AbilityResourceActivationModal({
             <option value="">Escolha uma arma equipada</option>
             {character.get("equipment").weapons.map(weapon => <option key={weapon.id} value={weapon.id}>{weapon.name}</option>)}
           </Select>
+        </label> : null}
+
+        {needsAttribute ? <label className="grid gap-1 text-xs text-textMuted">
+          <span className="font-semibold text-textH">Atributo para os ataques e danos da arma</span>
+          <Select value={selectedWeaponAttribute} onChange={event => setSelectedWeaponAttribute(event.target.value as Attribute)}>
+            <option value="">Escolha o atributo para esta ativação</option>
+            {ATTRIBUTES.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}
+          </Select>
+          <span className="text-[11px]">A escolha permanece enquanto o efeito estiver ativo. Para outra ativação, você poderá selecionar novamente.</span>
         </label> : null}
 
         {damageTypeChoices.length > 0 ? <label className="grid gap-1 text-xs text-textMuted">

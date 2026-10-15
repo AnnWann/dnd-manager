@@ -1,3 +1,4 @@
+import { useState } from "react"
 import { Button } from "../../../components/ui/Button"
 import { useMagicContext } from "../../../contexts/magicContext"
 import {
@@ -5,7 +6,11 @@ import {
   getAbilityUsageMax,
   isAbilityBenefitsActive,
 } from "../../../models/abilities/abilityActivation"
-import type { AbilityUsageResetKind } from "../../../models/abilities/Ability"
+import type { Ability, AbilityResourceSelection, AbilityUsageResetKind } from "../../../models/abilities/Ability"
+import { abilityRequiresWeaponAttributeSelection } from "../../../models/combat/AttackRider"
+import { spendAbilityResourceCosts } from "../../../models/abilities/abilityResourceCosts"
+import { AbilityResourceActivationModal } from "../abilities/abilityResourceActivationModal"
+import { useOptionalSessionRuntime } from "../../session-runtime/useSessionRuntime"
 import type { Equipment } from "../../../models/items/equipment/EquipmentSlot"
 import { useCharacterWorkspace } from "../workspace/CharacterWorkspaceContext"
 
@@ -21,6 +26,8 @@ export function EquipmentFeaturesList<T extends Equipment>({
   onUpdate,
 }: Props<T>) {
   const { getSpellByIndex } = useMagicContext()
+  const runtime = useOptionalSessionRuntime()
+  const [configureAbility, setConfigureAbility] = useState<Ability | null>(null)
   const { characters, updateCharacter, mode } = useCharacterWorkspace()
   const character = characters.find((entry) => entry.get("id") === characterId)
   const userMode = mode === "user"
@@ -44,6 +51,38 @@ export function EquipmentFeaturesList<T extends Equipment>({
       }
       return current.restoreEquipmentAbility(equipment.id, abilityId)
     })
+  }
+
+  function activateConfiguredAbility(
+    optionId?: string,
+    selection?: AbilityResourceSelection,
+    bonusRollValues?: Record<string, number>,
+    selectedWeaponId?: string,
+  ) {
+    if (!character || !configureAbility || userMode) return
+    const abilityId = configureAbility.id
+    if (runtime) {
+      if (runtime.status !== "connected") return
+      runtime.dispatchAbilityOperation({
+        type: "character.ability.use",
+        characterId,
+        source: { type: "equipment", itemId: equipment.id, abilityId },
+        activationOptionId: optionId,
+        resourceSelection: selection,
+        bonusRollValues,
+        selectedWeaponId,
+      })
+    } else {
+      updateCharacter(characterId, current => {
+        const result = spendAbilityResourceCosts(current, configureAbility, selection)
+        if (!result.ok) return current
+        return result.character.useEquipmentAbility(
+          equipment.id, abilityId, bonusRollValues, optionId, selectedWeaponId,
+          selection?.damageType, selection?.weaponAttribute,
+        )
+      })
+    }
+    setConfigureAbility(null)
   }
 
   function consumeAbilityCharge(abilityId: string) {
@@ -185,7 +224,11 @@ export function EquipmentFeaturesList<T extends Equipment>({
                         size="sm"
                         variant="secondary"
                         disabled={remaining !== undefined && remaining <= 0}
-                        onClick={() => updateAbilityState(ability.id, "use")}
+                        onClick={() => {
+                          if (ability.activationOptions?.length || abilityRequiresWeaponAttributeSelection(ability)) {
+                            setConfigureAbility(ability)
+                          } else updateAbilityState(ability.id, "use")
+                        }}
                       >
                         {(ability.kind ?? "active") === "passive" ? "Acionar" : "Usar"}
                       </Button>
@@ -315,6 +358,14 @@ export function EquipmentFeaturesList<T extends Equipment>({
           )
         })}
       </div>
+      {configureAbility && character ? (
+        <AbilityResourceActivationModal
+          ability={configureAbility}
+          character={character}
+          onClose={() => setConfigureAbility(null)}
+          onConfirm={activateConfiguredAbility}
+        />
+      ) : null}
     </div>
   )
 }

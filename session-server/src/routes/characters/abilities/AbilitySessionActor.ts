@@ -5,7 +5,7 @@ import {
   restoreAbilityUse,
   useAbilityEffect,
 } from "../../../../../src/models/abilities/abilityActivation";
-import { getAbilityAttackRiderDamageChoices, optionRequiresWeaponSelection } from "../../../../../src/models/combat/AttackRider";
+import { abilityRequiresWeaponAttributeSelection, getAbilityAttackRiderDamageChoices, optionRequiresWeaponSelection } from "../../../../../src/models/combat/AttackRider";
 import { hasAbilityResourceCosts, spendAbilityResourceCosts } from "../../../../../src/models/abilities/abilityResourceCosts";
 import { getChannelDivinityPool } from "../../../../../src/models/characters/characterChannelDivinity";
 import { getKiPool } from "../../../../../src/models/characters/characterKi";
@@ -414,6 +414,8 @@ function applyAbilityOperation(
     const types = getAbilityAttackRiderDamageChoices(ability, operation.activationOptionId);
     if (types.length && (!operation.resourceSelection?.damageType || !types.includes(operation.resourceSelection.damageType))) return null;
     if (operation.resourceSelection?.damageType && !types.includes(operation.resourceSelection.damageType)) return null;
+    const needsAttribute = abilityRequiresWeaponAttributeSelection(ability, operation.activationOptionId);
+    if (needsAttribute !== Boolean(operation.resourceSelection?.weaponAttribute)) return null;
     if (optionRequiresWeaponSelection(ability, operation.activationOptionId)) {
       const previousWeapon = getCharacterConditions(character)
         .filter(condition => condition.sourceAbilityId === ability.id && condition.sourceAbilityOptionId?.endsWith(":abilities"))
@@ -433,7 +435,7 @@ function applyAbilityOperation(
   switch (source.type) {
     case "character":
       if (operation.type === "character.ability.use") {
-        return nextCharacter.useAbility(source.abilityId, operation.activationOptionId, operation.bonusRollValues, operation.selectedWeaponId, operation.resourceSelection?.damageType);
+        return nextCharacter.useAbility(source.abilityId, operation.activationOptionId, operation.bonusRollValues, operation.selectedWeaponId, operation.resourceSelection?.damageType, operation.resourceSelection?.weaponAttribute);
       }
       if (operation.type === "character.ability.restore") {
         return character.restoreAbility(source.abilityId);
@@ -442,7 +444,7 @@ function applyAbilityOperation(
 
     case "equipment":
       if (operation.type === "character.ability.use") {
-        return nextCharacter.useEquipmentAbility(source.itemId, source.abilityId, operation.bonusRollValues);
+        return nextCharacter.useEquipmentAbility(source.itemId, source.abilityId, operation.bonusRollValues, operation.activationOptionId, operation.selectedWeaponId, operation.resourceSelection?.damageType, operation.resourceSelection?.weaponAttribute);
       }
       if (operation.type === "character.ability.restore") {
         return character.restoreEquipmentAbility(source.itemId, source.abilityId);
@@ -452,7 +454,7 @@ function applyAbilityOperation(
     case "condition": {
       const projectedId = `condition:${source.conditionId}:${source.abilityId}`;
       if (operation.type === "character.ability.use") {
-        return nextCharacter.useAbility(projectedId, operation.activationOptionId, operation.bonusRollValues, operation.selectedWeaponId);
+        return nextCharacter.useAbility(projectedId, operation.activationOptionId, operation.bonusRollValues, operation.selectedWeaponId, operation.resourceSelection?.damageType, operation.resourceSelection?.weaponAttribute);
       }
       if (operation.type === "character.ability.restore") {
         return character.restoreAbility(projectedId);
@@ -479,6 +481,7 @@ function applyAbilityOperation(
           ? operation.selectedWeaponId
           : undefined,
         operation.type === "character.ability.use" ? operation.resourceSelection?.damageType : undefined,
+        operation.type === "character.ability.use" ? operation.resourceSelection?.weaponAttribute : undefined,
       );
   }
 }
@@ -515,6 +518,7 @@ function updateRaceAbilityState(
   bonusRollValues?: Record<string, number>,
   selectedWeaponId?: string,
   selectedDamageType?: import("../../../../../src/models/combat/Damage").DamageType,
+  selectedWeaponAttribute?: import("../../../../../src/models/sheet/Attribute").Attribute,
 ): CharacterTemplate {
   const race = character.get("sheet").race;
   const ability = (race.naturalAbilities ?? []).find(
@@ -531,6 +535,7 @@ function updateRaceAbilityState(
       bonusRollValues,
       selectedWeaponId,
       selectedDamageType,
+      selectedWeaponAttribute,
     );
   }
   if (action === "deactivate") {

@@ -182,6 +182,7 @@ export function useAbility(
   bonusRollValues?: Record<string, number>,
   selectedWeaponId?: string,
   selectedDamageType?: import("../combat/Damage").DamageType,
+  selectedWeaponAttribute?: import("../sheet/Attribute").Attribute,
 ): CharacterTemplate {
   const directAbility = findStoredCharacterAbility(character, abilityId)
   const projected = directAbility ? undefined : findConditionAbility(character, abilityId)
@@ -207,6 +208,7 @@ export function useAbility(
       bonusRollValues,
       selectedWeaponId,
       selectedDamageType,
+      selectedWeaponAttribute,
     )
     return spendChannelDivinity(activated)
   }
@@ -222,6 +224,7 @@ export function useAbility(
       bonusRollValues,
       selectedWeaponId,
       selectedDamageType,
+      selectedWeaponAttribute,
     )
     return spendKi(activated)
   }
@@ -234,6 +237,7 @@ export function useAbility(
     bonusRollValues,
     selectedWeaponId,
     selectedDamageType,
+    selectedWeaponAttribute,
   )
 }
 

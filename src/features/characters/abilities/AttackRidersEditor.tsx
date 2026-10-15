@@ -121,12 +121,13 @@ export function AttackRidersEditor({ riders, character, onChange, defaultScope =
             </label>
             <label className="grid gap-1 text-xs text-textMuted">Atributo para ataque e dano
               <Select value={rider.weaponAttackAttribute ?? "default"} onChange={e => patch(rider.id, {
-                weaponAttackAttribute: e.target.value === "default" ? undefined : e.target.value as Attribute | "spellcasting",
+                weaponAttackAttribute: e.target.value === "default" ? undefined : e.target.value as Attribute | "spellcasting" | "selected",
                 weaponSpellcastingClass: undefined,
               })}>
                 <option value="default">Manter atributo normal da arma</option>
                 {ATTRIBUTES.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}
                 <option value="spellcasting">Atributo de conjuração</option>
+                <option value="selected">Escolher atributo ao ativar</option>
               </Select>
             </label>
             {rider.weaponAttackAttribute === "spellcasting" ? (
@@ -139,7 +140,7 @@ export function AttackRidersEditor({ riders, character, onChange, defaultScope =
               </label>
             ) : null}
             {rider.weaponAttackAttribute ? (
-              <p className="text-[11px] text-textMuted">Substitui o atributo dos ataques e do dano da arma enquanto ativo, sem conceder proficiência.</p>
+              <p className="text-[11px] text-textMuted">Substitui o atributo dos ataques e do dano da arma enquanto ativo, sem conceder proficiência. No modo de escolha, o jogador define o atributo a cada ativação.</p>
             ) : null}
             <label className="grid gap-1 text-xs text-textMuted">Substituir o tipo de dano da arma
               <Select

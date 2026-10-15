@@ -1,4 +1,4 @@
-import { getAbilityAttackRiderDamageChoices } from "../../../models/combat/AttackRider"
+import { abilityRequiresWeaponAttributeSelection, getAbilityAttackRiderDamageChoices } from "../../../models/combat/AttackRider"
 import { getInitiativeRollSelection } from "../../initiative/initiativeRollSelection"
 import { useEffect, useMemo, useState } from "react"
 
@@ -190,7 +190,7 @@ export function CharacterAbilitiesTab({ character, updateCharacter }: Props) {
       Boolean(sessionRuntime)
       && !digitalDiceEnabled
       && listBonusRollRequirements(ability.bonuses).length > 0
-    if (getAbilityAttackRiderDamageChoices(ability).length > 0 || (ability.activationOptions ?? []).some(option => getAbilityAttackRiderDamageChoices(ability, option.id).length > 0) || (ability.activationOptions?.length ?? 0) > 0 || hasAbilityResourceCosts(ability) || ability.resourceUpcast?.enabled || hasManualBonusRolls(ability.bonuses) || requiresPhysicalRollInput) {
+    if (abilityRequiresWeaponAttributeSelection(ability) || getAbilityAttackRiderDamageChoices(ability).length > 0 || (ability.activationOptions ?? []).some(option => getAbilityAttackRiderDamageChoices(ability, option.id).length > 0) || (ability.activationOptions?.length ?? 0) > 0 || hasAbilityResourceCosts(ability) || ability.resourceUpcast?.enabled || hasManualBonusRolls(ability.bonuses) || requiresPhysicalRollInput) {
       setActivationChoice(ability)
       return
     }
@@ -233,7 +233,7 @@ export function CharacterAbilitiesTab({ character, updateCharacter }: Props) {
       const paidCharacter = payment.character
 
       if (ability && isEquipmentAbility(ability)) {
-        return paidCharacter.useEquipmentAbility(ability.sourceItemId, ability.originalAbilityId, bonusRollValues)
+        return paidCharacter.useEquipmentAbility(ability.sourceItemId, ability.originalAbilityId, bonusRollValues, optionId, selectedWeaponId, resourceSelection?.damageType, resourceSelection?.weaponAttribute)
       }
 
       if (ability && isRaceAbility(ability)) {
@@ -245,10 +245,11 @@ export function CharacterAbilitiesTab({ character, updateCharacter }: Props) {
           bonusRollValues,
           selectedWeaponId,
           resourceSelection?.damageType,
+          resourceSelection?.weaponAttribute,
         )
       }
 
-      return useCharacterAbility(paidCharacter, id, optionId, bonusRollValues, selectedWeaponId, resourceSelection?.damageType)
+      return useCharacterAbility(paidCharacter, id, optionId, bonusRollValues, selectedWeaponId, resourceSelection?.damageType, resourceSelection?.weaponAttribute)
     })
     setActivationChoice(null)
   }
@@ -515,6 +516,7 @@ function updateRaceAbilityState(
   bonusRollValues?: Record<string, number>,
   selectedWeaponId?: string,
   selectedDamageType?: import("../../../models/combat/Damage").DamageType,
+  selectedWeaponAttribute?: import("../../../models/sheet/Attribute").Attribute,
 ): CharacterTemplate {
   const race = character.get("sheet").race
   const ability = (race.naturalAbilities ?? []).find((current) => current.id === abilityId)
@@ -524,7 +526,7 @@ function updateRaceAbilityState(
     return useAbilityEffect(character, ability, {
       type: "race",
       sourceLabel: "Raça",
-    }, optionId, bonusRollValues, selectedWeaponId, selectedDamageType)
+    }, optionId, bonusRollValues, selectedWeaponId, selectedDamageType, selectedWeaponAttribute)
   }
   if (action === "deactivate") {
     return endAbilityEffect(character, ability, {

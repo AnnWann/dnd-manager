@@ -1,5 +1,6 @@
 import type { DamageType } from "../combat/Damage"
-import { getAbilityAttackRiderDamageChoices, resolveAttackRiderDamageChoice } from "../combat/AttackRider"
+import type { Attribute } from "../sheet/Attribute"
+import { abilityRequiresWeaponAttributeSelection, getAbilityAttackRiderDamageChoices, resolveAttackRiderAttributeSelection, resolveAttackRiderDamageChoice } from "../combat/AttackRider"
 import { evaluateCharacterSheetFormula } from "../../lib/customSystems/CharacterSheetFormula"
 import type { Bonus } from "../bonuses/Bonus"
 import { resolveBonusCollectionRolls } from "../bonuses/BonusRoll"
@@ -107,6 +108,7 @@ export function useAbilityEffect(
   bonusRollValues?: Record<string, number>,
   selectedWeaponId?: string,
   selectedDamageType?: DamageType,
+  selectedWeaponAttribute?: Attribute,
 ): CharacterTemplate {
   if (!abilityRequiresActivation(ability) || !canActivateAbility(character, ability)) return character
   const switchingOption = Boolean(ability.allowOptionSwitching && isAbilityBenefitsActive(ability) && (activationOptionId || selectedDamageType))
@@ -129,11 +131,12 @@ export function useAbilityEffect(
   const selectedOption = ability.activationOptions?.find(entry => entry.id === activationOptionId)
   const choices = getAbilityAttackRiderDamageChoices(ability, activationOptionId)
   if (choices.length && (!selectedDamageType || !choices.includes(selectedDamageType))) return character
+  if (abilityRequiresWeaponAttributeSelection(ability, activationOptionId) && !selectedWeaponAttribute) return character
   const resolvedAbility: Ability = {
     ...ability,
     bonuses: {
       ...(resolvedRolls.bonuses ?? {}),
-      attackRiders: resolveAttackRiderDamageChoice(resolvedRolls.bonuses?.attackRiders ?? [], selectedDamageType),
+      attackRiders: resolveAttackRiderAttributeSelection(resolveAttackRiderDamageChoice(resolvedRolls.bonuses?.attackRiders ?? [], selectedDamageType), selectedWeaponAttribute),
     },
   }
   const duration = getAbilityEffectDuration(resolvedAbility)
@@ -181,7 +184,7 @@ export function useAbilityEffect(
         next,
         resolvedAbility,
         source,
-        optionAbilitiesGrant(selectedOption, resolvedAbility, optionAbilities, activeWeaponId, selectedDamageType),
+        optionAbilitiesGrant(selectedOption, resolvedAbility, optionAbilities, activeWeaponId, selectedDamageType, selectedWeaponAttribute),
         `${selectedOption.id}:abilities`,
         selectedOption.name,
       )
@@ -279,6 +282,7 @@ function optionAbilitiesGrant(
   embedded: Ability[],
   weaponId?: string,
   selectedDamageType?: DamageType,
+  selectedWeaponAttribute?: Attribute,
 ): CharacterConditionGrant {
   return {
     name: option.name || embedded[0]?.name || "Opção de habilidade",
@@ -289,11 +293,11 @@ function optionAbilitiesGrant(
       ...granted,
       bonuses: {
         ...(granted.bonuses ?? {}),
-        attackRiders: resolveAttackRiderDamageChoice(
+        attackRiders: resolveAttackRiderAttributeSelection(resolveAttackRiderDamageChoice(
           (granted.bonuses?.attackRiders ?? []).map(rider =>
             rider.weaponSelection === "onActivation" ? { ...rider, weaponId } : rider),
           selectedDamageType,
-        ),
+        ), selectedWeaponAttribute),
       },
     })),
     duration: option.duration ?? defaultOptionDuration(parent),

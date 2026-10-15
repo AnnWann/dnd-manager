@@ -7,6 +7,7 @@ import type {
   CharacterConditionGrant,
 } from "../characters/CharacterCondition"
 import type { SpellGrant } from "../magic/spells/SpellGrant"
+import type { Attribute } from "../sheet/Attribute"
 import type { Proficiency } from "../sheet/Proficiency"
 
 export type AbilityActivationOption = {
@@ -77,6 +78,8 @@ export interface AbilityResourceCostGroup {
 export interface AbilityResourceSelection {
   /** Selected type for riders with configured damageTypeChoices. */
   damageType?: DamageType
+  /** Atributo escolhido ao ativar uma alteração temporária de ataques de arma. */
+  weaponAttribute?: Attribute
   /** Nível escolhido quando a habilidade permite upcast/escalonamento. */
   activationLevel?: number
   /** Em grupos OU, mapeia groupId para o costId escolhido. */

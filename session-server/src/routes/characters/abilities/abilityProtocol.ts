@@ -155,6 +155,7 @@ function isResourceSelection(value: unknown): value is AbilityResourceSelection 
     return false;
   }
   if (value.damageType !== undefined && (!DAMAGE_TYPES.includes(value.damageType))) return false;
+  if (value.weaponAttribute !== undefined && !["str", "dex", "con", "int", "wis", "cha"].includes(value.weaponAttribute)) return false;
   if (value.alternatives !== undefined) {
     if (!isRecord(value.alternatives)) return false;
     for (const [groupId, costId] of Object.entries(value.alternatives)) {
