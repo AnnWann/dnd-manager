@@ -145,6 +145,7 @@ export type CompendiumCreature = {
 
 export type CreatureCompendiumState = {
   version: 1
+  folders?: string[]
   creatures: CompendiumCreature[]
   updatedAt: number
 }
@@ -317,6 +318,7 @@ export function createCreatureCompendiumState(): CreatureCompendiumState {
   return {
     version: 1,
     creatures: [],
+    folders: [],
     updatedAt: Date.now(),
   }
 }
@@ -330,6 +332,7 @@ export function normalizeCreatureCompendiumState(
 
   return {
     version: 1,
+    folders: Array.isArray(raw.folders) ? raw.folders.filter((folder): folder is string => typeof folder === "string") : [],
     creatures: raw.creatures
       .flatMap((entry) => {
         try {

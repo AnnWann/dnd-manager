@@ -21,6 +21,8 @@ import {
 
 type CreatureCompendiumContextValue = {
   creatures: CompendiumCreature[]
+  folders: string[]
+  setFolders: (folders: string[]) => void
   hydrated: boolean
   upsertCreature: (creature: CompendiumCreature) => void
   upsertCreatures: (creatures: CompendiumCreature[]) => void
@@ -48,6 +50,7 @@ export function CreatureCompendiumProvider({
   const [state, setState] = useState<CreatureCompendiumState>({
     version: 1,
     creatures: [],
+    folders: [],
     updatedAt: Date.now(),
   })
   const [hydrated, setHydrated] = useState(false)
@@ -70,6 +73,10 @@ export function CreatureCompendiumProvider({
     if (!hydrated) return
     void repository.save(state)
   }, [hydrated, repository, state])
+
+  function setFolders(folders: string[]) {
+    setState(current => ({ ...current, folders, updatedAt: Date.now() }))
+  }
 
   function upsertCreature(creature: CompendiumCreature) {
     upsertCreatures([creature])
@@ -127,6 +134,8 @@ export function CreatureCompendiumProvider({
     <CreatureCompendiumContext.Provider
       value={{
         creatures: state.creatures,
+        folders: state.folders ?? [],
+        setFolders,
         hydrated,
         upsertCreature,
         upsertCreatures,
@@ -224,6 +233,8 @@ export function useCreatureCompendium(): CreatureCompendiumContextValue {
 
     return {
       creatures: editor.draft.creatureCompendium,
+      folders: editor.draft.creatureFolders ?? [],
+      setFolders: (folders: string[]) => editor.updateDraft(draft => ({ ...draft, creatureFolders: folders })),
       hydrated: creationMigrationReady,
       upsertCreature,
       upsertCreatures,

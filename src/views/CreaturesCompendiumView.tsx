@@ -63,11 +63,13 @@ export function CreaturesCompendiumView() {
     upsertCreatures,
     deleteCreature,
     duplicateCreature,
+    folders: storedFolders,
+    setFolders,
   } = useCreatureCompendium()
   const [query, setQuery] = useState("")
   const [sideFilter, setSideFilter] = useState<CreatureSide | "all">("all")
   const [activeFolder, setActiveFolder] = useState<string>()
-  const [localFolders, setLocalFolders] = useState<string[]>([])
+
   const [editingCreature, setEditingCreature] = useState<CompendiumCreature>()
   const [viewingCreature, setViewingCreature] = useState<CompendiumCreature>()
   const [dropCreature, setDropCreature] = useState<CompendiumCreature>()
@@ -76,9 +78,9 @@ export function CreaturesCompendiumView() {
     () =>
       creatureFolderPaths([
         ...(creationEditor?.draft?.creatureFolders ?? []),
-        ...localFolders,
+        ...storedFolders,
       ], creatures),
-    [creationEditor?.draft?.creatureFolders, creatures, localFolders],
+    [creationEditor?.draft?.creatureFolders, creatures, storedFolders],
   )
 
   const normalizedQuery = normalizeSearchText(query)
@@ -183,7 +185,7 @@ export function CreaturesCompendiumView() {
         creatureFolders: mergeFolderNames([...(draft.creatureFolders ?? []), folder]),
       }))
     } else {
-      setLocalFolders(previous => mergeFolderNames([...previous, folder]))
+      setFolders(mergeFolderNames([...storedFolders, folder]))
     }
 
     openFolder(folder)
@@ -236,7 +238,7 @@ export function CreaturesCompendiumView() {
       )
     }
 
-    setLocalFolders(prev => mergeFolderNames(prev.map(entry => replaceCreatureFolderPrefix(entry, folder, nextFolder) ?? "")))
+    if (!creationEditor?.draft) setFolders(mergeFolderNames(storedFolders.map(entry => replaceCreatureFolderPrefix(entry, folder, nextFolder) ?? "")))
     if (activeFolder && creatureFolderWithin(activeFolder, folder)) {
       setActiveFolder(replaceCreatureFolderPrefix(activeFolder, folder, nextFolder))
     }
@@ -278,7 +280,7 @@ export function CreaturesCompendiumView() {
       )
     }
 
-    setLocalFolders(previous => previous.filter(entry => !creatureFolderWithin(entry, folder)))
+    if (!creationEditor?.draft) setFolders(storedFolders.filter(entry => !creatureFolderWithin(entry, folder)))
     if (activeFolder && creatureFolderWithin(activeFolder, folder)) {
       setActiveFolder(creatureFolderParent(folder) || undefined)
     }
