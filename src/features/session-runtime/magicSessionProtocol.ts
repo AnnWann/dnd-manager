@@ -5,6 +5,7 @@ import type { SessionDiceRollMode, SessionRollVisibility } from "../../shared/se
 
 export type SessionSpellCastPayment =
   | { type: "none" }
+  | { type: "scroll"; itemId: string }
   | { type: "slot"; pool: "normal" | "pact"; level: number }
   | { type: "resource"; resource: SpellResourceType }
   | { type: "ability-use"; source: CharacterGrantedSpellUsageSource }

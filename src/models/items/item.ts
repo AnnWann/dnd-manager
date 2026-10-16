@@ -22,6 +22,7 @@ export type ItemKind =
   | "common"
   | "equipment"
   | "consumable"
+  | "scroll"
   | "throwable"
   | "supply"
   | "ammunition"
@@ -68,6 +69,9 @@ export type Item = {
   equipSlot?: EquipSlot
 
   magicItem?: boolean
+  /** Spell stored in a one-use spell scroll. Only available when held or pocketed. */
+  scrollSpellIndex?: string
+  scrollCastingAttribute?: import("../sheet/Attribute").Attribute
   requiresAttunement?: boolean
   attuned?: boolean
 

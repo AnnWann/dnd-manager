@@ -3,6 +3,7 @@ import type { ItemKind, Itemmable } from "./item"
 const AUTOMATICALLY_POCKETABLE_KINDS = new Set<ItemKind>([
   "ammunition",
   "consumable",
+  "scroll",
   "throwable",
   "focus",
   "tool",

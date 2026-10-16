@@ -32,6 +32,7 @@ import type { MetamagicId } from "../../../../../src/models/magic/metamagic/Meta
 import { SessionActor as AbilitySessionActor } from "../abilities/AbilitySessionActor";
 import { parseMagicClientMessage, type SessionMagicOperation, type SessionSpellCastPayment } from "./magicProtocol";
 import { resolveSpellCastAction } from "./spellCastResolution";
+import { consumeCharacterScroll, getUsableScroll } from "../../../../../src/models/characters/characterScrolls";
 import { MAX_CHARACTER_STATE_LOG_RECORDS } from "../sheet/characterState";
 import type { SessionConditionsState, SessionConnection, SessionHpState } from "../../session/protocol";
 import { applyConcentrationOperation } from "../sheet/concentrationState";
@@ -480,6 +481,18 @@ function applySpellCastPayment(
   castLevel: number,
   payment: SessionSpellCastPayment,
 ): CastPaymentResult {
+  if (grant?.scrollItemId) {
+    if (payment.type !== "scroll" || payment.itemId !== grant.scrollItemId) {
+      return { ok: false, code: "SCROLL_PAYMENT_REQUIRED", message: "This spell can only be cast by consuming its scroll." };
+    }
+    if (castLevel !== spell.slotLevel || !getUsableScroll(character, payment.itemId, spell.index)) {
+      return { ok: false, code: "SCROLL_UNAVAILABLE", message: "The scroll is no longer available in the hand or pocket." };
+    }
+    return { ok: true, character: consumeCharacterScroll(character, payment.itemId, spell.index) };
+  }
+  if (payment.type === "scroll") {
+    return { ok: false, code: "SCROLL_PAYMENT_INVALID", message: "This spell is not granted by that scroll." };
+  }
   if (payment.type === "none") {
     const options = getEffectiveSpellResourceOptions(character, spell);
     const sourceRequiresPayment = Boolean(

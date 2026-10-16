@@ -580,7 +580,7 @@ export function ItemCreationDialog({
               <Button
                 size="sm"
                 variant="primary"
-                disabled={!draft.name.trim()}
+                disabled={!draft.name.trim() || (draft.kind === "scroll" && !draft.scrollSpellIndex)}
                 onClick={() => onSave(normalizeEditorItem(draft))}
               >
                 {saveLabel}

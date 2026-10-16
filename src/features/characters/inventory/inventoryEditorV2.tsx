@@ -15,6 +15,7 @@ import { InventoryFloatingMenu } from "./InventoryFloatingMenu"
 import { canStoreItem, getItemContainerId, isCompartment } from "../../../models/items/itemCompartments"
 import { Select } from "../../../components/ui/Select"
 import type { EquippedInventoryEntry } from "../../../models/characters/characterEquippedInventory"
+import type { ReactNode } from "react"
 
 type Props = {
   title: string
@@ -22,6 +23,7 @@ type Props = {
   items: Itemmable[]
   equippedItems?: EquippedInventoryEntry[]
   pocketItems?: Itemmable[]
+  renderPocketScrollAction?: (item: Itemmable) => ReactNode
   onMoveToPocket?: (itemId: string) => void
   onRemovePocketItem?: (itemId: string) => void
   onUnequipItem?: (entry: EquippedInventoryEntry) => void
@@ -108,6 +110,7 @@ export function InventoryEditor({
   items,
   equippedItems = [],
   pocketItems,
+  renderPocketScrollAction,
   onMoveToPocket,
   onRemovePocketItem,
   onUnequipItem,
@@ -266,7 +269,7 @@ export function InventoryEditor({
           filteredPocketItems={filteredPocketItems}
           onMoveToPocket={onMoveToPocket}
           renderPocketItem={pocketItems ? (item) => (
-            <InventoryItemTile
+            <div className="grid gap-1"><InventoryItemTile
               item={item}
               location="Bolso"
               actions={{ selected: false, toggleSelected: () => {}, requestMove: () => {}, canMove: false }}
@@ -277,6 +280,7 @@ export function InventoryEditor({
               onTransfer={onRemovePocketItem ? () => onRemovePocketItem(item.id) : undefined}
               transferLabel="Tirar do bolso"
             />
+            {item.kind === "scroll" ? renderPocketScrollAction?.(item) : null}</div>
           ) : undefined}
           filtered={filter !== "all" || Boolean(normalizedQuery)}
           mutationsDisabled={mutationsDisabled}

@@ -1,4 +1,5 @@
 import { Button } from "../../../components/ui/Button"
+import { MinimalMagicActions } from "../characterSheet/minimalMagicActions"
 import { attributeShort } from "../../../lib/attributeShorts"
 import { getCharacterWeaponAttackAttribute } from "../../../models/combat/AttackRider"
 import { formatSigned } from "../../../lib/formatSigned"
@@ -42,6 +43,7 @@ function itemTypeLabel(item: Itemmable): string {
   }
 
   if (item.kind === "consumable") return "Consumível"
+  if (item.kind === "scroll") return "Pergaminho"
   if (item.kind === "throwable") return "Arremessável"
   if (item.kind === "ammunition") return "Munição"
   if (item.kind === "currency") return "Moeda"
@@ -197,6 +199,10 @@ export function EquipmentPocketsSection({
                   </div>
                 ) : null}
               </div>
+
+              {item.kind === "scroll" && item.scrollSpellIndex ? (
+                <MinimalMagicActions character={character} updateCharacter={updateCharacter} scrollOnlyItemId={item.id} />
+              ) : null}
 
               {item.desc?.trim() ? (
                 <div className="mt-3">

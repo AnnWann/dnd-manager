@@ -5,6 +5,7 @@ import type { SpellResourceCost } from "../magic/spells/Spell"
 import type { SpellSource } from "../magic/spells/SpellSource"
 import type { SpellGrantCastingMode } from "../magic/spells/SpellGrant"
 import type { CharacterTemplate } from "./CharacterTemplate"
+import { getUsableScroll } from "./characterScrolls"
 import {
   getCharacterConditions,
   withCharacterConditions,
@@ -30,6 +31,8 @@ export type CharacterGrantedSpell = {
   usageSource?: CharacterGrantedSpellUsageSource
   equipmentSpellUsageSource?: CharacterGrantedEquipmentSpellUsageSource
   resourceCost?: SpellResourceCost
+  /** One scroll unit is destroyed by casting this grant. */
+  scrollItemId?: string
 }
 
 export function getCharacterGrantedSpells(
@@ -98,6 +101,30 @@ export function getCharacterGrantedSpells(
         sourceId: `${equipment.id}:${ability.id}`,
       }, { type: "equipment", itemId: equipment.id, abilityId: ability.id })
     }
+  }
+
+  // Scrolls are single-use sources, not permanent known spells.
+  const scrolls = [
+    ...character.get("equipment").pockets,
+    ...(character.get("equipment").heldItems ?? []),
+  ]
+  const seenScrollIds = new Set<string>()
+  for (const item of scrolls) {
+    if (item.kind !== "scroll" || !item.scrollSpellIndex || seenScrollIds.has(item.id)) continue
+    if (!getUsableScroll(character, item.id, item.scrollSpellIndex)) continue
+    seenScrollIds.add(item.id)
+    results.push({
+      key: `scroll:${item.id}:${item.scrollSpellIndex}`,
+      index: item.scrollSpellIndex,
+      castingMode: "source",
+      source: {
+        type: "equipment",
+        name: item.name || "Pergaminho",
+        sourceId: item.id,
+        attribute: item.scrollCastingAttribute ?? "int",
+      },
+      scrollItemId: item.id,
+    })
   }
 
   for (const condition of getCharacterConditions(character)) {

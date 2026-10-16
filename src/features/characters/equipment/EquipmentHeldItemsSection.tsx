@@ -3,6 +3,7 @@ import { Hand, Sparkles } from "lucide-react"
 
 import type { CharacterTemplate } from "../../../models/characters/CharacterTemplate"
 import { getItemHeldHands } from "../../../models/characters/characterHands"
+import { MinimalMagicActions } from "../characterSheet/minimalMagicActions"
 import { useCharacterWorkspace } from "../workspace/CharacterWorkspaceContext"
 import {
   HandItemActionsDialog,
@@ -14,7 +15,7 @@ export function EquipmentHeldItemsSection({
 }: {
   character: CharacterTemplate
 }) {
-  const { mode, isEditing } = useCharacterWorkspace()
+  const { mode, isEditing, updateCharacter } = useCharacterWorkspace()
   const [dialogState, setDialogState] =
     useState<HandItemActionsDialogState | null>(null)
   const items = character.get("equipment").heldItems ?? []
@@ -69,19 +70,22 @@ export function EquipmentHeldItemsSection({
                   className="rounded-xl border border-border bg-bg-subtle p-3 text-left"
                 >
                   {content}
+                  {item.kind === "scroll" && item.scrollSpellIndex ? <MinimalMagicActions character={character} updateCharacter={updateCharacter} scrollOnlyItemId={item.id} /> : null}
                 </div>
               )
             }
 
             return (
+              <div key={`${item.id}-${index}`} className="grid gap-1">
               <button
-                key={`${item.id}-${index}`}
                 type="button"
                 onClick={() => setDialogState({ itemId: item.id })}
                 className="rounded-xl border border-border bg-bg-subtle p-3 text-left transition-colors hover:border-accentBorder hover:bg-accentBg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
               >
                 {content}
               </button>
+              {item.kind === "scroll" && item.scrollSpellIndex ? <MinimalMagicActions character={character} updateCharacter={updateCharacter} scrollOnlyItemId={item.id} /> : null}
+              </div>
             )
           })}
         </div>

@@ -24,6 +24,7 @@ import { useOptionalSessionRuntime } from "../../session-runtime/useSessionRunti
 import { useCharacterWorkspace } from "../workspace/CharacterWorkspaceContext"
 import { CharacterEncumbrancePanel } from "./characterEncumbrancePanel"
 import { EquipItemDialog } from "./equipItemDialog"
+import { MinimalMagicActions } from "../characterSheet/minimalMagicActions"
 import { InventoryEditor } from "./inventoryEditor"
 import { TransferItemDialog } from "./transferItemDialog"
 import { ItemCreationDialog } from "../../items/ItemCreationDialog"
@@ -255,6 +256,7 @@ export function CharacterInventoryTab({
         items={items}
         equippedItems={getEquippedInventoryEntries(character)}
         pocketItems={pocketItems}
+        renderPocketScrollAction={item => item.scrollSpellIndex ? <MinimalMagicActions character={character} updateCharacter={updateCharacter} scrollOnlyItemId={item.id} /> : null}
         onMoveToPocket={moveToPocket}
         onRemovePocketItem={removeFromPocket}
         onUnequipItem={entry => {

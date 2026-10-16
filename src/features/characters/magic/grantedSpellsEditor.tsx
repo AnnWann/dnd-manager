@@ -302,7 +302,7 @@ export function GrantedSpellsEditor({
   )
 }
 
-function SpellPickerDialog({
+export function SpellPickerDialog({
   open,
   excludedIndexes,
   onClose,
@@ -396,7 +396,7 @@ function SpellPickerDialog({
   }
 
   return (
-    <div className="fixed inset-0 z-[10000] flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm" onMouseDown={close}>
+    <div className="fixed inset-0 z-[30000] flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm" onMouseDown={close}>
       <div role="dialog" aria-modal="true" className="flex max-h-[85vh] w-full max-w-2xl flex-col overflow-hidden rounded-xl border border-border bg-bg-elevated shadow-theme-lg" onMouseDown={(event) => event.stopPropagation()}>
         <div className="flex items-start justify-between gap-3 border-b border-border p-4">
           <div>
