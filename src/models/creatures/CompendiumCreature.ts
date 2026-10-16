@@ -17,6 +17,10 @@ export type CreatureAbilityScores = {
 export type CreatureDamagePart = {
   formula: string
   damageType: DamageType
+  /** Name of this damage component, e.g. "Ataque Furtivo" or "Marca do Caçador". */
+  label?: string
+  /** Optional damage is selected for each initiative feature roll; off by default. */
+  optional?: boolean
 }
 
 export type CreatureFeatureMechanics =
@@ -447,7 +451,7 @@ function normalizeCreatureFeatureMechanics(value: unknown): CreatureFeatureMecha
           ? partRecord.damageType as DamageType
           : undefined
         const formula = stringValue(partRecord?.formula).trim()
-        return damageType && formula ? [{ damageType, formula }] : []
+        return damageType && formula ? [{ damageType, formula, label: optionalStringValue(partRecord?.label), optional: partRecord?.optional === true }] : []
       })
     : []
   const dc = Math.max(0, Math.min(99, Math.trunc(finiteNumber(record.dc, 10))))

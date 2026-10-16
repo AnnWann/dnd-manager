@@ -650,6 +650,31 @@ function FeatureSection({
   entries: QuickSheetFeature[]
   rollContext?: CreatureQuickSheetRollContext
 }) {
+  // Toggle state is independent for each combatant and feature.
+  const [enabledOptionalByFeature, setEnabledOptionalByFeature] = useState<Record<string, number[]>>({})
+  const selectionKey = (featureId: string) =>
+    `dnd-manager:creature-optional-damage:${rollContext?.creatureId ?? "preview"}:${rollContext?.initiativeEntryId ?? "compendium"}:${featureId}`
+  const enabledFor = (featureId: string): number[] => {
+    const key = selectionKey(featureId)
+    if (enabledOptionalByFeature[key]) return enabledOptionalByFeature[key]
+    if (typeof window === "undefined") return []
+    try {
+      const saved: unknown = JSON.parse(window.sessionStorage.getItem(key) ?? "[]")
+      return Array.isArray(saved) ? saved.filter(value => Number.isInteger(value) && value >= 0 && value < 100) : []
+    } catch {
+      return []
+    }
+  }
+  const toggleOptional = (featureId: string, index: number, enabled: boolean) => {
+    const key = selectionKey(featureId)
+    const current = enabledFor(featureId)
+    const next = enabled ? [...new Set([...current, index])] : current.filter(value => value !== index)
+    setEnabledOptionalByFeature(previous => ({ ...previous, [key]: next }))
+    if (typeof window !== "undefined") {
+      try { window.sessionStorage.setItem(key, JSON.stringify(next)) } catch { /* Storage unavailable. */ }
+    }
+  }
+
   return (
     <section className="rounded-xl border border-border bg-bg-subtle p-4">
       <h4 className="text-sm font-semibold text-textH">{title}</h4>
@@ -704,7 +729,7 @@ function FeatureSection({
                       title={rollModifierHint()}
                       onClick={event => requestCreatureRoll({
                         ...rollContext,
-                        source: { type: "feature", featureId: entry.id, intent: "resolve" },
+                        source: { type: "feature", featureId: entry.id, intent: "resolve", enabledOptionalDamageIndices: enabledFor(entry.id) },
                         mode: rollModeFromEvent(event.nativeEvent),
                       })}
                     >{label}</button>
@@ -720,11 +745,23 @@ function FeatureSection({
                     Sucesso: {entry.mechanics.onSuccess === "half" ? "metade" : entry.mechanics.onSuccess === "full" ? "dano total" : "sem dano"}
                   </span>
                 ) : null}
-                {entry.mechanics.damage.map((part, index) => (
-                  <span key={`${part.damageType}:${index}`} className="rounded-full border border-border bg-bg-subtle px-2 py-1 text-textH">
-                    {part.formula}{entry.effectiveDamageBonus ? ` ${entry.effectiveDamageBonus > 0 ? "+" : ""}${entry.effectiveDamageBonus}` : ""} {damageTypeLabel(part.damageType)}
-                  </span>
-                ))}
+                {entry.mechanics.damage.map((part, index) => {
+                  const description = `${part.label?.trim() ? `${part.label.trim()}: ` : ""}${part.formula}${!part.optional && entry.effectiveDamageBonus ? ` ${entry.effectiveDamageBonus > 0 ? "+" : ""}${entry.effectiveDamageBonus}` : ""} ${damageTypeLabel(part.damageType)}`
+                  return part.optional && rollContext ? (
+                    <label key={`${entry.id}:damage:${index}`}
+                      className="inline-flex cursor-pointer items-center gap-1.5 rounded-full border border-accentBorder bg-accentBg px-2 py-1 text-textH">
+                      <input type="checkbox" className="accent-accent" checked={enabledFor(entry.id).includes(index)}
+                        onChange={event => toggleOptional(entry.id, index, event.target.checked)}
+                        aria-label={`Incluir dano opcional ${part.label?.trim() || `componente ${index + 1}`} de ${entry.name}`} />
+                      <span>{description}</span>
+                    </label>
+                  ) : (
+                    <span key={`${entry.id}:damage:${index}`}
+                      className={`rounded-full border border-border bg-bg-subtle px-2 py-1 ${part.optional ? "text-textMuted" : "text-textH"}`}>
+                      {description}{part.optional ? " · opcional" : ""}
+                    </span>
+                  )
+                })}
               </div>
             ) : null}
             {entry.description.trim() ? (

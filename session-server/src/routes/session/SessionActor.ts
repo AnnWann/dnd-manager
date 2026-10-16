@@ -1389,7 +1389,8 @@ function resolveServerCreatureRoll(
 
     if (mechanics.kind !== "attack") {
       const damages: SessionResolvedDamageRoll[] = [];
-      for (const part of mechanics.damage) {
+      for (const [partIndex, part] of mechanics.damage.entries()) {
+        if (part.optional && !source.enabledOptionalDamageIndices?.includes(partIndex)) continue;
         const parsed = parseCreatureDamageFormula(part.formula);
         if (!parsed) {
           return {
@@ -1400,7 +1401,7 @@ function resolveServerCreatureRoll(
         }
         damages.push({
           ...rollActionDamage(parsed.dice, parsed.modifier, false),
-          label: "Dano",
+          label: part.label?.trim() || "Dano",
           damageType: part.damageType,
         });
       }
@@ -1484,7 +1485,8 @@ function resolveServerCreatureRoll(
     const riders = getActiveAttackRiders(riderCharacter, { scope: riderScope });
     const weaponEffect = riderScope === "weapon" ? getWeaponRiderTransformation(riders) : undefined;
     const damages: SessionResolvedDamageRoll[] = [];
-    for (const part of mechanics.damage) {
+    for (const [partIndex, part] of mechanics.damage.entries()) {
+      if (part.optional && !source.enabledOptionalDamageIndices?.includes(partIndex)) continue;
       const parsed = parseCreatureDamageFormula(part.formula);
       if (!parsed) {
         return {
@@ -1495,12 +1497,12 @@ function resolveServerCreatureRoll(
       }
       const rolled = rollActionDamage(
         parsed.dice,
-        parsed.modifier + effectiveDamageBonus,
+        parsed.modifier + (part.optional ? 0 : effectiveDamageBonus),
         critical,
       );
       damages.push({
         ...rolled,
-        label: "Dano",
+        label: part.label?.trim() || "Dano",
         damageType: weaponEffect?.damageType ?? part.damageType,
       });
     }

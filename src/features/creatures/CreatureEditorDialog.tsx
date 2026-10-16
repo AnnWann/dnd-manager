@@ -828,7 +828,8 @@ function CreatureFeatureMechanicsEditor({
             </div>
             <div className="grid gap-2">
               {current.damage.map((part, index) => (
-                <div key={index} className="grid gap-2 sm:grid-cols-[1fr_1fr_auto]">
+                <div key={index} className="grid gap-2 rounded-lg border border-border bg-bg-subtle p-2">
+                  <div className="grid gap-2 sm:grid-cols-[1fr_1fr_auto]">
                   <Input value={part.formula} placeholder="1d6+2" onChange={event => patch({ damage: current.damage.map((item, currentIndex) => currentIndex === index ? { ...item, formula: event.target.value } : item) })} />
                   <SharedSelect className={selectClassName} value={part.damageType} onChange={event => patch({ damage: current.damage.map((item, currentIndex) => currentIndex === index ? { ...item, damageType: event.target.value as DamageType } : item) })}>
                     {DAMAGE_TYPE_OPTIONS.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}
@@ -836,6 +837,17 @@ function CreatureFeatureMechanicsEditor({
                   <Button size="icon" variant="ghost" title="Remover dano" onClick={() => patch({ damage: current.damage.filter((_, currentIndex) => currentIndex !== index) })}>
                     <Trash2 className="h-4 w-4 text-danger" />
                   </Button>
+                  </div>
+                  <div className="grid gap-2 sm:grid-cols-[1fr_auto] sm:items-center">
+                    <Input value={part.label ?? ""} placeholder="Nome: Ex. Ataque Furtivo, Hex, Marca do Caçador"
+                      aria-label={`Nome do componente de dano ${index + 1}`}
+                      onChange={event => patch({ damage: current.damage.map((item, currentIndex) => currentIndex === index ? { ...item, label: event.target.value } : item) })} />
+                    <label className="flex items-center gap-2 text-xs text-textH">
+                      <input type="checkbox" checked={part.optional === true}
+                        onChange={event => patch({ damage: current.damage.map((item, currentIndex) => currentIndex === index ? { ...item, optional: event.target.checked } : item) })} />
+                      Opcional na iniciativa
+                    </label>
+                  </div>
                 </div>
               ))}
             </div>

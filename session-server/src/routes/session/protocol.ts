@@ -360,7 +360,14 @@ function isCreatureRollRequest(value: unknown): value is SessionCreatureRollRequ
           value.source.intent === undefined
           || value.source.intent === "resolve"
           || value.source.intent === "announce"
-        );
+        )
+        && (value.source.enabledOptionalDamageIndices === undefined || (
+          Array.isArray(value.source.enabledOptionalDamageIndices)
+          && value.source.enabledOptionalDamageIndices.length <= 100
+          && value.source.enabledOptionalDamageIndices.every(
+            (index: unknown) => typeof index === "number" && Number.isInteger(index) && index >= 0 && index < 100,
+          )
+        ));
     default:
       return false;
   }

@@ -180,7 +180,13 @@ export type SessionCreatureRollSource =
       castLevel: number
       intent?: "resolve" | "announce"
     }
-  | { type: "feature"; featureId: string; intent?: "resolve" | "announce" }
+  | {
+      type: "feature"
+      featureId: string
+      intent?: "resolve" | "announce"
+      /** Indices of explicitly enabled optional damage components. Required damage is always included. */
+      enabledOptionalDamageIndices?: number[]
+    }
 
 export type SessionCreatureRollRequest = {
   requestId: string
