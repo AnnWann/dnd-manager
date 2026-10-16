@@ -22,6 +22,17 @@ import { Button } from "../components/ui/Button"
 import { Input } from "../components/ui/Input"
 import { Modal } from "../components/ui/Modal"
 import { useCreatureCompendium } from "../contexts/creatureCompendiumContext"
+import {
+  creatureFolderChildren,
+  creatureFolderLabel,
+  creatureFolderParent,
+  creatureFolderPath,
+  creatureFolderPaths,
+  creatureFolderWithin,
+  normalizeCreatureFolder as normalizeFolderName,
+  replaceCreatureFolderPrefix,
+  sameCreatureFolder as sameFolder,
+} from "../models/creatures/creatureFolders"
 import { useSyncContext } from "../contexts/syncContext"
 import { useOptionalCreationEditor } from "../features/creation/CreationEditorProvider"
 import { CreatureCompendiumTransferBar } from "../features/creatures/CreatureCompendiumTransferBar"
@@ -56,34 +67,28 @@ export function CreaturesCompendiumView() {
   const [query, setQuery] = useState("")
   const [sideFilter, setSideFilter] = useState<CreatureSide | "all">("all")
   const [activeFolder, setActiveFolder] = useState<string>()
+  const [localFolders, setLocalFolders] = useState<string[]>([])
   const [editingCreature, setEditingCreature] = useState<CompendiumCreature>()
   const [viewingCreature, setViewingCreature] = useState<CompendiumCreature>()
   const [dropCreature, setDropCreature] = useState<CompendiumCreature>()
 
   const folderNames = useMemo(
     () =>
-      mergeFolderNames([
+      creatureFolderPaths([
         ...(creationEditor?.draft?.creatureFolders ?? []),
-        ...creatures.flatMap((creature) =>
-          creature.folder?.trim() ? [creature.folder] : [],
-        ),
-      ]),
-    [creationEditor?.draft?.creatureFolders, creatures],
+        ...localFolders,
+      ], creatures),
+    [creationEditor?.draft?.creatureFolders, creatures, localFolders],
   )
 
   const normalizedQuery = normalizeSearchText(query)
 
   const visibleFolders = useMemo(() => {
-    if (activeFolder) return []
-
-    return folderNames.filter((folder) => {
-      if (!normalizedQuery) return true
-      if (normalizeSearchText(folder).includes(normalizedQuery)) return true
-
-      return creatures.some(
-        (creature) =>
-          sameFolder(creature.folder, folder) &&
-          creatureMatchesQuery(creature, normalizedQuery),
+    return creatureFolderChildren(folderNames, activeFolder).filter(folder => {
+      if (!normalizedQuery || normalizeSearchText(creatureFolderLabel(folder)).includes(normalizedQuery)) return true
+      return creatures.some(creature =>
+        creatureFolderWithin(creature.folder, folder) &&
+        creatureMatchesQuery(creature, normalizedQuery),
       )
     })
   }, [activeFolder, creatures, folderNames, normalizedQuery])
@@ -151,7 +156,7 @@ export function CreaturesCompendiumView() {
   }
 
   function leaveFolder() {
-    setActiveFolder(undefined)
+    setActiveFolder(activeFolder ? creatureFolderParent(activeFolder) || undefined : undefined)
     setQuery("")
   }
 
@@ -159,7 +164,7 @@ export function CreaturesCompendiumView() {
     const requested = window.prompt("Nome da nova pasta:")
     if (requested === null) return
 
-    const folder = normalizeFolderName(requested)
+    const folder = creatureFolderPath(activeFolder, requested)
     if (!folder) {
       window.alert("Informe um nome para a pasta.")
       return
@@ -175,21 +180,20 @@ export function CreaturesCompendiumView() {
     if (creationEditor?.draft) {
       creationEditor.updateDraft((draft) => ({
         ...draft,
-        creatureFolders: mergeFolderNames([
-          ...(draft.creatureFolders ?? []),
-          folder,
-        ]),
+        creatureFolders: mergeFolderNames([...(draft.creatureFolders ?? []), folder]),
       }))
+    } else {
+      setLocalFolders(previous => mergeFolderNames([...previous, folder]))
     }
 
     openFolder(folder)
   }
 
   function renameFolder(folder: string) {
-    const requested = window.prompt("Novo nome da pasta:", folder)
+    const requested = window.prompt("Novo nome da pasta:", creatureFolderLabel(folder))
     if (requested === null) return
 
-    const nextFolder = normalizeFolderName(requested)
+    const nextFolder = creatureFolderPath(creatureFolderParent(folder), requested)
     if (!nextFolder) {
       window.alert("Informe um nome para a pasta.")
       return
@@ -208,16 +212,14 @@ export function CreaturesCompendiumView() {
       creationEditor.updateDraft((draft) => ({
         ...draft,
         creatureFolders: mergeFolderNames([
-          ...(draft.creatureFolders ?? []).filter(
-            (entry) => !sameFolder(entry, folder),
-          ),
+          ...(draft.creatureFolders ?? []).map(entry => replaceCreatureFolderPrefix(entry, folder, nextFolder) ?? ""),
           nextFolder,
         ]),
         creatureCompendium: draft.creatureCompendium.map((creature) =>
-          sameFolder(creature.folder, folder)
+          creatureFolderWithin(creature.folder, folder)
             ? {
                 ...creature,
-                folder: nextFolder,
+                folder: replaceCreatureFolderPrefix(creature.folder, folder, nextFolder),
                 updatedAt: Date.now(),
               }
             : creature,
@@ -226,23 +228,24 @@ export function CreaturesCompendiumView() {
     } else {
       upsertCreatures(
         creatures
-          .filter((creature) => sameFolder(creature.folder, folder))
+          .filter((creature) => creatureFolderWithin(creature.folder, folder))
           .map((creature) => ({
             ...creature,
-            folder: nextFolder,
+            folder: replaceCreatureFolderPrefix(creature.folder, folder, nextFolder),
           })),
       )
     }
 
-    if (activeFolder && sameFolder(activeFolder, folder)) {
-      setActiveFolder(nextFolder)
+    setLocalFolders(prev => mergeFolderNames(prev.map(entry => replaceCreatureFolderPrefix(entry, folder, nextFolder) ?? "")))
+    if (activeFolder && creatureFolderWithin(activeFolder, folder)) {
+      setActiveFolder(replaceCreatureFolderPrefix(activeFolder, folder, nextFolder))
     }
   }
 
   function deleteFolder(folder: string) {
     if (
       !window.confirm(
-        `Remover a pasta "${folder}"? As criaturas dela ficarão na raiz do compêndio.`,
+        `Remover a pasta "${folder}" e suas subpastas? As criaturas serão movidas para "${creatureFolderParent(folder) || "a raiz"}".`,
       )
     ) {
       return
@@ -252,13 +255,13 @@ export function CreaturesCompendiumView() {
       creationEditor.updateDraft((draft) => ({
         ...draft,
         creatureFolders: (draft.creatureFolders ?? []).filter(
-          (entry) => !sameFolder(entry, folder),
+          (entry) => !creatureFolderWithin(entry, folder),
         ),
         creatureCompendium: draft.creatureCompendium.map((creature) =>
-          sameFolder(creature.folder, folder)
+          creatureFolderWithin(creature.folder, folder)
             ? {
                 ...creature,
-                folder: undefined,
+                folder: creatureFolderParent(folder) || undefined,
                 updatedAt: Date.now(),
               }
             : creature,
@@ -267,16 +270,17 @@ export function CreaturesCompendiumView() {
     } else {
       upsertCreatures(
         creatures
-          .filter((creature) => sameFolder(creature.folder, folder))
+          .filter((creature) => creatureFolderWithin(creature.folder, folder))
           .map((creature) => ({
             ...creature,
-            folder: undefined,
+            folder: creatureFolderParent(folder) || undefined,
           })),
       )
     }
 
-    if (activeFolder && sameFolder(activeFolder, folder)) {
-      leaveFolder()
+    setLocalFolders(previous => previous.filter(entry => !creatureFolderWithin(entry, folder)))
+    if (activeFolder && creatureFolderWithin(activeFolder, folder)) {
+      setActiveFolder(creatureFolderParent(folder) || undefined)
     }
   }
 
@@ -316,7 +320,7 @@ export function CreaturesCompendiumView() {
   }
 
   const activeFolderCreatureCount = activeFolder
-    ? creatures.filter((creature) => sameFolder(creature.folder, activeFolder))
+    ? creatures.filter((creature) => creatureFolderWithin(creature.folder, activeFolder))
         .length
     : 0
 
@@ -349,7 +353,7 @@ export function CreaturesCompendiumView() {
                 </button>
                 <ChevronRight className="h-3.5 w-3.5 text-textMuted" />
                 <span className="truncate font-semibold text-textH">
-                  {activeFolder}
+                  {creatureFolderLabel(activeFolder)}
                 </span>
               </nav>
             ) : (
@@ -362,15 +366,13 @@ export function CreaturesCompendiumView() {
           <div className="flex flex-wrap gap-2">
             {activeFolder ? (
               <Button variant="secondary" onClick={leaveFolder}>
-                <ArrowLeft className="h-4 w-4" />
-                Voltar
+                <ArrowLeft className="h-4 w-4" /> Voltar
               </Button>
-            ) : (
-              <Button variant="secondary" onClick={createFolder}>
-                <FolderPlus className="h-4 w-4" />
-                Nova pasta
-              </Button>
-            )}
+            ) : null}
+            <Button variant="secondary" onClick={createFolder}>
+              <FolderPlus className="h-4 w-4" />
+              {activeFolder ? "Nova subpasta" : "Nova pasta"}
+            </Button>
             <Button
               variant="primary"
               onClick={() =>
@@ -402,7 +404,7 @@ export function CreaturesCompendiumView() {
               </div>
               <div className="min-w-0">
                 <h2 className="truncate font-heading text-lg font-semibold text-textH">
-                  {activeFolder}
+                  {creatureFolderLabel(activeFolder)}
                 </h2>
                 <p className="text-xs text-textMuted">
                   {activeFolderCreatureCount} criatura
@@ -443,7 +445,7 @@ export function CreaturesCompendiumView() {
               onChange={(event) => setQuery(event.target.value)}
               placeholder={
                 activeFolder
-                  ? `Buscar em ${activeFolder}…`
+                  ? `Buscar em ${creatureFolderLabel(activeFolder)}…`
                   : "Buscar pastas ou criaturas na raiz…"
               }
             />
@@ -464,16 +466,16 @@ export function CreaturesCompendiumView() {
         </div>
       </section>
 
-      {!activeFolder && visibleFolders.length > 0 ? (
+      {visibleFolders.length > 0 ? (
         <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
           {visibleFolders.map((folder) => {
             const folderCreatures = creatures.filter((creature) =>
-              sameFolder(creature.folder, folder),
+              creatureFolderWithin(creature.folder, folder),
             )
             return (
               <FolderCard
                 key={folder}
-                folder={folder}
+                folder={creatureFolderLabel(folder)}
                 creatureCount={folderCreatures.length}
                 imageUrls={folderCreatures
                   .map((creature) => creature.sheetImageUrl)
@@ -856,21 +858,6 @@ function creatureMatchesQuery(
   return normalizeSearchText(
     `${creature.name} ${creature.category} ${featureText}`,
   ).includes(normalizedQuery)
-}
-
-function normalizeFolderName(value?: string): string {
-  return value?.trim().replace(/\s+/g, " ") ?? ""
-}
-
-function sameFolder(left?: string, right?: string): boolean {
-  const normalizedLeft = normalizeFolderName(left)
-  const normalizedRight = normalizeFolderName(right)
-  if (!normalizedLeft || !normalizedRight) {
-    return normalizedLeft === normalizedRight
-  }
-  return normalizedLeft.localeCompare(normalizedRight, "pt-BR", {
-    sensitivity: "accent",
-  }) === 0
 }
 
 function mergeFolderNames(values: string[]): string[] {

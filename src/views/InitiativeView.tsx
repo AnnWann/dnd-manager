@@ -30,6 +30,7 @@ import {
   type CombatQuickSheetData,
 } from "../features/creatures/CreatureQuickSheet"
 import { InitiativeCards } from "../features/initiative/InitiativeCards"
+import { CreatureCompendiumPicker, type CreatureInitiativeSelection } from "../features/initiative/CreatureCompendiumPicker"
 import {
   ConditionDialog,
   CustomEntryDialog,
@@ -89,8 +90,7 @@ export function InitiativeView() {
   const [selectedCharacterId, setSelectedCharacterId] = useState("")
   const [selectedCharacterSide, setSelectedCharacterSide] =
     useState<InitiativeSide>("ally")
-  const [selectedCreatureId, setSelectedCreatureId] = useState("")
-  const [creatureQuantity, setCreatureQuantity] = useState(1)
+  const [creaturePickerOpen, setCreaturePickerOpen] = useState(false)
   const [sharedCreatureInitiative, setSharedCreatureInitiative] =
     useState(false)
   const [customOpen, setCustomOpen] = useState(false)
@@ -118,9 +118,6 @@ export function InitiativeView() {
       !session.entries.some(
         (entry) => entry.sourceId === character.get("id"),
       ),
-  )
-  const selectedCreature = creatures.find(
-    (creature) => creature.id === selectedCreatureId,
   )
   const initiativeSystemActions = useMemo(() => {
     const snapshot = runtime?.runtimeConfigSnapshot
@@ -321,57 +318,49 @@ export function InitiativeView() {
     )
   }
 
-  function addSelectedCreature() {
-    if (!selectedCreature) return
-
-    const sourceId = `${COMPENDIUM_SOURCE_PREFIX}${selectedCreature.id}`
-    const existingCopies = session.entries.filter(
-      (entry) => entry.sourceId === sourceId,
-    ).length
-
-    if (selectedCreature.unique && existingCopies > 0) return
-
-    const quantity = selectedCreature.unique
-      ? clamp(Math.trunc(selectedCreature.initiativeTurns), 1, 50)
-      : clamp(Math.trunc(creatureQuantity), 1, 50)
-    const sharedRoll = digitalDiceEnabled && sharedCreatureInitiative
-      ? rollInitiative(selectedCreature.initiativeBonus)
-      : undefined
-    const combatantId = selectedCreature.unique
-      ? crypto.randomUUID()
-      : undefined
-
-    const entries = Array.from({ length: quantity }, (_, index) => ({
-      sourceId,
-      sourceType: creatureSourceType(selectedCreature),
-      combatantId,
-      name: selectedCreature.unique
-        ? selectedCreature.name
-        : `${selectedCreature.name} ${existingCopies + index + 1}`,
-      realName: selectedCreature.unique
-        ? selectedCreature.name
-        : `${selectedCreature.name} ${existingCopies + index + 1}`,
-      basicName: selectedCreature.unique
-        ? selectedCreature.basicName
-        : `${selectedCreature.basicName} ${existingCopies + index + 1}`,
-      revealRealName: false,
-      imageUrl: selectedCreature.sheetImageUrl,
-      initiative:
-        sharedRoll
-        ?? (digitalDiceEnabled
-          ? rollInitiative(selectedCreature.initiativeBonus)
-          : 0),
-      initiativeBonus: selectedCreature.initiativeBonus,
-      dexterity: selectedCreature.abilityScores.dex,
-      side: selectedCreature.defaultSide,
-      armorClass: selectedCreature.armorClass,
-      currentHp: selectedCreature.maxHp,
-      maxHp: selectedCreature.maxHp,
-      temporaryHp: 0,
-      creatureSpellResources: createCreatureSpellResources(selectedCreature),
-    }))
-
-    updateSession((current) => addInitiativeEntries(current, entries))
+  function addSelectedCreatures(selections: CreatureInitiativeSelection[]) {
+    if (!selections.length) return
+    // One batch operation also works in authoritative initiative sessions.
+    updateSession(current => {
+      const entries: Array<Parameters<typeof addInitiativeEntries>[1][number]> = []
+      for (const { creature, quantity: requestedQuantity } of selections) {
+        const sourceId = `${COMPENDIUM_SOURCE_PREFIX}${creature.id}`
+        const existingCopies = current.entries.filter(entry => entry.sourceId === sourceId).length
+          + entries.filter(entry => entry.sourceId === sourceId).length
+        if (creature.unique && existingCopies > 0) continue
+        const quantity = creature.unique
+          ? clamp(Math.trunc(creature.initiativeTurns), 1, 50)
+          : clamp(Math.trunc(requestedQuantity), 1, 50)
+        const sharedRoll = digitalDiceEnabled && sharedCreatureInitiative
+          ? rollInitiative(creature.initiativeBonus)
+          : undefined
+        const combatantId = creature.unique ? crypto.randomUUID() : undefined
+        for (let index = 0; index < quantity; index++) {
+          const name = creature.unique ? creature.name : `${creature.name} ${existingCopies + index + 1}`
+          const basicName = creature.unique ? creature.basicName : `${creature.basicName} ${existingCopies + index + 1}`
+          entries.push({
+            sourceId,
+            sourceType: creatureSourceType(creature),
+            combatantId,
+            name,
+            realName: name,
+            basicName,
+            revealRealName: false,
+            imageUrl: creature.sheetImageUrl,
+            initiative: sharedRoll ?? (digitalDiceEnabled ? rollInitiative(creature.initiativeBonus) : 0),
+            initiativeBonus: creature.initiativeBonus,
+            dexterity: creature.abilityScores.dex,
+            side: creature.defaultSide,
+            armorClass: creature.armorClass,
+            currentHp: creature.maxHp,
+            maxHp: creature.maxHp,
+            temporaryHp: 0,
+            creatureSpellResources: createCreatureSpellResources(creature),
+          })
+        }
+      }
+      return entries.length ? addInitiativeEntries(current, entries) : current
+    })
   }
 
   function addCustomEntries(draft: CustomInitiativeEntryDraft) {
@@ -666,70 +655,33 @@ export function InitiativeView() {
         </div>
 
         <div className="rounded-xl border border-border bg-bg p-4 shadow-theme-sm">
-          <div className="mb-3 flex items-center gap-2 text-sm font-semibold text-textH">
-            <BookOpen className="h-4 w-4 text-accent" />
-            Adicionar do Compêndio de Criaturas
-          </div>
-          <div className="grid gap-2 md:grid-cols-[minmax(0,1fr)_5rem_auto_auto]">
-            <SharedSelect
-              className={selectClassName}
-              value={selectedCreatureId}
-              onChange={(event) => setSelectedCreatureId(event.target.value)}
-            >
-              <option value="">Selecione uma criatura</option>
-              {creatures.map((creature) => {
-                const sourceId = `${COMPENDIUM_SOURCE_PREFIX}${creature.id}`
-                const alreadyAdded = session.entries.some(
-                  (entry) => entry.sourceId === sourceId,
-                )
-                const disabled = creature.unique && alreadyAdded
-
-                return (
-                  <option
-                    key={creature.id}
-                    value={creature.id}
-                    disabled={disabled}
-                  >
-                    {creature.name}
-                    {creature.basicName !== creature.name ? ` — ${creature.basicName}` : ""}
-                    {creature.unique && creature.initiativeTurns > 1
-                      ? ` — ${creature.initiativeTurns} iniciativas`
-                      : ""}
-                    {disabled ? " — já adicionada" : ""}
-                  </option>
-                )
-              })}
-            </SharedSelect>
-            <Input
-              type="number"
-              min={1}
-              max={50}
-              value={selectedCreature?.unique ? selectedCreature.initiativeTurns : creatureQuantity}
-              disabled={selectedCreature?.unique}
-              onChange={(event) => setCreatureQuantity(Number(event.target.value))}
-              title="Quantidade"
-            />
-            <label className="flex h-10 items-center gap-2 rounded-lg border border-border bg-bg px-3 text-xs text-textH">
-              <input
-                type="checkbox"
-                checked={sharedCreatureInitiative}
-                onChange={(event) =>
-                  setSharedCreatureInitiative(event.target.checked)
-                }
-              />
-              Iniciativa conjunta
-            </label>
-            <Button
-              variant="primary"
-              onClick={addSelectedCreature}
-              disabled={!selectedCreature}
-            >
-              <CirclePlus className="h-4 w-4" />
-              Adicionar
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div className="flex min-w-0 items-center gap-3">
+              <BookOpen className="h-5 w-5 shrink-0 text-accent" />
+              <div>
+                <h3 className="text-sm font-semibold text-textH">Adicionar do Compêndio de Criaturas</h3>
+                <p className="text-xs text-textMuted">Pesquise, navegue pelas pastas e adicione grupos inteiros.</p>
+              </div>
+            </div>
+            <Button variant="primary" onClick={() => setCreaturePickerOpen(true)} disabled={creatures.length === 0}>
+              <CirclePlus className="h-4 w-4" /> Escolher criaturas
             </Button>
           </div>
         </div>
       </section>
+
+      {creaturePickerOpen ? (
+        <CreatureCompendiumPicker
+          creatures={creatures}
+          existingCreatureIds={session.entries
+            .filter(entry => entry.sourceId?.startsWith(COMPENDIUM_SOURCE_PREFIX))
+            .map(entry => entry.sourceId!.slice(COMPENDIUM_SOURCE_PREFIX.length))}
+          sharedInitiative={sharedCreatureInitiative}
+          onSharedInitiativeChange={setSharedCreatureInitiative}
+          onConfirm={addSelectedCreatures}
+          onClose={() => setCreaturePickerOpen(false)}
+        />
+      ) : null}
 
       <section className="flex flex-wrap items-center gap-2 rounded-xl border border-border bg-bg p-4 shadow-theme-sm">
         <Button onClick={() => setCustomOpen(true)}>
