@@ -1360,7 +1360,7 @@ function resolveServerCreatureRoll(
           title: feature.name,
           subtitle: `${creature.name} · ${sectionLabel}`,
           description: feature.description?.trim() || undefined,
-          details: mechanics
+          details: mechanics?.kind === "attack"
             ? [
                 ...(mechanics.reach?.trim() ? [mechanics.reach.trim()] : []),
                 ...(mechanics.magical ? ["Mágico"] : []),
