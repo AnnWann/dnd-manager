@@ -198,6 +198,21 @@ export function getCreatureEffectiveSpellDamageBonus(
     .getEffectiveSpellDamageBonus(spellcasting.ability, baseValue)
 }
 
+export function getCreatureFeatureEffectiveContestBonus(
+  creature: CompendiumCreature,
+  feature: CreatureFeature,
+  conditions: InitiativeCondition[] = [],
+  entry?: InitiativeEntry,
+): number | undefined {
+  const mechanics = feature.mechanics
+  if (!mechanics || mechanics.kind !== "contest") return undefined
+  const base = mechanics.actorType === "skill" && mechanics.actorSkill
+    ? getCreatureEffectiveSkillBonus(creature, mechanics.actorSkill, conditions, entry)
+      ?? getCreatureEffectiveAbilityCheckBonus(creature, mechanics.actorAttribute, conditions, entry)
+    : getCreatureEffectiveAbilityCheckBonus(creature, mechanics.actorAttribute, conditions, entry)
+  return base + mechanics.actorBonus
+}
+
 export function getCreatureFeatureEffectiveAttackBonus(
   creature: CompendiumCreature,
   feature: CreatureFeature,

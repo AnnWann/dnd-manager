@@ -6,8 +6,8 @@ import { Select } from "../../components/ui/Select"
 import { useMagicContext } from "../../contexts/magicContext"
 import { damageAffinityLabel, damageTypeLabel, type DamageAffinity } from "../../models/combat/Damage"
 import { requestCreatureRoll, rollModeFromEvent, rollModifierHint } from "../../lib/diceRoller"
-import { CREATURE_ATTRIBUTE_LABELS, parseCreatureSavingThrows, parseCreatureSkills, type ParsedCreatureSave, type ParsedCreatureSkill } from "../../models/creatures/CreatureRolls"
-import { getCreatureEffectiveAbilityModifier, getCreatureEffectiveArmorClass, getCreatureEffectiveInitiative, getCreatureEffectiveSaveBonus, getCreatureEffectiveSkillBonus, getCreatureEffectiveSpellAttackBonus, getCreatureEffectiveSpellSaveDc, getCreatureFeatureEffectiveAttackBonus, getCreatureFeatureEffectiveDamageBonus } from "../../models/creatures/CreatureCombatRuntime"
+import { CREATURE_ATTRIBUTE_LABELS, CREATURE_SKILL_OPTIONS, parseCreatureSavingThrows, parseCreatureSkills, type ParsedCreatureSave, type ParsedCreatureSkill } from "../../models/creatures/CreatureRolls"
+import { getCreatureEffectiveAbilityModifier, getCreatureEffectiveArmorClass, getCreatureEffectiveInitiative, getCreatureEffectiveSaveBonus, getCreatureEffectiveSkillBonus, getCreatureEffectiveSpellAttackBonus, getCreatureEffectiveSpellSaveDc, getCreatureFeatureEffectiveAttackBonus, getCreatureFeatureEffectiveContestBonus, getCreatureFeatureEffectiveDamageBonus } from "../../models/creatures/CreatureCombatRuntime"
 import type { CharacterTemplate } from "../../models/characters/CharacterTemplate"
 import {
   type CompendiumCreature,
@@ -24,6 +24,7 @@ import type {
 
 export type QuickSheetFeature = CreatureFeature & {
   effectiveAttackBonus?: number
+  effectiveContestBonus?: number
   effectiveDamageBonus?: number
 }
 
@@ -681,31 +682,44 @@ function FeatureSection({
             </div>
             {entry.mechanics ? (
               <div className="mt-2 flex flex-wrap gap-1.5 text-[11px]">
-                {rollContext ? (
-                  <button
-                    type="button"
-                    className="rounded-full border border-accentBorder bg-accentBg px-2 py-1 font-semibold text-accent transition-colors hover:bg-bg-subtle"
-                    title={rollModifierHint()}
-                    onClick={(event) =>
-                      requestCreatureRoll({
+                {(() => {
+                  const mechanics = entry.mechanics!
+                  const skillName = (skill: string | undefined) =>
+                    CREATURE_SKILL_OPTIONS.find(item => item.skill === skill)?.label ?? "Perícia"
+                  const contestSide = (type: "ability" | "skill", attribute: Attribute, skill?: string) =>
+                    type === "skill" ? skillName(skill) : CREATURE_ATTRIBUTE_LABELS[attribute]
+                  const label = mechanics.kind === "attack"
+                    ? `Ataque ${signed(entry.effectiveAttackBonus ?? mechanics.attackBonus)}`
+                    : mechanics.kind === "save"
+                      ? `Resistência ${CREATURE_ATTRIBUTE_LABELS[mechanics.saveAttribute]} · CD ${mechanics.dc}`
+                      : mechanics.kind === "check"
+                        ? `${mechanics.checkType === "skill" ? skillName(mechanics.checkSkill) : CREATURE_ATTRIBUTE_LABELS[mechanics.checkAttribute]} · CD ${mechanics.dc}`
+                        : mechanics.kind === "contest"
+                          ? `Disputa ${contestSide(mechanics.actorType, mechanics.actorAttribute, mechanics.actorSkill)} ${signed(entry.effectiveContestBonus ?? mechanics.actorBonus)} vs. ${contestSide(mechanics.targetType, mechanics.targetAttribute, mechanics.targetSkill)}`
+                          : "Rolar dano"
+                  return rollContext ? (
+                    <button
+                      type="button"
+                      className="rounded-full border border-accentBorder bg-accentBg px-2 py-1 font-semibold text-accent transition-colors hover:bg-bg-subtle"
+                      title={rollModifierHint()}
+                      onClick={event => requestCreatureRoll({
                         ...rollContext,
-                        source: {
-                          type: "feature",
-                          featureId: entry.id,
-                          intent: "resolve",
-                        },
+                        source: { type: "feature", featureId: entry.id, intent: "resolve" },
                         mode: rollModeFromEvent(event.nativeEvent),
-                      })
-                    }
-                  >
-                    Ataque {signed(entry.effectiveAttackBonus ?? entry.mechanics.attackBonus)}
-                  </button>
-                ) : (
-                  <span className="rounded-full border border-accentBorder bg-accentBg px-2 py-1 font-semibold text-accent">
-                    Ataque {signed(entry.effectiveAttackBonus ?? entry.mechanics.attackBonus)}
+                      })}
+                    >{label}</button>
+                  ) : (
+                    <span className="rounded-full border border-accentBorder bg-accentBg px-2 py-1 font-semibold text-accent">{label}</span>
+                  )
+                })()}
+                {entry.mechanics.kind === "attack" && entry.mechanics.reach
+                  ? <span className="rounded-full border border-border bg-bg-subtle px-2 py-1 text-textMuted">{entry.mechanics.reach}</span>
+                  : null}
+                {(entry.mechanics.kind === "save" || entry.mechanics.kind === "check") && entry.mechanics.damage.length ? (
+                  <span className="rounded-full border border-border bg-bg-subtle px-2 py-1 text-textMuted">
+                    Sucesso: {entry.mechanics.onSuccess === "half" ? "metade" : entry.mechanics.onSuccess === "full" ? "dano total" : "sem dano"}
                   </span>
-                )}
-                {entry.mechanics.reach ? <span className="rounded-full border border-border bg-bg-subtle px-2 py-1 text-textMuted">{entry.mechanics.reach}</span> : null}
+                ) : null}
                 {entry.mechanics.damage.map((part, index) => (
                   <span key={`${part.damageType}:${index}`} className="rounded-full border border-border bg-bg-subtle px-2 py-1 text-textH">
                     {part.formula}{entry.effectiveDamageBonus ? ` ${entry.effectiveDamageBonus > 0 ? "+" : ""}${entry.effectiveDamageBonus}` : ""} {damageTypeLabel(part.damageType)}
@@ -853,6 +867,7 @@ export function quickSheetFromCompendiumCreature(
           conditions,
           entry,
         ),
+        effectiveContestBonus: getCreatureFeatureEffectiveContestBonus(creature, resolvedFeature, conditions, entry),
         effectiveDamageBonus: getCreatureFeatureEffectiveDamageBonus(
           creature,
           resolvedFeature,

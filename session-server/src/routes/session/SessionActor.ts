@@ -51,8 +51,8 @@ import {
   type InitiativeEntry,
   type InitiativeSession,
 } from "../../../../src/models/initiative/Initiative";
-import { CREATURE_ATTRIBUTE_LABELS, findCreatureSave, findCreatureSkill, parseCreatureDamageFormula } from "../../../../src/models/creatures/CreatureRolls";
-import { createCreatureCombatCharacter, getCreatureEffectiveAbilityCheckBonus, getCreatureEffectiveAbilityModifier, getCreatureEffectiveInitiative, getCreatureEffectiveSaveBonus, getCreatureEffectiveSkillBonus, getCreatureFeatureEffectiveAttackBonus, getCreatureFeatureEffectiveDamageBonus } from "../../../../src/models/creatures/CreatureCombatRuntime";
+import { CREATURE_ATTRIBUTE_LABELS, CREATURE_SKILL_OPTIONS, findCreatureSave, findCreatureSkill, parseCreatureDamageFormula } from "../../../../src/models/creatures/CreatureRolls";
+import { createCreatureCombatCharacter, getCreatureEffectiveAbilityCheckBonus, getCreatureEffectiveAbilityModifier, getCreatureEffectiveInitiative, getCreatureEffectiveSaveBonus, getCreatureEffectiveSkillBonus, getCreatureFeatureEffectiveAttackBonus, getCreatureFeatureEffectiveContestBonus, getCreatureFeatureEffectiveDamageBonus } from "../../../../src/models/creatures/CreatureCombatRuntime";
 import type { CompendiumCreature, CreatureFeature } from "../../../../src/models/creatures/CompendiumCreature";
 import {
   getCharacterConditions,
@@ -1345,7 +1345,7 @@ function resolveServerCreatureRoll(
     const { feature, sectionLabel } = located;
     const mechanics = feature.mechanics;
 
-    if (!diceRollingEnabled || source.intent === "announce" || !mechanics || mechanics.kind !== "attack") {
+    if (!diceRollingEnabled || source.intent === "announce" || !mechanics) {
       return {
         ok: true,
         resultType: "action",
@@ -1372,6 +1372,88 @@ function resolveServerCreatureRoll(
       };
     }
 
+    const baseAction: SessionActionRollResult = {
+      id: crypto.randomUUID(),
+      requestId: request.requestId,
+      actorId,
+      characterId: resultCharacterId,
+      sourceName: creature.name,
+      visibility: request.visibility ?? "public",
+      sourceType: "creature",
+      title: feature.name,
+      subtitle: `${creature.name} · ${sectionLabel}`,
+      description: feature.description?.trim() || undefined,
+      critical: false,
+      createdAt: new Date().toISOString(),
+    };
+
+    if (mechanics.kind !== "attack") {
+      const damages: SessionResolvedDamageRoll[] = [];
+      for (const part of mechanics.damage) {
+        const parsed = parseCreatureDamageFormula(part.formula);
+        if (!parsed) {
+          return {
+            ok: false,
+            code: "CREATURE_DAMAGE_FORMULA_INVALID",
+            message: `Could not resolve damage formula: ${part.formula}`,
+          };
+        }
+        damages.push({
+          ...rollActionDamage(parsed.dice, parsed.modifier, false),
+          label: "Dano",
+          damageType: part.damageType,
+        });
+      }
+
+      if (mechanics.kind === "damage") {
+        return { ok: true, resultType: "action", result: {
+          ...baseAction, subtitle: `${baseAction.subtitle} · Dano direto`, damages,
+        }};
+      }
+      if (mechanics.kind === "save") {
+        return { ok: true, resultType: "action", result: {
+          ...baseAction,
+          subtitle: `${baseAction.subtitle} · Teste de resistência`,
+          save: { attribute: mechanics.saveAttribute, dc: mechanics.dc, onSuccess: mechanics.onSuccess },
+          damages,
+        }};
+      }
+      const skillLabel = (skill?: string) =>
+        CREATURE_SKILL_OPTIONS.find(option => option.skill === skill)?.label ?? "Perícia";
+      if (mechanics.kind === "check") {
+        return { ok: true, resultType: "action", result: {
+          ...baseAction,
+          subtitle: `${baseAction.subtitle} · Teste contra CD`,
+          check: {
+            attribute: mechanics.checkType === "ability" ? mechanics.checkAttribute : undefined,
+            skill: mechanics.checkType === "skill" ? mechanics.checkSkill : undefined,
+            dc: mechanics.dc,
+            onSuccess: mechanics.onSuccess,
+          },
+          damages,
+        }};
+      }
+      const bonus = getCreatureFeatureEffectiveContestBonus(creature, feature, conditions, entry);
+      if (bonus === undefined) {
+        return { ok: false, code: "CREATURE_CONTEST_INVALID", message: "Invalid creature contest." };
+      }
+      const actorName = mechanics.actorType === "skill" && mechanics.actorSkill
+        ? skillLabel(mechanics.actorSkill)
+        : CREATURE_ATTRIBUTE_LABELS[mechanics.actorAttribute];
+      const targetName = mechanics.targetType === "skill" && mechanics.targetSkill
+        ? skillLabel(mechanics.targetSkill)
+        : CREATURE_ATTRIBUTE_LABELS[mechanics.targetAttribute];
+      const rolled = rollActionD20(request.mode, bonus);
+      return { ok: true, resultType: "action", result: {
+        ...baseAction,
+        subtitle: `${baseAction.subtitle} · Disputa`,
+        details: [`Teste da criatura: ${actorName}`, `O alvo rola ${targetName} contra o total da criatura; empate favorece a situação anterior`],
+        primary: { ...rolled, kind: "abilityCheck", label: `Disputa: ${actorName}` },
+        damages,
+      }};
+    }
+
+    // Attack resolution retains the existing critical, bonus and rider rules.
     const resolvedFeature: CreatureFeature = { ...feature, mechanics };
 
     const attackBonus = getCreatureFeatureEffectiveAttackBonus(

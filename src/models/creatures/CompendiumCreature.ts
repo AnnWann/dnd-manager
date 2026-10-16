@@ -1,4 +1,5 @@
 import type { Attribute } from "../sheet/Attribute"
+import type { Skill } from "../sheet/Skills"
 import { inferDamageAffinitiesFromLegacy, normalizeDamageAffinities, type DamageAffinity, type DamageType } from "../combat/Damage"
 import { normalizeCreatureDrops, type CreatureDrops } from "./CreatureDrops"
 
@@ -18,16 +19,12 @@ export type CreatureDamagePart = {
   damageType: DamageType
 }
 
-export type CreatureFeatureMechanics = {
-  kind: "attack"
-  attackType: "weapon" | "spell" | "other"
-  rangeType: "melee" | "ranged"
-  attackBonus: number
-  attribute?: Attribute
-  magical?: boolean
-  reach?: string
-  damage: CreatureDamagePart[]
-}
+export type CreatureFeatureMechanics =
+  | { kind: "attack"; attackType: "weapon" | "spell" | "other"; rangeType: "melee" | "ranged"; attackBonus: number; attribute?: Attribute; magical?: boolean; reach?: string; damage: CreatureDamagePart[] }
+  | { kind: "save"; saveAttribute: Attribute; dc: number; onSuccess: "none" | "half" | "full"; damage: CreatureDamagePart[] }
+  | { kind: "check"; checkType: "ability" | "skill"; checkAttribute: Attribute; checkSkill?: Skill; dc: number; onSuccess: "none" | "half" | "full"; damage: CreatureDamagePart[] }
+  | { kind: "contest"; actorType: "ability" | "skill"; actorAttribute: Attribute; actorSkill?: Skill; actorBonus: number; targetType: "ability" | "skill"; targetAttribute: Attribute; targetSkill?: Skill; damage: CreatureDamagePart[] }
+  | { kind: "damage"; damage: CreatureDamagePart[] }
 
 export type CreatureFeature = {
   id: string
@@ -436,12 +433,13 @@ function normalizeLegacyFeatureText(
 
 function normalizeCreatureFeatureMechanics(value: unknown): CreatureFeatureMechanics | undefined {
   const record = asRecord(value)
-  if (!record || record.kind !== "attack") return undefined
-  const attackType = record.attackType === "spell" || record.attackType === "other" ? record.attackType : "weapon"
-  const rangeType = record.rangeType === "ranged" ? "ranged" : "melee"
-  const attribute = ["str", "dex", "con", "int", "wis", "cha"].includes(String(record.attribute))
-    ? record.attribute as Attribute
-    : undefined
+  if (!record || !["attack", "save", "check", "contest", "damage"].includes(String(record.kind))) return undefined
+  const toAttribute = (value: unknown, fallback: Attribute = "str"): Attribute =>
+    ["str", "dex", "con", "int", "wis", "cha"].includes(String(value)) ? value as Attribute : fallback
+  const toSkill = (value: unknown): Skill | undefined =>
+    ["acrobatics", "animalHandling", "arcana", "athletics", "deception", "history", "insight", "intimidation",
+      "investigation", "medicine", "nature", "perception", "performance", "persuasion", "religion",
+      "sleightOfHand", "stealth", "survival"].includes(String(value)) ? value as Skill : undefined
   const damage = Array.isArray(record.damage)
     ? record.damage.flatMap((part) => {
         const partRecord = asRecord(part)
@@ -452,12 +450,26 @@ function normalizeCreatureFeatureMechanics(value: unknown): CreatureFeatureMecha
         return damageType && formula ? [{ damageType, formula }] : []
       })
     : []
+  const dc = Math.max(0, Math.min(99, Math.trunc(finiteNumber(record.dc, 10))))
+  const onSuccess = record.onSuccess === "half" || record.onSuccess === "full" ? record.onSuccess : "none"
+  if (record.kind === "damage") return { kind: "damage", damage }
+  if (record.kind === "save") return { kind: "save", saveAttribute: toAttribute(record.saveAttribute, "con"), dc, onSuccess, damage }
+  if (record.kind === "check") return {
+    kind: "check", checkType: record.checkType === "skill" ? "skill" : "ability", checkAttribute: toAttribute(record.checkAttribute),
+    checkSkill: toSkill(record.checkSkill), dc, onSuccess, damage,
+  }
+  if (record.kind === "contest") return {
+    kind: "contest", actorType: record.actorType === "skill" ? "skill" : "ability",
+    actorAttribute: toAttribute(record.actorAttribute), actorSkill: toSkill(record.actorSkill), actorBonus: finiteNumber(record.actorBonus),
+    targetType: record.targetType === "skill" ? "skill" : "ability", targetAttribute: toAttribute(record.targetAttribute),
+    targetSkill: toSkill(record.targetSkill), damage,
+  }
   return {
     kind: "attack",
-    attackType,
-    rangeType,
+    attackType: record.attackType === "spell" || record.attackType === "other" ? record.attackType : "weapon",
+    rangeType: record.rangeType === "ranged" ? "ranged" : "melee",
     attackBonus: finiteNumber(record.attackBonus),
-    attribute,
+    attribute: ["str", "dex", "con", "int", "wis", "cha"].includes(String(record.attribute)) ? record.attribute as Attribute : undefined,
     magical: booleanValue(record.magical),
     reach: optionalStringValue(record.reach),
     damage,

@@ -1,3 +1,6 @@
+import { CREATURE_ATTRIBUTE_LABELS, CREATURE_SKILL_OPTIONS } from "../../models/creatures/CreatureRolls"
+import type { Attribute } from "../../models/sheet/Attribute"
+import type { Skill } from "../../models/sheet/Skills"
 import { Select as SharedSelect } from "../../components/ui/Select"
 import {
   ClipboardPaste,
@@ -674,66 +677,147 @@ function CreatureFeatureMechanicsEditor({
   value?: CreatureFeatureMechanics
   onChange: (value?: CreatureFeatureMechanics) => void
 }) {
-  const enabled = Boolean(value)
-  const current = value ?? {
-    kind: "attack" as const,
-    attackType: "weapon" as const,
-    rangeType: "melee" as const,
+  const current: CreatureFeatureMechanics = value ?? {
+    kind: "attack",
+    attackType: "weapon",
+    rangeType: "melee",
     attackBonus: 0,
-    attribute: "str" as const,
+    attribute: "str",
     magical: false,
     damage: [],
   }
-
-  function patch(patchValue: Partial<CreatureFeatureMechanics>) {
-    onChange({ ...current, ...patchValue })
+  const enabled = Boolean(value)
+  function patch(fields: Record<string, unknown>) {
+    onChange({ ...current, ...fields } as CreatureFeatureMechanics)
   }
-
+  function changeKind(kind: CreatureFeatureMechanics["kind"]) {
+    const damage = current.damage
+    if (kind === "attack") onChange({ kind, attackType: "weapon", rangeType: "melee", attackBonus: 0, attribute: "str", magical: false, damage })
+    if (kind === "save") onChange({ kind, saveAttribute: "dex", dc: 13, onSuccess: "half", damage })
+    if (kind === "check") onChange({ kind, checkType: "ability", checkAttribute: "str", dc: 13, onSuccess: "none", damage })
+    if (kind === "contest") onChange({ kind, actorType: "skill", actorAttribute: "str", actorSkill: "athletics", actorBonus: 0, targetType: "skill", targetAttribute: "str", targetSkill: "athletics", damage })
+    if (kind === "damage") onChange({ kind, damage })
+  }
+  const attributeChoices = (["str", "dex", "con", "int", "wis", "cha"] as const)
+  const attributeSelect = (value: string, onSelected: (attribute: Attribute) => void) => (
+    <SharedSelect className={selectClassName} value={value} onChange={event => onSelected(event.target.value as Attribute)}>
+      {attributeChoices.map(attribute => <option key={attribute} value={attribute}>{CREATURE_ATTRIBUTE_LABELS[attribute]}</option>)}
+    </SharedSelect>
+  )
+  const skillSelect = (value: string, onSelected: (skill: Skill) => void) => (
+    <SharedSelect className={selectClassName} value={value} onChange={event => onSelected(event.target.value as Skill)}>
+      <option value="">Selecione a perícia</option>
+      {CREATURE_SKILL_OPTIONS.map(skill => <option key={skill.skill} value={skill.skill}>{skill.label}</option>)}
+    </SharedSelect>
+  )
   return (
     <div className="rounded-lg border border-accentBorder/60 bg-accentBg/40 p-3">
       <label className="flex items-center gap-2 text-xs font-semibold text-textH">
-        <input
-          type="checkbox"
-          checked={enabled}
-          onChange={(event) => onChange(event.target.checked ? current : undefined)}
-        />
-        Estruturar mecanicamente como ataque
+        <input type="checkbox" checked={enabled} onChange={event => onChange(event.target.checked ? current : undefined)} />
+        Estruturar mecanicamente esta característica
       </label>
       <p className="mt-1 text-[11px] leading-5 text-textMuted">
-        A descrição continua livre. Estes dados permitem que condições alterem ataque/dano e preparam automações da iniciativa.
+        A descrição permanece livre. Configure como a ação é resolvida para exibir seus dados na ficha e registrar rolagens na sessão.
       </p>
-
       {enabled ? (
         <div className="mt-3 grid gap-3">
-          <div className="grid gap-2 sm:grid-cols-4">
-            <Field label="Origem">
-              <SharedSelect className={selectClassName} value={current.attackType} onChange={(event) => patch({ attackType: event.target.value as CreatureFeatureMechanics["attackType"] })}>
-                <option value="weapon">Arma</option>
-                <option value="spell">Magia</option>
-                <option value="other">Outro</option>
-              </SharedSelect>
-            </Field>
-            <Field label="Alcance">
-              <SharedSelect className={selectClassName} value={current.rangeType} onChange={(event) => patch({ rangeType: event.target.value as CreatureFeatureMechanics["rangeType"] })}>
-                <option value="melee">Corpo a corpo</option>
-                <option value="ranged">À distância</option>
-              </SharedSelect>
-            </Field>
-            <NumberField label="Bônus de ataque" value={current.attackBonus} onChange={(attackBonus) => patch({ attackBonus: attackBonus ?? 0 })} />
-            <Field label="Atributo">
-              <SharedSelect className={selectClassName} value={current.attribute ?? "str"} onChange={(event) => patch({ attribute: event.target.value as CreatureFeatureMechanics["attribute"] })}>
-                {(["str", "dex", "con", "int", "wis", "cha"] as const).map((attribute) => <option key={attribute} value={attribute}>{attribute.toUpperCase()}</option>)}
-              </SharedSelect>
-            </Field>
-          </div>
+          <Field label="Tipo de resolução">
+            <SharedSelect className={selectClassName} value={current.kind} onChange={event => changeKind(event.target.value as CreatureFeatureMechanics["kind"])}>
+              <option value="attack">Jogada de ataque</option>
+              <option value="save">Teste de resistência do alvo (CD)</option>
+              <option value="check">Teste de atributo ou perícia do alvo (CD)</option>
+              <option value="contest">Disputa / teste contestado</option>
+              <option value="damage">Somente dano (sem teste)</option>
+            </SharedSelect>
+          </Field>
 
-          <div className="grid gap-2 sm:grid-cols-[1fr_auto]">
-            <TextInput label="Alcance/reach" value={current.reach ?? ""} placeholder="Ex.: 1,5 m ou 24/96 m" onChange={(reach) => patch({ reach })} />
-            <label className="flex items-end gap-2 pb-2 text-xs text-textH">
-              <input type="checkbox" checked={current.magical === true} onChange={(event) => patch({ magical: event.target.checked })} />
-              Ataque mágico
-            </label>
-          </div>
+          {current.kind === "attack" ? (
+            <>
+              <div className="grid gap-2 sm:grid-cols-4">
+                <Field label="Origem">
+                  <SharedSelect className={selectClassName} value={current.attackType} onChange={event => patch({ attackType: event.target.value })}>
+                    <option value="weapon">Arma</option><option value="spell">Magia</option><option value="other">Outro</option>
+                  </SharedSelect>
+                </Field>
+                <Field label="Alcance">
+                  <SharedSelect className={selectClassName} value={current.rangeType} onChange={event => patch({ rangeType: event.target.value })}>
+                    <option value="melee">Corpo a corpo</option><option value="ranged">À distância</option>
+                  </SharedSelect>
+                </Field>
+                <NumberField label="Bônus de ataque" value={current.attackBonus} onChange={attackBonus => patch({ attackBonus: attackBonus ?? 0 })} />
+                <Field label="Atributo">
+                  {attributeSelect(current.attribute ?? "str", attribute => patch({ attribute }))}
+                </Field>
+              </div>
+              <div className="grid gap-2 sm:grid-cols-[1fr_auto]">
+                <TextInput label="Alcance/reach" value={current.reach ?? ""} placeholder="Ex.: 1,5 m ou 24/96 m" onChange={reach => patch({ reach })} />
+                <label className="flex items-end gap-2 pb-2 text-xs text-textH">
+                  <input type="checkbox" checked={current.magical === true} onChange={event => patch({ magical: event.target.checked })} />
+                  Ataque mágico
+                </label>
+              </div>
+            </>
+          ) : null}
+
+          {current.kind === "save" ? (
+            <div className="grid gap-2 sm:grid-cols-2">
+              <Field label="Resistência exigida do alvo">
+                {attributeSelect(current.saveAttribute, saveAttribute => patch({ saveAttribute }))}
+              </Field>
+              <NumberField label="Classe de dificuldade (CD)" value={current.dc} onChange={dc => patch({ dc: dc ?? 10 })} />
+            </div>
+          ) : null}
+
+          {current.kind === "check" ? (
+            <div className="grid gap-2 sm:grid-cols-2">
+              <Field label="Tipo de teste do alvo">
+                <SharedSelect className={selectClassName} value={current.checkType} onChange={event => patch({ checkType: event.target.value })}>
+                  <option value="ability">Teste de atributo</option><option value="skill">Teste de perícia</option>
+                </SharedSelect>
+              </Field>
+              {current.checkType === "skill"
+                ? <Field label="Perícia exigida">{skillSelect(current.checkSkill ?? "", checkSkill => patch({ checkSkill }))}</Field>
+                : <Field label="Atributo exigido">{attributeSelect(current.checkAttribute, checkAttribute => patch({ checkAttribute }))}</Field>}
+              <NumberField label="Classe de dificuldade (CD)" value={current.dc} onChange={dc => patch({ dc: dc ?? 10 })} />
+            </div>
+          ) : null}
+
+          {(current.kind === "save" || current.kind === "check") ? (
+            <Field label="Dano em caso de sucesso do alvo">
+              <SharedSelect className={selectClassName} value={current.onSuccess} onChange={event => patch({ onSuccess: event.target.value })}>
+                <option value="none">Nenhum dano</option>
+                <option value="half">Metade do dano</option>
+                <option value="full">Dano completo</option>
+              </SharedSelect>
+            </Field>
+          ) : null}
+
+          {current.kind === "contest" ? (
+            <div className="grid gap-3">
+              <div className="grid gap-2 sm:grid-cols-3">
+                <Field label="Rolagem da criatura">
+                  <SharedSelect className={selectClassName} value={current.actorType} onChange={event => patch({ actorType: event.target.value })}>
+                    <option value="ability">Atributo</option><option value="skill">Perícia</option>
+                  </SharedSelect>
+                </Field>
+                {current.actorType === "skill" ? <Field label="Perícia da criatura">{skillSelect(current.actorSkill ?? "", actorSkill => patch({ actorSkill }))}</Field>
+                  : <Field label="Atributo da criatura">{attributeSelect(current.actorAttribute, actorAttribute => patch({ actorAttribute }))}</Field>}
+                <NumberField label="Bônus adicional" value={current.actorBonus} onChange={actorBonus => patch({ actorBonus: actorBonus ?? 0 })} />
+              </div>
+              <div className="grid gap-2 sm:grid-cols-2">
+                <Field label="Rolagem oposta do alvo">
+                  <SharedSelect className={selectClassName} value={current.targetType} onChange={event => patch({ targetType: event.target.value })}>
+                    <option value="ability">Atributo</option><option value="skill">Perícia</option>
+                  </SharedSelect>
+                </Field>
+                {current.targetType === "skill" ? <Field label="Perícia do alvo">{skillSelect(current.targetSkill ?? "", targetSkill => patch({ targetSkill }))}</Field>
+                  : <Field label="Atributo do alvo">{attributeSelect(current.targetAttribute, targetAttribute => patch({ targetAttribute }))}</Field>}
+              </div>
+              <p className="text-[11px] text-textMuted">A criatura rola seu teste e o resultado aparece no log. O alvo faz a rolagem oposta; o sistema não presume seu resultado.</p>
+            </div>
+          ) : null}
+
+          {current.kind === "damage" ? <p className="text-[11px] text-textMuted">O dano é rolado diretamente, sem ataque ou teste de resistência.</p> : null}
 
           <div>
             <div className="mb-2 flex items-center justify-between gap-2">
@@ -745,9 +829,9 @@ function CreatureFeatureMechanicsEditor({
             <div className="grid gap-2">
               {current.damage.map((part, index) => (
                 <div key={index} className="grid gap-2 sm:grid-cols-[1fr_1fr_auto]">
-                  <Input value={part.formula} placeholder="1d6+2" onChange={(event) => patch({ damage: current.damage.map((item, currentIndex) => currentIndex === index ? { ...item, formula: event.target.value } : item) })} />
-                  <SharedSelect className={selectClassName} value={part.damageType} onChange={(event) => patch({ damage: current.damage.map((item, currentIndex) => currentIndex === index ? { ...item, damageType: event.target.value as DamageType } : item) })}>
-                    {DAMAGE_TYPE_OPTIONS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
+                  <Input value={part.formula} placeholder="1d6+2" onChange={event => patch({ damage: current.damage.map((item, currentIndex) => currentIndex === index ? { ...item, formula: event.target.value } : item) })} />
+                  <SharedSelect className={selectClassName} value={part.damageType} onChange={event => patch({ damage: current.damage.map((item, currentIndex) => currentIndex === index ? { ...item, damageType: event.target.value as DamageType } : item) })}>
+                    {DAMAGE_TYPE_OPTIONS.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}
                   </SharedSelect>
                   <Button size="icon" variant="ghost" title="Remover dano" onClick={() => patch({ damage: current.damage.filter((_, currentIndex) => currentIndex !== index) })}>
                     <Trash2 className="h-4 w-4 text-danger" />

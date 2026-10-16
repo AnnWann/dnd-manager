@@ -25,7 +25,7 @@ export type ParsedCreatureSkill = {
   bonus: number
 }
 
-const SKILLS: Array<{
+export const CREATURE_SKILL_OPTIONS: Array<{
   skill: Skill
   label: string
   attribute: Attribute
@@ -50,6 +50,8 @@ const SKILLS: Array<{
   { skill: "stealth", label: "Furtividade", attribute: "dex", aliases: ["stealth", "furtividade"] },
   { skill: "survival", label: "Sobrevivência", attribute: "wis", aliases: ["survival", "sobrevivencia", "sobrevivência"] },
 ]
+
+const SKILLS = CREATURE_SKILL_OPTIONS
 
 const ATTRIBUTE_ALIASES: Array<{ attribute: Attribute; aliases: string[] }> = [
   { attribute: "str", aliases: ["str", "for", "strength", "forca", "força"] },

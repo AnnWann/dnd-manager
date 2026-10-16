@@ -8,7 +8,7 @@ import { useInitiativeRollSelection } from "../initiative/initiativeRollSelectio
 import { ACTION_ROLL_RESULT_EVENT, DICE_ROLL_RESULT_EVENT, getRollVisibility, requestManualDiceRoll, setRollVisibility } from "../../lib/diceRoller"
 import type { SessionActionRollResult, SessionDiceRollResult } from "../../shared/session-runtime/diceRollProtocol"
 import { DAMAGE_TYPES, damageTypeLabel, type DamageType } from "../../models/combat/Damage"
-import { CREATURE_ATTRIBUTE_LABELS } from "../../models/creatures/CreatureRolls"
+import { CREATURE_SKILL_OPTIONS, CREATURE_ATTRIBUTE_LABELS } from "../../models/creatures/CreatureRolls"
 import type {
   CharacterCustomSystemState,
   CustomAbilityInstance,
@@ -638,6 +638,24 @@ function ActionRollEntry({
           </div>
         ) : null}
 
+        {roll.check ? (
+          <div className="flex items-center justify-between gap-3 rounded-lg border border-border bg-bg-subtle px-3 py-2">
+            <div>
+              <div className="text-[10px] font-semibold uppercase tracking-wide text-textMuted">Teste do alvo contra CD</div>
+              {roll.check.onSuccess ? (
+                <div className="mt-0.5 text-[10px] text-textMuted">
+                  Sucesso: {roll.check.onSuccess === "half" ? "metade do dano" : roll.check.onSuccess === "full" ? "dano completo" : "sem dano"}
+                </div>
+              ) : null}
+            </div>
+            <div className="text-sm font-black text-textH">
+              CD {roll.check.dc} · {roll.check.skill
+                ? CREATURE_SKILL_OPTIONS.find(option => option.skill === roll.check!.skill)?.label ?? roll.check.skill
+                : roll.check.attribute ? CREATURE_ATTRIBUTE_LABELS[roll.check.attribute] : "Teste"}
+            </div>
+          </div>
+        ) : null}
+
         {damage ? <ResolvedDamageBlock damage={damage} /> : null}
 
         {roll.damages?.map((entry, index) => (
@@ -645,7 +663,7 @@ function ActionRollEntry({
             key={`${entry.label ?? "damage"}:${index}`}
             damage={entry}
             halfOnSave={
-              roll.save?.onSuccess === "half"
+              (roll.save?.onSuccess === "half" || roll.check?.onSuccess === "half")
                 ? Math.floor(entry.total / 2)
                 : undefined
             }

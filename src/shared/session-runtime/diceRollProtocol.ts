@@ -149,6 +149,13 @@ export type SessionActionRollResult = {
     dc: number
     onSuccess?: "none" | "half" | "full"
   }
+  /** Target ability or skill check; the target rolls separately. */
+  check?: {
+    attribute?: Attribute
+    skill?: Skill
+    dc: number
+    onSuccess?: "none" | "half" | "full"
+  }
   /** Legacy/single damage block used by weapons and simple actions. */
   damage?: SessionResolvedDamageRoll
   /** Structured spell damage when one action can contain multiple components. */
