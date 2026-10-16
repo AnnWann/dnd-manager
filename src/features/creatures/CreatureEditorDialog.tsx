@@ -654,6 +654,8 @@ function FeatureListEditor({
                   />
                 </Field>
                 <CreatureFeatureMechanicsEditor
+                  usage={feature.usage}
+                  onUsageChange={usage => patchFeature(feature.id, { usage })}
                   value={feature.mechanics}
                   onChange={(mechanics) => patchFeature(feature.id, { mechanics })}
                 />
@@ -670,12 +672,51 @@ function FeatureListEditor({
   )
 }
 
-function CreatureFeatureMechanicsEditor({
+function CreatureFeatureUsageEditor({
   value,
   onChange,
 }: {
+  value?: CreatureFeature["usage"]
+  onChange: (value?: CreatureFeature["usage"]) => void
+}) {
+  return (
+    <div className="grid gap-2 rounded-lg border border-border bg-bg p-3">
+      <label className="flex items-center gap-2 text-xs font-semibold text-textH">
+        <input type="checkbox" checked={Boolean(value)}
+          onChange={event => onChange(event.target.checked ? { max: 3, reset: "longRest" } : undefined)} />
+        Limitar usos / cargas desta ação
+      </label>
+      {value ? (
+        <div className="grid gap-2 sm:grid-cols-2">
+          <NumberField label="Usos máximos" value={value.max}
+            onChange={max => onChange({ ...value, max: Math.max(1, Math.min(1000, Math.trunc(max ?? 1))) })} />
+          <Field label="Recuperação">
+            <SharedSelect className={selectClassName} value={value.reset}
+              onChange={event => onChange({ ...value, reset: event.target.value as "shortRest" | "longRest" | "manual" })}>
+              <option value="longRest">Descanso longo / por dia</option>
+              <option value="shortRest">Descanso curto</option>
+              <option value="manual">Manual</option>
+            </SharedSelect>
+          </Field>
+          <p className="text-[11px] text-textMuted sm:col-span-2">
+            O uso é consumido ao resolver a ação durante a iniciativa. O mestre pode recuperar as cargas pela ficha da criatura.
+          </p>
+        </div>
+      ) : null}
+    </div>
+  )
+}
+
+function CreatureFeatureMechanicsEditor({
+  value,
+  onChange,
+  usage,
+  onUsageChange,
+}: {
   value?: CreatureFeatureMechanics
   onChange: (value?: CreatureFeatureMechanics) => void
+  usage?: CreatureFeature["usage"]
+  onUsageChange: (value?: CreatureFeature["usage"]) => void
 }) {
   const current: CreatureFeatureMechanics = value ?? {
     kind: "attack",
@@ -719,6 +760,9 @@ function CreatureFeatureMechanicsEditor({
       <p className="mt-1 text-[11px] leading-5 text-textMuted">
         A descrição permanece livre. Configure como a ação é resolvida para exibir seus dados na ficha e registrar rolagens na sessão.
       </p>
+      <div className="mt-3">
+        <CreatureFeatureUsageEditor value={usage} onChange={onUsageChange} />
+      </div>
       {enabled ? (
         <div className="mt-3 grid gap-3">
           <Field label="Tipo de resolução">
@@ -727,7 +771,7 @@ function CreatureFeatureMechanicsEditor({
               <option value="save">Teste de resistência do alvo (CD)</option>
               <option value="check">Teste de atributo ou perícia do alvo (CD)</option>
               <option value="contest">Disputa / teste contestado</option>
-              <option value="damage">Dano ou cura (sem teste)</option>
+              <option value="damage">Somente dano (sem teste)</option>
             </SharedSelect>
           </Field>
 
@@ -817,13 +861,13 @@ function CreatureFeatureMechanicsEditor({
             </div>
           ) : null}
 
-          {current.kind === "damage" ? <p className="text-[11px] text-textMuted">O dano ou a cura é rolado diretamente, sem ataque ou teste de resistência.</p> : null}
+          {current.kind === "damage" ? <p className="text-[11px] text-textMuted">O dano é rolado diretamente, sem ataque ou teste de resistência.</p> : null}
 
           <div>
             <div className="mb-2 flex items-center justify-between gap-2">
-              <span className="text-xs font-semibold text-textH">Componentes de dano</span>
+              <span className="text-xs font-semibold text-textH">Componentes de dano ou cura</span>
               <Button size="sm" variant="ghost" onClick={() => patch({ damage: [...current.damage, { formula: "1d6", damageType: "slashing" }] })}>
-                <Plus className="h-3.5 w-3.5" /> Adicionar dano
+                <Plus className="h-3.5 w-3.5" /> Adicionar dano / cura
               </Button>
             </div>
             <div className="grid gap-2">
@@ -831,7 +875,8 @@ function CreatureFeatureMechanicsEditor({
                 <div key={index} className="grid gap-2 rounded-lg border border-border bg-bg-subtle p-2">
                   <div className="grid gap-2 sm:grid-cols-[1fr_1fr_auto]">
                   <Input value={part.formula} placeholder="1d6+2" onChange={event => patch({ damage: current.damage.map((item, currentIndex) => currentIndex === index ? { ...item, formula: event.target.value } : item) })} />
-                  <SharedSelect className={selectClassName} value={part.damageType} onChange={event => patch({ damage: current.damage.map((item, currentIndex) => currentIndex === index ? { ...item, damageType: event.target.value as DamageType } : item) })}>
+                  <SharedSelect className={selectClassName} value={part.damageType} onChange={event => patch({ damage: current.damage.map((item, currentIndex) => currentIndex === index ? { ...item, damageType: event.target.value as DamageType | "healing" } : item) })}>
+                    <option value="healing">Cura (PV recuperados)</option>
                     {DAMAGE_TYPE_OPTIONS.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}
                   </SharedSelect>
                   <Button size="icon" variant="ghost" title="Remover dano" onClick={() => patch({ damage: current.damage.filter((_, currentIndex) => currentIndex !== index) })}>
