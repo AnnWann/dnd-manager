@@ -559,7 +559,7 @@ function applyInitiativeOperation(
       if (existing.combatantId && [
         "armorClass", "currentHp", "maxHp", "temporaryHp", "conditions",
         "hidden", "defeated", "downed", "defeatReason",
-        "creatureSpellResources",
+        "creatureSpellResources", "creatureFeatureResources",
       ].some((key) => key in patch)) {
         session = synchronizeSharedCombatantState(session, operation.entryId);
       }
@@ -972,8 +972,23 @@ function normalizeEntryInput(value: Record<string, unknown>): NewInitiativeEntry
       !Array.isArray(value.creatureSpellResources)
         ? structuredClone(value.creatureSpellResources) as InitiativeEntry["creatureSpellResources"]
         : undefined,
+    creatureFeatureResources: normalizeFeatureResourcesInput(value.creatureFeatureResources),
     conditions: Array.isArray(value.conditions) ? structuredClone(value.conditions) as InitiativeEntry["conditions"] : [],
   }];
+}
+
+function normalizeFeatureResourcesInput(value: unknown): InitiativeEntry["creatureFeatureResources"] {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return undefined;
+  const resources: NonNullable<InitiativeEntry["creatureFeatureResources"]> = {};
+  for (const [key, resource] of Object.entries(value)) {
+    if (!key || key.length > 200 || !resource || typeof resource !== "object" || Array.isArray(resource)) continue;
+    const record = resource as Record<string, unknown>;
+    const max = Math.trunc(Number(record.max));
+    const used = Math.trunc(Number(record.used));
+    if (!Number.isInteger(max) || max < 1 || max > 1000 || !Number.isInteger(used)) continue;
+    resources[key] = { max, used: Math.min(max, Math.max(0, used)) };
+  }
+  return resources;
 }
 
 function normalizeEntryPatch(value: Record<string, unknown>): Partial<InitiativeEntry> {
@@ -1008,6 +1023,9 @@ function normalizeEntryPatch(value: Record<string, unknown>): Partial<Initiative
     patch.creatureSpellResources = structuredClone(
       value.creatureSpellResources,
     ) as InitiativeEntry["creatureSpellResources"];
+  }
+  if ("creatureFeatureResources" in value) {
+    patch.creatureFeatureResources = normalizeFeatureResourcesInput(value.creatureFeatureResources);
   }
   if (Array.isArray(value.conditions)) patch.conditions = structuredClone(value.conditions) as InitiativeEntry["conditions"];
   return patch;

@@ -727,7 +727,7 @@ function CreatureFeatureMechanicsEditor({
               <option value="save">Teste de resistência do alvo (CD)</option>
               <option value="check">Teste de atributo ou perícia do alvo (CD)</option>
               <option value="contest">Disputa / teste contestado</option>
-              <option value="damage">Somente dano (sem teste)</option>
+              <option value="damage">Dano ou cura (sem teste)</option>
             </SharedSelect>
           </Field>
 
@@ -817,7 +817,7 @@ function CreatureFeatureMechanicsEditor({
             </div>
           ) : null}
 
-          {current.kind === "damage" ? <p className="text-[11px] text-textMuted">O dano é rolado diretamente, sem ataque ou teste de resistência.</p> : null}
+          {current.kind === "damage" ? <p className="text-[11px] text-textMuted">O dano ou a cura é rolado diretamente, sem ataque ou teste de resistência.</p> : null}
 
           <div>
             <div className="mb-2 flex items-center justify-between gap-2">

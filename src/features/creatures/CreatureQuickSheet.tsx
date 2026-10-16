@@ -2,6 +2,7 @@ import { FileImage, Shield, Swords } from "lucide-react"
 import { useEffect, useState, type MouseEvent as ReactMouseEvent } from "react"
 
 import { Button } from "../../components/ui/Button"
+import { useOptionalSessionRuntime } from "../session-runtime/useSessionRuntime"
 import { Select } from "../../components/ui/Select"
 import { useMagicContext } from "../../contexts/magicContext"
 import { damageAffinityLabel, damageTypeLabel, type DamageAffinity } from "../../models/combat/Damage"
@@ -18,6 +19,7 @@ import type { Attribute } from "../../models/sheet/Attribute"
 import type { Skill } from "../../models/sheet/Skills"
 import type {
   InitiativeCreatureSpellResources,
+  InitiativeCreatureFeatureResources,
   InitiativeEntry,
   InitiativeSide,
 } from "../../models/initiative/Initiative"
@@ -72,6 +74,7 @@ export type CombatQuickSheetData = {
   spellSaveDc?: number
   spellAttackBonus?: number
   spellResources?: InitiativeCreatureSpellResources
+  featureResources?: InitiativeCreatureFeatureResources
   sections: QuickSheetSection[]
 }
 
@@ -323,6 +326,7 @@ function QuickSheetSummary({ data, compact = false }: { data: CombatQuickSheetDa
               title={section.title}
               entries={section.entries}
               rollContext={data.rollContext}
+              featureResources={data.featureResources}
             />
           ) : (
             <InfoBlock
@@ -645,11 +649,27 @@ function FeatureSection({
   title,
   entries,
   rollContext,
+  featureResources,
 }: {
   title: string
   entries: QuickSheetFeature[]
   rollContext?: CreatureQuickSheetRollContext
+  featureResources?: InitiativeCreatureFeatureResources
 }) {
+  const runtime = useOptionalSessionRuntime()
+  const restoreFeature = (feature: QuickSheetFeature) => {
+    const entryId = rollContext?.initiativeEntryId
+    if (!entryId || !feature.usage || runtime?.role !== "MASTER") return
+    runtime.dispatchInitiativeOperation({
+      type: "initiative.entry.update", characterId: "session", entryId,
+      patch: {
+        creatureFeatureResources: {
+          ...(featureResources ?? {}),
+          [feature.id]: { max: feature.usage.max, used: 0 },
+        },
+      },
+    })
+  }
   // Toggle state is independent for each combatant and feature.
   const [enabledOptionalByFeature, setEnabledOptionalByFeature] = useState<Record<string, number[]>>({})
   const selectionKey = (featureId: string) =>
@@ -704,7 +724,32 @@ function FeatureSection({
                   Mostrar
                 </button>
               ) : null}
+              {entry.usage && !entry.mechanics && rollContext?.initiativeEntryId ? (
+                <Button size="sm" variant="secondary"
+                  disabled={(featureResources?.[entry.id]?.used ?? 0) >= entry.usage.max}
+                  onClick={() => requestCreatureRoll({
+                    ...rollContext,
+                    source: { type: "feature", featureId: entry.id, intent: "resolve" },
+                  })}>
+                  Usar
+                </Button>
+              ) : null}
             </div>
+            {entry.usage ? (() => {
+              const max = Math.max(1, entry.usage.max)
+              const remaining = Math.max(0, max - Math.min(max, featureResources?.[entry.id]?.used ?? 0))
+              const reset = entry.usage.reset === "shortRest" ? "descanso curto"
+                : entry.usage.reset === "longRest" ? "descanso longo" : "manual"
+              return (
+                <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-textMuted">
+                  <span>{remaining}/{max} usos · {reset}</span>
+                  {remaining < max && runtime?.role === "MASTER" && rollContext?.initiativeEntryId ? (
+                    <Button size="sm" variant="ghost" onClick={() => restoreFeature(entry)}>Recuperar usos</Button>
+                  ) : null}
+                  {!rollContext?.initiativeEntryId ? <span>Sem rastreamento fora da iniciativa</span> : null}
+                </div>
+              )
+            })() : null}
             {entry.mechanics ? (
               <div className="mt-2 flex flex-wrap gap-1.5 text-[11px]">
                 {(() => {
@@ -721,12 +766,13 @@ function FeatureSection({
                         ? `${mechanics.checkType === "skill" ? skillName(mechanics.checkSkill) : CREATURE_ATTRIBUTE_LABELS[mechanics.checkAttribute]} · CD ${mechanics.dc}`
                         : mechanics.kind === "contest"
                           ? `Disputa ${contestSide(mechanics.actorType, mechanics.actorAttribute, mechanics.actorSkill)} ${signed(entry.effectiveContestBonus ?? mechanics.actorBonus)} vs. ${contestSide(mechanics.targetType, mechanics.targetAttribute, mechanics.targetSkill)}`
-                          : "Rolar dano"
+                          : mechanics.damage.some(part => part.damageType === "healing") ? "Rolar cura" : "Rolar dano"
                   return rollContext ? (
                     <button
                       type="button"
                       className="rounded-full border border-accentBorder bg-accentBg px-2 py-1 font-semibold text-accent transition-colors hover:bg-bg-subtle"
-                      title={rollModifierHint()}
+                      title={entry.usage && !rollContext?.initiativeEntryId ? "Inicie a criatura na iniciativa para consumir usos." : rollModifierHint()}
+                      disabled={Boolean(entry.usage && (!rollContext?.initiativeEntryId || (featureResources?.[entry.id]?.used ?? 0) >= entry.usage.max))}
                       onClick={event => requestCreatureRoll({
                         ...rollContext,
                         source: { type: "feature", featureId: entry.id, intent: "resolve", enabledOptionalDamageIndices: enabledFor(entry.id) },
@@ -746,7 +792,7 @@ function FeatureSection({
                   </span>
                 ) : null}
                 {entry.mechanics.damage.map((part, index) => {
-                  const description = `${part.label?.trim() ? `${part.label.trim()}: ` : ""}${part.formula}${!part.optional && entry.effectiveDamageBonus ? ` ${entry.effectiveDamageBonus > 0 ? "+" : ""}${entry.effectiveDamageBonus}` : ""} ${damageTypeLabel(part.damageType)}`
+                  const description = `${part.label?.trim() ? `${part.label.trim()}: ` : ""}${part.formula}${part.damageType !== "healing" && !part.optional && entry.effectiveDamageBonus ? ` ${entry.effectiveDamageBonus > 0 ? "+" : ""}${entry.effectiveDamageBonus}` : ""} ${damageTypeLabel(part.damageType)}`
                   return part.optional && rollContext ? (
                     <label key={`${entry.id}:damage:${index}`}
                       className="inline-flex cursor-pointer items-center gap-1.5 rounded-full border border-accentBorder bg-accentBg px-2 py-1 text-textH">
@@ -965,6 +1011,7 @@ export function quickSheetFromCompendiumCreature(
     spellSaveDc: getCreatureEffectiveSpellSaveDc(creature, conditions, entry),
     spellAttackBonus: getCreatureEffectiveSpellAttackBonus(creature, conditions, entry),
     spellResources: entry?.creatureSpellResources,
+    featureResources: entry?.creatureFeatureResources,
     sections: [
       { title: "Traços e habilidades", entries: enrich(creature.traits) },
       { title: "Ações", entries: enrich(creature.actions) },

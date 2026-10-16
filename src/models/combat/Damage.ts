@@ -54,7 +54,8 @@ export const DAMAGE_TYPE_OPTIONS: Array<{ value: DamageType; label: string }> = 
   { value: "thunder", label: "Trovão" },
 ]
 
-export function damageTypeLabel(type: DamageType | undefined): string {
+export function damageTypeLabel(type: DamageType | "healing" | undefined): string {
+  if (type === "healing") return "Cura"
   return DAMAGE_TYPE_OPTIONS.find((entry) => entry.value === type)?.label ?? "Sem tipo"
 }
 

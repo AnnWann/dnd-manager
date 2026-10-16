@@ -16,6 +16,8 @@ export type InitiativeDeathSaveVisibility = "masterOnly" | "owner" | "everyone"
 export type InitiativeDeathSaves = { successes: number; failures: number }
 export type InitiativeDefeatReason = "manual" | "zeroHp"
 
+export type InitiativeCreatureFeatureResources = Record<string, { used: number; max: number }>
+
 export type InitiativeCreatureSpellResources = {
   slots: Partial<
     Record<
@@ -83,6 +85,8 @@ export type InitiativeEntry = {
   deathSaves?: InitiativeDeathSaves
   /** Mutable monster-spell resources for compendium combatants. */
   creatureSpellResources?: InitiativeCreatureSpellResources
+  /** Uses of limited creature features during initiative, keyed by feature id. */
+  creatureFeatureResources?: InitiativeCreatureFeatureResources
   order: number
   createdAt: number
 }
@@ -185,6 +189,7 @@ export function normalizeInitiativeSession(
       creatureSpellResources: normalizeCreatureSpellResources(
         entry.creatureSpellResources,
       ),
+      creatureFeatureResources: normalizeCreatureFeatureResources(entry.creatureFeatureResources),
       revealRealName: Boolean(entry.revealRealName),
       realName: entry.realName?.trim() || undefined,
       basicName: entry.basicName?.trim() || undefined,
@@ -288,6 +293,7 @@ export function synchronizeSharedCombatantState(
     armorClass: source.armorClass,
     armorClassOverride: source.armorClassOverride,
     creatureSpellResources: source.creatureSpellResources,
+    creatureFeatureResources: source.creatureFeatureResources,
   }
 
   return touchSession({
@@ -595,6 +601,20 @@ function normalizeZeroHpState(
       ? { successes: 0, failures: 0 }
       : next.deathSaves,
   }
+}
+
+function normalizeCreatureFeatureResources(
+  value: InitiativeCreatureFeatureResources | undefined,
+): InitiativeCreatureFeatureResources | undefined {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return undefined
+  return Object.fromEntries(
+    Object.entries(value).flatMap(([id, resource]) => {
+      if (!id.trim() || !resource || typeof resource !== "object") return []
+      const max = Math.min(1000, Math.max(1, Math.trunc(Number(resource.max) || 1)))
+      const used = Math.min(max, Math.max(0, Math.trunc(Number(resource.used) || 0)))
+      return [[id, { max, used }]]
+    }),
+  )
 }
 
 function normalizeCreatureSpellResources(

@@ -754,7 +754,7 @@ function ResolvedDamageBlock({
   const label = damage.label?.trim() || (damage.critical ? "Dano crítico" : "Dano")
   const rawType = damage.damageType?.trim()
   const type = rawType
-    ? DAMAGE_TYPES.includes(rawType as DamageType)
+    ? rawType === "healing" ? "Cura" : DAMAGE_TYPES.includes(rawType as DamageType)
       ? damageTypeLabel(rawType as DamageType)
       : rawType
     : undefined
@@ -762,7 +762,7 @@ function ResolvedDamageBlock({
     <div className="grid grid-cols-[1fr_auto] items-center gap-3 rounded-lg border border-border bg-bg px-3 py-2">
       <div>
         <div className="text-[10px] font-semibold uppercase tracking-wide text-textMuted">
-          {label}{type ? ` · ${type}` : ""}
+          {damage.damageType === "healing" && !damage.label?.trim() ? "Cura" : label}{type ? ` · ${type}` : ""}
         </div>
         <div className="mt-0.5 text-[10px] text-textMuted">{formatResolvedDamage(damage)}</div>
         {halfOnSave !== undefined ? (

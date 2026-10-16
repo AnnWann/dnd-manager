@@ -420,6 +420,24 @@ export class SessionActor extends DurableObject<Env> {
       return;
     }
 
+    const feature = request.source.type === "feature"
+      ? findCreatureFeature(creature, request.source.featureId)?.feature
+      : undefined;
+    const spendsFeatureUse = Boolean(feature?.usage && request.source.type === "feature"
+      && request.source.intent !== "announce");
+    if (spendsFeatureUse && feature?.usage) {
+      if (!entry) {
+        this.sendError(webSocket, "CREATURE_ENTRY_REQUIRED", "Limited creature actions require an initiative combatant.");
+        return;
+      }
+      const max = Math.max(1, Math.min(1000, feature.usage.max));
+      const used = entry.creatureFeatureResources?.[feature.id]?.used ?? 0;
+      if (used >= max) {
+        this.sendError(webSocket, "CREATURE_FEATURE_USES_EXHAUSTED", "No uses of this creature feature remain.");
+        return;
+      }
+    }
+
     const resolution = resolveServerCreatureRoll(
       request,
       connection.userId,
@@ -430,6 +448,30 @@ export class SessionActor extends DurableObject<Env> {
     if (!resolution.ok) {
       this.sendError(webSocket, resolution.code, resolution.message);
       return;
+    }
+
+    if (spendsFeatureUse && entry && initiativeState?.initialized && feature?.usage) {
+      const current = normalizeInitiativeSession(initiativeState.session as Partial<InitiativeSession>);
+      let next = updateInitiativeEntry(current, entry.id, target => {
+        const resources = { ...(target.creatureFeatureResources ?? {}) };
+        const used = resources[feature.id]?.used ?? 0;
+        resources[feature.id] = {
+          max: feature.usage!.max,
+          used: Math.min(feature.usage!.max, used + 1),
+        };
+        return { ...target, creatureFeatureResources: resources };
+      });
+      next = synchronizeSharedCombatantState(next, entry.id);
+      const updatedState: SessionInitiativeState = {
+        initialized: true,
+        revision: (initiativeState.revision ?? 0) + 1,
+        session: next,
+      };
+      await this.ctx.storage.put("initiative-state", updatedState);
+      broadcastVisibilityFiltered(this.ctx.getWebSockets(), {
+        type: "session.initiative.updated",
+        state: updatedState,
+      });
     }
 
     this.broadcast(
@@ -1497,7 +1539,7 @@ function resolveServerCreatureRoll(
       }
       const rolled = rollActionDamage(
         parsed.dice,
-        parsed.modifier + (part.optional ? 0 : effectiveDamageBonus),
+        parsed.modifier + (part.optional || part.damageType === "healing" ? 0 : effectiveDamageBonus),
         critical,
       );
       damages.push({

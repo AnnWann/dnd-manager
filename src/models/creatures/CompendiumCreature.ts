@@ -16,7 +16,7 @@ export type CreatureAbilityScores = {
 
 export type CreatureDamagePart = {
   formula: string
-  damageType: DamageType
+  damageType: DamageType | "healing"
   /** Name of this damage component, e.g. "Ataque Furtivo" or "Marca do Caçador". */
   label?: string
   /** Optional damage is selected for each initiative feature roll; off by default. */
@@ -30,11 +30,17 @@ export type CreatureFeatureMechanics =
   | { kind: "contest"; actorType: "ability" | "skill"; actorAttribute: Attribute; actorSkill?: Skill; actorBonus: number; targetType: "ability" | "skill"; targetAttribute: Attribute; targetSkill?: Skill; damage: CreatureDamagePart[] }
   | { kind: "damage"; damage: CreatureDamagePart[] }
 
+export type CreatureFeatureUsage = {
+  max: number
+  reset: "shortRest" | "longRest" | "manual"
+}
+
 export type CreatureFeature = {
   id: string
   name: string
   description: string
   mechanics?: CreatureFeatureMechanics
+  usage?: CreatureFeatureUsage
 }
 
 export type CreatureSpellUsage =
@@ -160,6 +166,7 @@ export function createCreatureFeature(
     name: patch.name ?? "",
     description: patch.description ?? "",
     mechanics: normalizeCreatureFeatureMechanics(patch.mechanics),
+    usage: normalizeCreatureFeatureUsage(patch.usage),
   }
 }
 
@@ -393,6 +400,7 @@ function normalizeCreatureFeatures(
           name: name || `${fallbackName} ${index + 1}`,
           description,
           mechanics: normalizeCreatureFeatureMechanics(record.mechanics),
+          usage: normalizeCreatureFeatureUsage(record.usage),
         }),
       ]
     })
@@ -435,6 +443,15 @@ function normalizeLegacyFeatureText(
   ]
 }
 
+function normalizeCreatureFeatureUsage(value: unknown): CreatureFeatureUsage | undefined {
+  const record = asRecord(value)
+  if (!record) return undefined
+  const max = Math.min(1000, Math.max(0, Math.trunc(finiteNumber(record.max))))
+  if (!max) return undefined
+  const reset = record.reset === "shortRest" || record.reset === "manual" ? record.reset : "longRest"
+  return { max, reset }
+}
+
 function normalizeCreatureFeatureMechanics(value: unknown): CreatureFeatureMechanics | undefined {
   const record = asRecord(value)
   if (!record || !["attack", "save", "check", "contest", "damage"].includes(String(record.kind))) return undefined
@@ -447,8 +464,8 @@ function normalizeCreatureFeatureMechanics(value: unknown): CreatureFeatureMecha
   const damage = Array.isArray(record.damage)
     ? record.damage.flatMap((part) => {
         const partRecord = asRecord(part)
-        const damageType = partRecord && ["acid", "bludgeoning", "cold", "fire", "force", "lightning", "necrotic", "piercing", "poison", "psychic", "radiant", "slashing", "thunder"].includes(String(partRecord.damageType))
-          ? partRecord.damageType as DamageType
+        const damageType = partRecord && ["acid", "bludgeoning", "cold", "fire", "force", "lightning", "necrotic", "piercing", "poison", "psychic", "radiant", "slashing", "thunder", "healing"].includes(String(partRecord.damageType))
+          ? partRecord.damageType as DamageType | "healing"
           : undefined
         const formula = stringValue(partRecord?.formula).trim()
         return damageType && formula ? [{ damageType, formula, label: optionalStringValue(partRecord?.label), optional: partRecord?.optional === true }] : []
