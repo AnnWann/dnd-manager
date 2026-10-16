@@ -31,6 +31,7 @@ import {
   isAutomaticallyPocketableKind,
 } from "../../models/items/itemPocketability"
 import { ConsumableFields, withConsumableDefaults } from "../characters/inventory/consumableFields"
+import { ScrollSpellFields } from "./ScrollSpellFields"
 import {
   EquipmentFields,
   EquipmentSpellsFields,
@@ -61,6 +62,7 @@ const ITEM_KIND_OPTIONS: Array<{ value: ItemKind; label: string }> = [
   { value: "gear", label: "Equipamento geral" },
   { value: "currency", label: "Moeda" },
   { value: "consumable", label: "Consumível" },
+  { value: "scroll", label: "Pergaminho" },
   { value: "throwable", label: "Arremessável" },
 ]
 
@@ -547,7 +549,7 @@ export function ItemCreationDialog({
 
               {draft.kind === "equipment" || draft.kind === "shield" ? (
                 <EquipmentFields item={draft} onUpdate={patch} />
-              ) : draft.kind !== "currency" ? (
+              ) : draft.kind !== "currency" && draft.kind !== "scroll" ? (
                 <div className="grid gap-3 md:col-span-3 rounded-xl border border-border bg-bg-subtle p-3">
                   <div>
                     <div className="text-xs font-semibold text-textH">
@@ -561,6 +563,9 @@ export function ItemCreationDialog({
                   </div>
                   <EquipmentSpellsFields item={draft} onUpdate={patch} />
                 </div>
+              ) : null}
+              {draft.kind === "scroll" ? (
+                <ScrollSpellFields item={draft} onUpdate={patch} />
               ) : null}
               {draft.kind === "consumable" ? (
                 <ConsumableFields item={draft} onUpdate={patch} />
@@ -653,6 +658,7 @@ function updateItemKind(item: Itemmable, kind: ItemKind): Itemmable {
   }
   if (kind === "shield") return withShieldDefaults(item)
   if (kind === "consumable") return withConsumableDefaults(item)
+  if (kind === "scroll") return { ...item, kind: "scroll", magicItem: true, pocketable: true, equippable: false, equipSlot: undefined, scrollSpellIndex: item.scrollSpellIndex ?? "", scrollCastingAttribute: item.scrollCastingAttribute ?? "int" }
   if (kind === "throwable") return withThrowableDefaults(item)
   if (kind === "supply") return withSupplyDefaults(item)
   if (kind === "currency") {
