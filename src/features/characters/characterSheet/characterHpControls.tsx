@@ -1,3 +1,4 @@
+import { HpActionButtons } from "../../../../packages/game-ui/src/HpActionButtons"
 import { HpValue } from "../../../../packages/game-ui/src/HpValue"
 import { Select as SharedSelect } from "../../../components/ui/Select"
 import { useState } from "react"
@@ -271,22 +272,7 @@ export function CharacterHpControls({ character, updateCharacter, compact = fals
           <HpValue label="Vida temporária" value={hp.temporary} />
         </div>
 
-        <div className={compact ? "grid grid-cols-2 gap-2" : "grid grid-cols-2 gap-3"}>
-          <button
-            type="button"
-            onClick={() => openModal("heal")}
-            className="rounded-lg border border-border bg-bg-subtle px-3 py-2 text-xs font-semibold text-textH transition-colors hover:border-accentBorder hover:bg-accentBg"
-          >
-            Curar
-          </button>
-          <button
-            type="button"
-            onClick={() => openModal("damage")}
-            className="rounded-lg border border-border bg-bg-subtle px-3 py-2 text-xs font-semibold text-textH transition-colors hover:border-danger hover:bg-dangerBg"
-          >
-            Dano
-          </button>
-        </div>
+        <HpActionButtons compact={compact} onHeal={() => openModal("heal")} onDamage={() => openModal("damage")} />
 
         {compact ? (
           <div className="mt-2 border-t border-border pt-3">
