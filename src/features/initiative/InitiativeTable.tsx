@@ -1,3 +1,4 @@
+import { InitiativeRosterTable } from "../../../packages/game-ui/src/InitiativeRosterTable"
 import { HeartPulse, Pencil, Play, Skull, Trash2, Zap } from "lucide-react"
 
 import { Button } from "../../components/ui/Button"
@@ -24,27 +25,12 @@ type InitiativeTableProps = InitiativeRosterProps & {
 
 export function InitiativeTable(props: InitiativeTableProps) {
   return (
-    <div className="overflow-x-auto">
-      <table className="w-full min-w-[980px] border-collapse text-left text-sm">
-        <thead className="bg-bg-subtle text-xs uppercase tracking-wide text-textMuted">
-          <tr>
-            <th className="px-3 py-3">Turno</th>
-            <th className="px-3 py-3">Iniciativa</th>
-            <th className="px-3 py-3">Participante</th>
-            <th className="px-3 py-3">PV</th>
-            <th className="px-3 py-3">CA</th>
-            <th className="px-3 py-3">Condições</th>
-            <th className="px-3 py-3">Troca</th>
-            <th className="px-3 py-3 text-right">Ações</th>
-          </tr>
-        </thead>
-        <tbody>
-          {props.entries.map((entry) => (
-            <TableEntryRows key={entry.id} entry={entry} {...props} />
-          ))}
-        </tbody>
-      </table>
-    </div>
+    <InitiativeRosterTable
+      entries={props.entries}
+      getKey={(entry) => entry.id}
+      headings={["Turno", "Iniciativa", "Participante", "PV", "CA", "Condições", "Troca", "Ações"]}
+      renderRows={(entry) => <TableEntryRows entry={entry} {...props} />}
+    />
   )
 }
 
