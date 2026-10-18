@@ -6,7 +6,7 @@ React presentation components that accept data, callbacks and optional host cont
 
 - Character sheet: `CharacterSheetLayout` (host-controlled play/config views), `CharacterHpPanel`, `StatShell`, `HitDiceRow`, `SpellcastingHandsNotice`, `CharacterSheetSection`, `CharacterSheetNumberField`, `CharacterSheetAttributeCard`, `CharacterSheetSaveCard`, `CharacterSheetSkillSearch` and `CharacterSheetSpellAttackTile`, plus `ExperienceProgress`, `HpValue`, `HpActionButtons`, `HpMaximumButton`, `HpSummaryGrid`
 - Missions: `MissionBoard` (status columns and render-item callback), `MissionBoardToolbar` (counts and controlled search), `MissionCard` (mission details, objectives and host-supplied action buttons)
-- Abilities and spells: `ActionGroup` for action discovery and usage badges, `ResourcePill` for spellcasting/resource counters, `SpellListBoard` for spell filtering and spell selection cards.
+- Abilities and spells: `ActionGroup` for action discovery and usage badges, `ResourcePill` for spellcasting/resource counters, `SpellListBoard` for spell filtering and spell selection cards, `CharacterActionTabs` for action filters and `ActionRollFeedback` for rolled action results.
 - Weapon controls: `WeaponAmmunitionBar` for current ammunition and spend callback, `AmmunitionSelectionList` for ammunition compatibility/selection, `HandGripPanel` for changing equipped grip/removal commands.
 - Configuration: `CharacterConfigStatCell`, `CharacterConfigStatValue`, `CharacterConfigSaveToggle` for class-agnostic stat and saving throw editors.
 - Initiative: `InitiativeRosterTable` (table headings and host-rendered rows), `InitiativeCardRail` (horizontal combat-card layout)
