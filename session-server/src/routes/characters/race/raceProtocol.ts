@@ -2,24 +2,9 @@ import type { CharacterRace } from "../../../../../src/models/races/CharacterRac
 import type { CharacterSkills } from "../../../../../src/models/sheet/CharacterSkills";
 import type { SavingThrowProficiencies } from "../../../../../src/models/sheet/SavingThrows";
 
-export type SessionRaceOperation =
-  | {
-      type: "character.race.replace";
-      characterId: string;
-      race: CharacterRace;
-      skills: CharacterSkills;
-      savingThrowProficiencies: SavingThrowProficiencies;
-    }
-  | {
-      type: "character.race.spells.replace";
-      characterId: string;
-      racialSpells: Record<string, unknown>[];
-    };
-
-export type SessionRaceClientMessage = {
-  type: "session.race.operation";
-  operation: SessionRaceOperation;
-};
+import type { SessionRaceOperation as SharedSessionRaceOperation, SessionRaceClientMessage as SharedSessionRaceClientMessage } from "../../../../../packages/session-protocol/src/raceOperations"
+export type SessionRaceOperation = SharedSessionRaceOperation<CharacterRace, CharacterSkills, SavingThrowProficiencies>;
+export type SessionRaceClientMessage = SharedSessionRaceClientMessage<CharacterRace, CharacterSkills, SavingThrowProficiencies>;
 
 export function parseRaceClientMessage(raw: string): SessionRaceClientMessage | null {
   let value: unknown;
