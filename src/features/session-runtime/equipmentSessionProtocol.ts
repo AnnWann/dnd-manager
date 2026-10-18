@@ -1,42 +1,9 @@
 import type { EquippedItemDestination, EquippedItemReference } from "../../models/characters/characterEquippedItemMovement"
 
-export type SessionEquipmentOperation =
-  | {
-      type: "character.equipment.item.update"
-      characterId: string
-      reference: EquippedItemReference
-      item: Record<string, unknown>
-    }
-  | {
-      type: "character.equipment.move"
-      characterId: string
-      reference: EquippedItemReference
-      destination: Exclude<EquippedItemDestination, "ground">
-    }
-  | {
-      type: "character.equipment.attunement.toggle"
-      characterId: string
-      itemId: string
-    }
-  | {
-      type: "character.equipment.pocket.unequip"
-      characterId: string
-      index: number
-    }
-  | {
-      type: "character.equipment.pocket.wield"
-      characterId: string
-      index: number
-      replaceWeaponId?: string
-      hands?: 1 | 2
-    }
-  | {
-      type: "character.equipment.pocket.use"
-      characterId: string
-      index: number
-    }
+import type {
+  SessionEquipmentOperation as SharedSessionEquipmentOperation,
+  SessionEquipmentClientMessage as SharedSessionEquipmentClientMessage,
+} from "../../../packages/session-protocol/src/equipmentOperations"
 
-export type SessionEquipmentClientMessage = {
-  type: "session.equipment.operation"
-  operation: SessionEquipmentOperation
-}
+export type SessionEquipmentOperation = SharedSessionEquipmentOperation<EquippedItemReference, EquippedItemDestination>
+export type SessionEquipmentClientMessage = SharedSessionEquipmentClientMessage<EquippedItemReference, EquippedItemDestination>
