@@ -1,12 +1,13 @@
 export type WeaponRuleInput = {
+  id?: string
   properties?: ReadonlyArray<{ id: string }>
   wieldedTwoHanded?: boolean
   modifierAttribute?: "str" | "dex" | "con" | "int" | "wis" | "cha"
   versatileDamage?: { quantity: number; sides: "d2" | "d3" | "d4" | "d6" | "d8" | "d10" | "d12" | "d20" | "d100" }
-  damage?: { quantity: number; sides: string }
+  damage?: { quantity: number; sides: "d2" | "d3" | "d4" | "d6" | "d8" | "d10" | "d12" | "d20" | "d100" }
 }
 export type WeaponPropertyId = string
-export type WeaponDie = { quantity: number; sides: string }
+export type WeaponDie = { quantity: number; sides: "d2" | "d3" | "d4" | "d6" | "d8" | "d10" | "d12" | "d20" | "d100" }
 export type Attribute = "str" | "dex" | "con" | "int" | "wis" | "cha"
 
 export function hasWeaponProperty(
