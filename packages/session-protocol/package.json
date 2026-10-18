@@ -22,6 +22,7 @@
     "./session-core": "./src/sessionCore.ts",
     "./session-messages": "./src/sessionMessages.ts",
     "./sheet-routes": "./src/sheetRoutes.ts",
-    "./dice-roll": "./src/diceRoll.ts"
+    "./dice-roll": "./src/diceRoll.ts",
+    "./session-log": "./src/sessionLog.ts"
   }
 }
