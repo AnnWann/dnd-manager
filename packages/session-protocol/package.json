@@ -5,6 +5,7 @@
   "type": "module",
   "exports": {
     "./initiative-hp": "./src/initiativeHp.ts",
-    "./mission": "./src/mission.ts"
+    "./mission": "./src/mission.ts",
+    "./inventory-settings": "./src/inventorySettings.ts"
   }
 }
