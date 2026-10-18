@@ -1,3 +1,4 @@
+import { ConfigurationToggleGrid } from "../../../../../packages/game-ui/src/ConfigurationToggleGrid"
 import { CustomClassBasicFields } from "../../../../../packages/game-ui/src/CustomClassBasicFields"
 import { LevelSelectionGrid } from "../../../../../packages/game-ui/src/LevelSelectionGrid"
 import { ClassConfigurationSelector } from "../../../../../packages/game-ui/src/ClassConfigurationSelector"
@@ -262,33 +263,13 @@ export function CustomClassConfigurationEditor({
           onToggle={toggleAsiLevel}
         />
 
-        <div className="mt-5 rounded-xl border border-border bg-bg-subtle p-3">
-          <div className="text-xs font-semibold text-textH">
-            Proficiências em testes de resistência
-          </div>
-          <div className="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-6">
-            {ATTRIBUTES.map((attribute) => {
-              const selected = draft.savingThrows.includes(attribute.value)
-              return (
-                <button
-                  key={attribute.value}
-                  type="button"
-                  disabled={readOnly}
-                  aria-pressed={selected}
-                  onClick={() => toggleSavingThrow(attribute.value)}
-                  className={[
-                    "rounded-lg border px-3 py-2 text-xs font-semibold disabled:cursor-default disabled:opacity-70",
-                    selected
-                      ? "border-accentBorder bg-accentBg text-textH"
-                      : "border-border bg-bg text-text",
-                  ].join(" ")}
-                >
-                  {selected ? "✓ " : ""}{attribute.label}
-                </button>
-              )
-            })}
-          </div>
-        </div>
+        <ConfigurationToggleGrid
+          title="Proficiências em testes de resistência"
+          choices={ATTRIBUTES}
+          selected={draft.savingThrows}
+          disabled={readOnly}
+          onToggle={toggleSavingThrow}
+        />
       </section>
 
       {draft.casterType !== "none" ? (
