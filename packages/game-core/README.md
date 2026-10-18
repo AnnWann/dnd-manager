@@ -5,8 +5,8 @@ Framework-independent game rules, numeric calculations and pure state transition
 ## Extracted modules
 
 - **Combat:** damage affinity normalization/resolution, weapon grip and damage dice, attack-rider damage choices and parsing.
-- **Characters:** HP application, death saves, XP progression, attribute modifiers, proficiency progression and carrying capacity.
-- **Inventory:** pocket eligibility, consumable quantities and stack merging.
+- **Characters:** HP application, death saves, XP progression, attribute modifiers, proficiency progression, ASI accumulation, numeric bonus resolution and carrying capacity.
+- **Inventory:** pocket eligibility, consumable quantities, stack merging and stack weight calculations.
 - **Campaign:** progression settings and projection, long-rest supply settings, standard item volumes and mission-board selectors.
 - **Dice:** bounded manual dice-expression parser.
 
