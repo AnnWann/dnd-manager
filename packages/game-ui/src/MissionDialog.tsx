@@ -1,6 +1,6 @@
 import { useEffect, useState, type ChangeEvent, type ComponentType } from "react"
 import { Plus, Trash2 } from "lucide-react"
-import type { Mission, MissionObjective, MissionPriority, MissionStatus } from "../../session-protocol/src/mission"
+import type { Mission, MissionObjective, MissionPriority, MissionStatus } from "@dnd-manager/session-protocol/mission"
 
 export function MissionDialog({
   open,
