@@ -1,3 +1,4 @@
+import { CharacterSheetSkillSearch, CharacterSheetSpellAttackTile } from "../../../../packages/game-ui/src/CharacterSheetSkillAndSpell"
 import {
   CharacterSheetSection as CompactSection,
   CharacterSheetNumberField as CompactNumberField,
@@ -448,28 +449,18 @@ export function MinimalCharacterSheet({
               {(["int", "wis", "cha"] as Attribute[]).map((attribute) => {
                 const modifier = character.getEffectiveAttributeModifier(attribute)
                 return (
-                  <div key={attribute} className="rounded-lg border border-border bg-bg-subtle px-2 py-2 text-center">
-                    <div className="text-[10px] font-semibold uppercase tracking-wide text-textMuted">{attributeShort(attribute)}</div>
-                    <div className="mt-1 flex items-baseline justify-center gap-2">
-                      <button
-                        type="button"
-                        className="rounded px-1 text-sm font-bold text-textH hover:bg-bg hover:text-accent"
-                        title={rollModifierHint()}
-                        onClick={(event) =>
-                          requestD20Roll({
-                            characterId,
-                            label: `Ataque mágico (${attributeShort(attribute)})`,
-                            source: { type: "spell-attack", attribute },
-                            mode: rollModeFromEvent(event.nativeEvent),
-                          })
-                        }
-                      >
-                        {formatSigned(character.getEffectiveSpellAttackBonus(attribute, modifier + proficiency))}
-                      </button>
-                      <span className="text-[10px] text-textMuted">CD</span>
-                      <span className="text-sm font-bold text-textH">{character.getEffectiveSpellSaveDc(attribute, 8 + modifier + proficiency)}</span>
-                    </div>
-                  </div>
+                  <CharacterSheetSpellAttackTile
+                    key={attribute}
+                    label={attributeShort(attribute)}
+                    attackBonus={formatSigned(character.getEffectiveSpellAttackBonus(attribute, modifier + proficiency))}
+                    saveDc={character.getEffectiveSpellSaveDc(attribute, 8 + modifier + proficiency)}
+                    onRoll={(event) => requestD20Roll({
+                      characterId,
+                      label: `Ataque mágico (${attributeShort(attribute)})`,
+                      source: { type: "spell-attack", attribute },
+                      mode: rollModeFromEvent(event.nativeEvent),
+                    })}
+                  />
                 )
               })}
             </div>
@@ -487,16 +478,17 @@ export function MinimalCharacterSheet({
       </CompactSection>
 
       <CompactSection title="Perícias">
-        <Input value={skillQuery} placeholder="Buscar perícia pelo nome" aria-label="Buscar perícia pelo nome" onChange={(event) => setSkillQuery(event.target.value)} />
-        {normalizedSkillQuery ? (
-          matchingSkills.length ? (
-            <div className="mt-2 grid gap-1 sm:grid-cols-2 xl:grid-cols-3">
-              {matchingSkills.map((skill) => (
-                <SelectSkillModule key={skill.key} character={character} updateCharacter={updateCharacter} skillKey={skill.key} label={skill.label} ability={skill.ability} profBonus={proficiency} />
-              ))}
-            </div>
-          ) : <p className="mt-2 text-xs text-textMuted">Nenhuma perícia corresponde à busca.</p>
-        ) : <p className="mt-2 text-xs text-textMuted">Digite para localizar uma perícia.</p>}
+        <CharacterSheetSkillSearch
+          query={skillQuery}
+          onQueryChange={setSkillQuery}
+          hasQuery={Boolean(normalizedSkillQuery)}
+          hasResults={matchingSkills.length > 0}
+        >
+          {matchingSkills.map((skill) => (
+            <SelectSkillModule key={skill.key} character={character} updateCharacter={updateCharacter}
+              skillKey={skill.key} label={skill.label} ability={skill.ability} profBonus={proficiency} />
+          ))}
+        </CharacterSheetSkillSearch>
       </CompactSection>
 
       <MinimalCharacterActions character={character} updateCharacter={updateCharacter} />
