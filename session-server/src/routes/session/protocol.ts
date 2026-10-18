@@ -1,3 +1,4 @@
+import type { SessionHpOperation as SharedSessionHpOperation, SessionRestOperation as SharedSessionRestOperation, SessionAuthoritativeOperation as SharedSessionAuthoritativeOperation } from "../../../../packages/session-protocol/src/sessionCore"
 import type { SessionDieSides as SharedSessionDieSides, SessionHitDicePool as SharedSessionHitDicePool, SessionHitDiceState as SharedSessionHitDiceState, SessionAttribute as SharedSessionAttribute, SessionAttributesState as SharedSessionAttributesState, SessionSavingThrowsState as SharedSessionSavingThrowsState, SessionSkill as SharedSessionSkill, SessionSkillProficiency as SharedSessionSkillProficiency, SessionSkillsState as SharedSessionSkillsState, SessionStatsState as SharedSessionStatsState, SessionConditionDuration as SharedSessionConditionDuration, SessionCondition as SharedSessionCondition, SessionConditionsState as SharedSessionConditionsState, SessionConditionSeed as SharedSessionConditionSeed, SessionHpState as SharedSessionHpState, SessionHpSeed as SharedSessionHpSeed, SessionHitDiceOperation as SharedSessionHitDiceOperation, SessionCalculatedStatOperation as SharedSessionCalculatedStatOperation, SessionSimpleStatOperation as SharedSessionSimpleStatOperation, SessionStatOperation as SharedSessionStatOperation, SessionAttributeOperation as SharedSessionAttributeOperation, SessionSavingThrowOperation as SharedSessionSavingThrowOperation, SessionSkillOperation as SharedSessionSkillOperation, SessionConditionOperation as SharedSessionConditionOperation, SessionConcentrationOperation as SharedSessionConcentrationOperation, SessionLoggedOperation as SharedSessionLoggedOperation } from "../../../../packages/session-protocol/src/sessionCore"
 import { routeForSheetOperation, type CharacterSheetRoute } from "../characters/sheet";
 import type { SessionActionRollRequest, SessionActionRollResult, SessionCreatureRollRequest, SessionDiceRollRequest, SessionDiceRollResult } from "../../../../src/shared/session-runtime/diceRollProtocol";
@@ -51,15 +52,7 @@ export type SessionHpState = SharedSessionHpState;
 
 export type SessionHpSeed = SharedSessionHpSeed;
 
-export type SessionHpOperation =
-  | { type: "character.hp.set"; characterId: string; value: number }
-  | { type: "character.hp.temporary.set"; characterId: string; value: number }
-  | { type: "character.hp.temporary.add"; characterId: string; amount: number }
-  | { type: "character.hp.damage"; characterId: string; amount: number; damageType?: string; source?: string; requiresConcentrationCheck?: boolean; concentrationDc?: number; concentrationSource?: string }
-  | { type: "character.hp.heal"; characterId: string; amount: number; source?: string }
-  | { type: "character.hp.max.set"; characterId: string; value: number }
-  | { type: "character.hp.currentMax.adjust"; characterId: string; amount: number }
-  | { type: "character.hp.currentMax.restore"; characterId: string };
+export type SessionHpOperation = SharedSessionHpOperation;
 
 export type SessionHitDiceOperation = SharedSessionHitDiceOperation;
 
@@ -75,21 +68,7 @@ export type SessionSavingThrowOperation = SharedSessionSavingThrowOperation;
 
 export type SessionSkillOperation = SharedSessionSkillOperation;
 
-export type SessionRestOperation =
-  | {
-      type: "character.rest.short";
-      characterId: string;
-      healing: number;
-      hitDiceConsumption: Partial<Record<SessionDieSides, number>>;
-    }
-  | {
-      type: "character.rest.long";
-      characterId: string;
-      selection: Array<{ itemId: string; portions: number }>;
-      recovery: "full" | "partial";
-      /** MASTER-only override: complete a full long rest without consuming supplies. */
-      resourceFree?: boolean;
-    };
+export type SessionRestOperation = SharedSessionRestOperation;
 
 export type SessionConditionOperation = SharedSessionConditionOperation;
 
@@ -121,14 +100,7 @@ export type SessionReverseOperation =
   | SessionConcentrationReverseOperation
   | { type: "character.rest.restore"; characterId: string; snapshot: { hp: SessionHpState; stats: SessionStatsState } };
 
-export type SessionAuthoritativeOperation =
-  | SessionHpOperation
-  | SessionHitDiceOperation
-  | SessionStatOperation
-  | SessionAttributeOperation
-  | SessionSavingThrowOperation
-  | SessionSkillOperation
-  | SessionRestOperation;
+export type SessionAuthoritativeOperation = SharedSessionAuthoritativeOperation;
 
 export type SessionLoggedOperation = SharedSessionLoggedOperation;
 
