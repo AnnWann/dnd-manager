@@ -1,3 +1,4 @@
+import { CharacterActionTabs } from "../../../../packages/game-ui/src/CharacterActionTabs"
 import { ActionGroup } from "../../../../packages/game-ui/src/ActionGroup"
 import { getInitiativeRollSelection } from "../../initiative/initiativeRollSelection"
 import { useMemo, useState } from "react"
@@ -668,25 +669,7 @@ export function MinimalCharacterActions({
     <section className="rounded-xl border border-border bg-bg p-3 shadow-theme-sm">
       <h2 className="text-xs font-semibold uppercase tracking-wide text-textH">Ações</h2>
 
-      <div className="mt-2 grid grid-cols-2 gap-1 rounded-lg border border-border bg-bg-subtle p-1 sm:grid-cols-4" role="tablist" aria-label="Filtrar ações">
-        {FILTER_OPTIONS.map((option) => (
-          <button
-            key={option.value}
-            type="button"
-            role="tab"
-            aria-selected={filter === option.value}
-            onClick={() => setFilter(option.value)}
-            className={cn(
-              "rounded-md px-2 py-2 text-xs font-semibold transition-colors",
-              filter === option.value
-                ? "bg-accentBg text-textH shadow-theme-sm"
-                : "text-textMuted hover:bg-bg hover:text-textH",
-            )}
-          >
-            {option.label}
-          </button>
-        ))}
-      </div>
+      <CharacterActionTabs filters={FILTER_OPTIONS} selected={filter} onSelect={setFilter} />
 
       <CustomSystemActionResources character={character} updateCharacter={updateCharacter} />
 
