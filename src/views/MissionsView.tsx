@@ -54,13 +54,6 @@ const STATUS_CONFIG: Record<
   },
 }
 
-const PRIORITY_LABELS: Record<MissionPriority, string> = {
-  low: "Baixa",
-  normal: "Normal",
-  high: "Alta",
-  urgent: "Urgente",
-}
-
 export function MissionsView() {
   const {
     missions,
@@ -485,16 +478,6 @@ function compareMissions(left: Mission, right: Mission): number {
   if (leftDeadline !== rightDeadline) return leftDeadline - rightDeadline
 
   return left.title.localeCompare(right.title, "pt-BR")
-}
-
-function formatDateTime(value: string): string {
-  const date = new Date(value)
-  if (Number.isNaN(date.getTime())) return value
-
-  return date.toLocaleString("pt-BR", {
-    dateStyle: "short",
-    timeStyle: "short",
-  })
 }
 
 function toDateTimeLocalValue(value?: string): string {
