@@ -1,22 +1,10 @@
 import type { CharacterRace } from "../../models/races/CharacterRace"
 import type { CharacterSkills } from "../../models/sheet/CharacterSkills"
 import type { SavingThrowProficiencies } from "../../models/sheet/SavingThrows"
+import type {
+  SessionRaceOperation as SharedRaceOperation,
+  SessionRaceClientMessage as SharedRaceClientMessage,
+} from "../../../packages/session-protocol/src/raceOperations"
 
-export type SessionRaceOperation =
-  | {
-      type: "character.race.replace"
-      characterId: string
-      race: CharacterRace
-      skills: CharacterSkills
-      savingThrowProficiencies: SavingThrowProficiencies
-    }
-  | {
-      type: "character.race.spells.replace"
-      characterId: string
-      racialSpells: Record<string, unknown>[]
-    }
-
-export type SessionRaceClientMessage = {
-  type: "session.race.operation"
-  operation: SessionRaceOperation
-}
+export type SessionRaceOperation = SharedRaceOperation<CharacterRace, CharacterSkills, SavingThrowProficiencies>
+export type SessionRaceClientMessage = SharedRaceClientMessage<CharacterRace, CharacterSkills, SavingThrowProficiencies>
