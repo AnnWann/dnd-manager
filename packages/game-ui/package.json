@@ -8,7 +8,10 @@
     "./hp-value": "./src/HpValue.tsx",
     "./hp-action-buttons": "./src/HpActionButtons.tsx",
     "./hp-maximum-button": "./src/HpMaximumButton.tsx",
-    "./hp-summary-grid": "./src/HpSummaryGrid.tsx"
+    "./hp-summary-grid": "./src/HpSummaryGrid.tsx",
+    "./mission-board": "./src/MissionBoard.tsx",
+    "./mission-toolbar": "./src/MissionBoardToolbar.tsx",
+    "./initiative-roster-table": "./src/InitiativeRosterTable.tsx"
   },
   "peerDependencies": {
     "react": "^19.0.0"
