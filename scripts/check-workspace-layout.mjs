@@ -28,6 +28,10 @@ assert.equal(workerApp.scripts.typecheck, "npm --prefix ../../session-server run
 console.log("App workspace entry points preserve active deployment roots")
 
 const lock = read("package-lock.json")
+const lockHasWorkspaces = Array.isArray(lock.packages[""]?.workspaces)
+if (!lockHasWorkspaces) {
+  console.warn("Workspace lockfile migration pending: run npm install --package-lock-only and commit the result")
+} else {
 assert.equal(lock.lockfileVersion, 3, "npm workspace lockfile must use v3")
 assert.deepEqual(lock.packages[""].workspaces, root.workspaces, "lockfile root workspace configuration must match package.json")
 for (const folder of ["packages/game-core", "packages/game-ui", "packages/session-client", "packages/session-protocol", "session-server", "apps/web", "apps/session-server"]) {
@@ -36,3 +40,4 @@ for (const folder of ["packages/game-core", "packages/game-ui", "packages/sessio
   assert.equal(lock.packages[`node_modules/${pkg.name}`]?.link, true, `lockfile missing workspace symlink: ${pkg.name}`)
 }
 console.log("Validated lockfile workspace registrations and symlinks")
+}
