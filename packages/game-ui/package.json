@@ -37,7 +37,9 @@
     "./inventory-transfer-form": "./src/InventoryTransferForm.tsx",
     "./combatant-inspector-panel": "./src/CombatantInspectorPanel.tsx",
     "./class-configuration-selector": "./src/ClassConfigurationSelector.tsx",
-    "./cast-activation-fields": "./src/CastActivationFields.tsx"
+    "./cast-activation-fields": "./src/CastActivationFields.tsx",
+    "./combat-hp-tabs": "./src/CombatHpModeTabs.tsx",
+    "./level-selection-grid": "./src/LevelSelectionGrid.tsx"
   },
   "peerDependencies": {
     "react": "^19.0.0",
