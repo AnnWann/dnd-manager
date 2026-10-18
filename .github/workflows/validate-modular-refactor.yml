@@ -40,6 +40,8 @@ jobs:
         run: node scripts/check-game-core-boundaries.mjs
       - name: Test game-core HP transitions
         run: node --test packages/game-core/tests/*.test.mjs
+      - name: Check shared protocol boundaries
+        run: node scripts/check-session-protocol-boundaries.mjs
       - name: Test shared session protocol routing
         run: node --test packages/session-protocol/tests/*.test.mjs
       - name: Test session client transport
