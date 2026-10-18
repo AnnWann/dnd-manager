@@ -15,6 +15,7 @@
     "./item-consumption": "./src/itemConsumption.ts",
     "./inventory-stacks": "./src/inventoryStacks.ts",
     "./weapon-rules": "./src/weaponRules.ts",
-    "./character-math": "./src/characterMath.ts"
+    "./character-math": "./src/characterMath.ts",
+    "./attack-riders": "./src/attackRiders.ts"
   }
 }
