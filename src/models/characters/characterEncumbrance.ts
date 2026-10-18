@@ -3,37 +3,10 @@ import { getItemStackWeightKg } from "../items/itemWeight"
 import { getInventoryCarriedWeightKg } from "../items/itemCompartments"
 import type { CharacterTemplate } from "./CharacterTemplate"
 
-export const POUNDS_TO_KILOGRAMS = 0.45359237
-
-const CREATURE_SIZE_CAPACITY_MULTIPLIER: Record<CreatureSize, number> = {
-  tiny: 0.5,
-  small: 1,
-  medium: 1,
-  large: 2,
-  huge: 4,
-  gargantuan: 8,
-}
-
-export type EncumbranceState =
-  | "normal"
-  | "encumbered"
-  | "heavily-encumbered"
-  | "over-capacity"
-
-export type EncumbranceInfo = {
-  weight: number
-  encumbranceLimit: number
-  heavyEncumbranceLimit: number
-  carryingCapacity: number
-  state: EncumbranceState
-  speedPenalty: number
-}
-
-export function getCreatureSizeCapacityMultiplier(
-  size: CreatureSize | undefined,
-): number {
-  return CREATURE_SIZE_CAPACITY_MULTIPLIER[size ?? "medium"]
-}
+import { calculateEncumbrance, getStrengthWeightLimitKg as calculateWeightLimit, getCreatureSizeCapacityMultiplier } from "../../../packages/game-core/src/encumbrance"
+import type { EncumbranceInfo, EncumbranceState } from "../../../packages/game-core/src/encumbrance"
+export { POUNDS_TO_KILOGRAMS, getCreatureSizeCapacityMultiplier } from "../../../packages/game-core/src/encumbrance"
+export type { EncumbranceInfo, EncumbranceState } from "../../../packages/game-core/src/encumbrance"
 
 function getStrengthWeightLimitKg(
   character: CharacterTemplate,
@@ -41,9 +14,8 @@ function getStrengthWeightLimitKg(
 ): number {
   const strength = Math.max(0, character.getEffectiveAttribute("str"))
   const size = character.get("sheet").race.size
-  const sizeMultiplier = getCreatureSizeCapacityMultiplier(size)
 
-  return strength * poundsPerStrengthPoint * sizeMultiplier * POUNDS_TO_KILOGRAMS
+  return calculateWeightLimit(strength, size, poundsPerStrengthPoint)
 }
 
 export function getCarriedWeightKg(character: CharacterTemplate): number {
@@ -90,51 +62,7 @@ export function getEncumbranceInfo(
   character: CharacterTemplate,
 ): EncumbranceInfo {
   const weight = getCarriedWeightKg(character)
-  const encumbranceLimit = getEncumbranceLimitKg(character)
-  const heavyEncumbranceLimit = getHeavyEncumbranceLimitKg(character)
-  const carryingCapacity = getCarryingCapacityKg(character)
-
-  if (weight > carryingCapacity) {
-    return {
-      weight,
-      encumbranceLimit,
-      heavyEncumbranceLimit,
-      carryingCapacity,
-      state: "over-capacity",
-      speedPenalty: 6,
-    }
-  }
-
-  if (weight > heavyEncumbranceLimit) {
-    return {
-      weight,
-      encumbranceLimit,
-      heavyEncumbranceLimit,
-      carryingCapacity,
-      state: "heavily-encumbered",
-      speedPenalty: 6,
-    }
-  }
-
-  if (weight > encumbranceLimit) {
-    return {
-      weight,
-      encumbranceLimit,
-      heavyEncumbranceLimit,
-      carryingCapacity,
-      state: "encumbered",
-      speedPenalty: 3,
-    }
-  }
-
-  return {
-    weight,
-    encumbranceLimit,
-    heavyEncumbranceLimit,
-    carryingCapacity,
-    state: "normal",
-    speedPenalty: 0,
-  }
+  return calculateEncumbrance(weight, character.getEffectiveAttribute("str"), character.get("sheet").race.size)
 }
 
 export function getEncumbranceSpeedPenalty(
