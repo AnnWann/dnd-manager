@@ -13,6 +13,7 @@
     "./pocketability": "./src/pocketability.ts",
     "./encumbrance": "./src/encumbrance.ts",
     "./item-consumption": "./src/itemConsumption.ts",
-    "./inventory-stacks": "./src/inventoryStacks.ts"
+    "./inventory-stacks": "./src/inventoryStacks.ts",
+    "./weapon-rules": "./src/weaponRules.ts"
   }
 }
