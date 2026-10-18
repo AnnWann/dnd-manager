@@ -1,3 +1,4 @@
+import type { InventorySettingsOperation } from "../../../packages/session-protocol/src/inventorySettings"
 import type { EquipmentDestination } from "../../models/characters/characterEquipmentInteractions"
 import type { EquippedItemReference } from "../../models/characters/characterEquippedItemMovement"
 import type { TransferItemOperationRequest } from "../../models/game/GameOperation"
@@ -56,9 +57,7 @@ export type SessionInventoryOperation =
   | { type: "party.item.add"; characterId: string; item: Itemmable }
   | { type: "party.item.update"; characterId: string; itemId: string; item: Itemmable }
   | { type: "party.item.remove"; characterId: string; itemId: string }
-  | { type: "party.settings.carryCapacity.set"; characterId: "session"; value: number }
-  | { type: "party.settings.additionalSupplyConsumption.set"; characterId: "session"; value: number }
-  | { type: "party.settings.accessible.set"; characterId: "session"; value: boolean }
+  | InventorySettingsOperation
   | { type: "ground.item.add"; characterId: string; item: Itemmable }
   | { type: "ground.item.update"; characterId: string; itemId: string; item: Itemmable }
   | { type: "ground.item.remove"; characterId: string; itemId: string }
