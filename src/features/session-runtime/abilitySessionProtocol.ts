@@ -4,81 +4,20 @@ import type { CharacterTemplateProps } from "../../models/characters/CharacterTe
 import type { DamageAffinity } from "../../models/combat/Damage"
 import type { SessionCustomSystemOperation } from "./customSystemSessionProtocol"
 
-export type SessionAbilitySource =
-  | { type: "character"; abilityId: string }
-  | { type: "race"; abilityId: string }
-  | { type: "equipment"; itemId: string; abilityId: string }
-  | { type: "condition"; conditionId: string; abilityId: string }
-
-export type SessionAbilitySeed = {
-  characterId: string
-  character: CharacterTemplateProps
-}
-
-export type SessionAbilityState = {
-  characterId: string
-  character: CharacterTemplateProps
-  initialized: boolean
-  revision: number
-}
-
-export type SessionAbilityOperation =
-  | {
-      type: "character.ability.use"
-      characterId: string
-      source: SessionAbilitySource
-      abilityName?: string
-      activationOptionId?: string
-      selectedWeaponId?: string
-      resourceSelection?: AbilityResourceSelection
-      /** Resultados dos dados informados pelo jogador para bônus em modo manual. */
-      bonusRollValues?: Record<string, number>
-      /** Preenchido pelo servidor para auditoria e exibição no log. */
-      bonusRollResults?: BonusRollResolution[]
-    }
-  | {
-      type: "character.ability.usage.spend"
-      characterId: string
-      source: SessionAbilitySource
-      abilityName?: string
-    }
-  | {
-      type: "character.ability.restore"
-      characterId: string
-      source: SessionAbilitySource
-      abilityName?: string
-    }
-  | {
-      type: "character.ability.deactivate"
-      characterId: string
-      source: SessionAbilitySource
-      abilityName?: string
-    }
-  | {
-      type: "character.ability.save"
-      characterId: string
-      ability: Ability
-    }
-  | {
-      type: "character.ability.remove"
-      characterId: string
-      abilityId: string
-      abilityName?: string
-    }
-  | {
-      type: "character.damageAffinities.set"
-      characterId: string
-      damageAffinities: DamageAffinity[]
-    }
-  | SessionCustomSystemOperation
-
-export type SessionAbilityClientMessage =
-  | { type: "session.abilities.initialize"; characters: SessionAbilitySeed[] }
-  | { type: "session.abilities.operation"; operation: SessionAbilityOperation }
-
-export type SessionAbilityServerMessage =
-  | { type: "session.abilities.snapshot"; characters: SessionAbilityState[] }
-  | { type: "session.abilities.updated"; character: SessionAbilityState }
+import type {
+  SessionAbilitySource,
+  SessionAbilitySeed as SharedSeed,
+  SessionAbilityState as SharedState,
+  SessionAbilityOperation as SharedOperation,
+  SessionAbilityClientMessage as SharedClientMessage,
+  SessionAbilityServerMessage as SharedServerMessage,
+} from "../../../packages/session-protocol/src/abilities"
+export type { SessionAbilitySource } from "../../../packages/session-protocol/src/abilities"
+export type SessionAbilitySeed = SharedSeed<CharacterTemplateProps>
+export type SessionAbilityState = SharedState<CharacterTemplateProps>
+export type SessionAbilityOperation = SharedOperation<AbilityResourceSelection, BonusRollResolution, DamageAffinity, Ability, SessionCustomSystemOperation>
+export type SessionAbilityClientMessage = SharedClientMessage<CharacterTemplateProps, AbilityResourceSelection, BonusRollResolution, DamageAffinity, Ability, SessionCustomSystemOperation>
+export type SessionAbilityServerMessage = SharedServerMessage<CharacterTemplateProps>
 
 export function parseAbilityServerMessage(raw: string): SessionAbilityServerMessage | null {
   let parsed: unknown
