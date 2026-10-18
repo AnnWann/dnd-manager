@@ -6,6 +6,7 @@ on:
       - refactor/modular-workspaces-foundation
     paths:
       - ".github/workflows/reconcile-workspace-lockfile.yml"
+      - "apps/web/package.json"
   workflow_dispatch:
 
 permissions:
