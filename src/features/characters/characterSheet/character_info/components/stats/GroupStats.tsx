@@ -1,3 +1,4 @@
+import { StatShell } from "../../../../../../../packages/game-ui/src/StatShell"
 import { Sparkles } from "lucide-react"
 
 import { Input } from "../../../../../../components/ui/Input"
@@ -163,19 +164,3 @@ export function GroupStats({
   )
 }
 
-function StatShell({
-  label,
-  children,
-}: {
-  label: string
-  children: React.ReactNode
-}) {
-  return (
-    <div className="min-h-24 rounded-xl border border-border bg-bg p-3 shadow-theme-sm">
-      <div className="mb-2 text-center text-[11px] font-medium uppercase tracking-wide text-textMuted">
-        {label}
-      </div>
-      {children}
-    </div>
-  )
-}
