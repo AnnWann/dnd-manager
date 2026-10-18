@@ -4,7 +4,7 @@ React presentation components that accept data, callbacks and optional host cont
 
 ## Current extracted features
 
-- Character sheet: `CharacterSheetLayout` (host-controlled play/config views), `CharacterHpPanel`, `StatShell`, `HitDiceRow`, `SpellcastingHandsNotice`, plus `ExperienceProgress`, `HpValue`, `HpActionButtons`, `HpMaximumButton`, `HpSummaryGrid`
+- Character sheet: `CharacterSheetLayout` (host-controlled play/config views), `CharacterHpPanel`, `StatShell`, `HitDiceRow`, `SpellcastingHandsNotice`, `CharacterSheetSection`, `CharacterSheetNumberField`, `CharacterSheetAttributeCard`, `CharacterSheetSaveCard`, `CharacterSheetSkillSearch` and `CharacterSheetSpellAttackTile`, plus `ExperienceProgress`, `HpValue`, `HpActionButtons`, `HpMaximumButton`, `HpSummaryGrid`
 - Missions: `MissionBoard` (status columns and render-item callback), `MissionBoardToolbar` (counts and controlled search), `MissionCard` (mission details, objectives and host-supplied action buttons)
 - Initiative: `InitiativeRosterTable` (table headings and host-rendered rows), `InitiativeCardRail` (horizontal combat-card layout)
 - Inventory: `InventoryTileGrid` (responsive slots and empty state)
