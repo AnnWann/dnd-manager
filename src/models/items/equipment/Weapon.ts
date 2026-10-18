@@ -1,3 +1,6 @@
+import { hasWeaponProperty, isVersatileWeapon, isTwoHandedWeapon, isWeaponImprovisedGrip, getWeaponHandsUsed, getWeaponAttackAttribute, getWeaponDamageDie } from "../../../../packages/game-core/src/weaponRules"
+export { hasWeaponProperty, isVersatileWeapon, isTwoHandedWeapon, isWeaponImprovisedGrip, getWeaponHandsUsed, getWeaponAttackAttribute, getWeaponDamageDie } from "../../../../packages/game-core/src/weaponRules"
+
 import type { Die } from "../../dice/Die"
 import type { DamageType } from "../../combat/Damage"
 import type { Attribute } from "../../sheet/Attribute"
@@ -48,55 +51,6 @@ export type WeaponPropertyId =
   | "special-weapons"
   | "lance"
   | "net"
-
-export function hasWeaponProperty(
-  weapon: Partial<Weapon>,
-  propertyId: WeaponPropertyId,
-): boolean {
-  return weapon.properties?.some((property) => property.id === propertyId) ?? false
-}
-
-export function isVersatileWeapon(weapon: Partial<Weapon>): boolean {
-  return hasWeaponProperty(weapon, "versatile")
-}
-
-export function isTwoHandedWeapon(weapon: Partial<Weapon>): boolean {
-  return hasWeaponProperty(weapon, "two-handed")
-}
-
-export function isWeaponImprovisedGrip(weapon: Partial<Weapon>): boolean {
-  return isTwoHandedWeapon(weapon) && weapon.wieldedTwoHanded === false
-}
-
-export function getWeaponHandsUsed(weapon: Partial<Weapon>): 1 | 2 {
-  if (weapon.wieldedTwoHanded === true) return 2
-  if (weapon.wieldedTwoHanded === false) return 1
-  return isTwoHandedWeapon(weapon) ? 2 : 1
-}
-
-export function getWeaponAttackAttribute(
-  weapon: Partial<Weapon>,
-): Attribute {
-  return isWeaponImprovisedGrip(weapon)
-    ? "str"
-    : (weapon.modifierAttribute ?? "str")
-}
-
-export function getWeaponDamageDie(weapon: Partial<Weapon>): Die | undefined {
-  if (isWeaponImprovisedGrip(weapon)) {
-    return { quantity: 1, sides: "d4" }
-  }
-
-  if (
-    isVersatileWeapon(weapon) &&
-    weapon.wieldedTwoHanded &&
-    weapon.versatileDamage
-  ) {
-    return weapon.versatileDamage
-  }
-
-  return weapon.damage
-}
 
 export const WEAPON_PROPERTIES: Record<WeaponPropertyId, WeaponProperty> = {
   ammunition: {
