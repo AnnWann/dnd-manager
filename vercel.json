@@ -108,7 +108,5 @@
       "qa": true,
       "master": true
     }
-  },
-  "buildCommand": "npm run build:app-web",
-  "outputDirectory": "apps/web/dist"
+  }
 }
