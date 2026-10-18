@@ -5,6 +5,7 @@
   "type": "module",
   "exports": {
     "./damage": "./src/damage.ts",
-    "./hit-points": "./src/hitPoints.ts"
+    "./hit-points": "./src/hitPoints.ts",
+    "./death-saves": "./src/deathSaves.ts"
   }
 }
