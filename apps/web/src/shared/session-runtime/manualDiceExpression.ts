@@ -1,1 +1,1 @@
-export * from "../../../../../packages/game-core/src/manualDiceExpression"
+export * from "@dnd-manager/game-core/manual-dice"
