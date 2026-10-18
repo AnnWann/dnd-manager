@@ -209,3 +209,75 @@ test("manual reconnect replaces the active socket and ignores late errors", asyn
     client.disconnect()
   } finally { globalThis.WebSocket = originalWebSocket }
 })
+
+test("heartbeat starts only after ready and stops on disconnect", async () => {
+  FakeWebSocket.instances = []
+  globalThis.WebSocket = FakeWebSocket
+  const originalSetTimeout = globalThis.setTimeout
+  const originalClearTimeout = globalThis.clearTimeout
+  const timers = new Map()
+  let id = 0
+  globalThis.setTimeout = (fn, delay) => {
+    const next = ++id
+    timers.set(next, { fn, delay })
+    return next
+  }
+  globalThis.clearTimeout = (key) => timers.delete(key)
+  try {
+    const { client } = createClient()
+    client.connect()
+    await tick()
+    const socket = FakeWebSocket.instances.at(-1)
+    assert.equal(timers.size, 0, "no heartbeat before ready")
+    socket.readyState = FakeWebSocket.OPEN
+    socket.receive('{"type":"session.ready"}')
+    const heartbeat = [...timers.entries()].find(([, timer]) => timer.delay >= 27000 && timer.delay <= 33000)
+    assert.ok(heartbeat)
+    timers.delete(heartbeat[0])
+    heartbeat[1].fn()
+    assert.deepEqual(JSON.parse(socket.sent.at(-1)), { type: "session.heartbeat", clientId: "client-1" })
+    assert.equal(timers.size, 1, "heartbeat rescheduled")
+    client.disconnect()
+    assert.equal(timers.size, 0, "disconnect cancels heartbeat")
+  } finally {
+    globalThis.WebSocket = originalWebSocket
+    globalThis.setTimeout = originalSetTimeout
+    globalThis.clearTimeout = originalClearTimeout
+  }
+})
+
+test("authorization failures schedule a reconnect without opening a socket", async () => {
+  FakeWebSocket.instances = []
+  globalThis.WebSocket = FakeWebSocket
+  const originalSetTimeout = globalThis.setTimeout
+  const originalClearTimeout = globalThis.clearTimeout
+  const originalError = console.error
+  const timers = new Map()
+  let id = 0
+  globalThis.setTimeout = (fn, delay) => {
+    const next = ++id
+    timers.set(next, { fn, delay })
+    return next
+  }
+  globalThis.clearTimeout = (key) => timers.delete(key)
+  console.error = () => {}
+  try {
+    const { client, statuses } = createClient({
+      useTokenAuth: true,
+      getConnectionToken: async () => { throw new Error("token denied") },
+    })
+    client.connect()
+    await tick()
+    assert.equal(FakeWebSocket.instances.length, 0)
+    assert.ok(statuses.includes("error"))
+    assert.equal(statuses.at(-1), "reconnecting")
+    assert.ok([...timers.values()].some((timer) => timer.delay === 1000))
+    client.disconnect()
+    assert.equal(timers.size, 0)
+  } finally {
+    globalThis.WebSocket = originalWebSocket
+    globalThis.setTimeout = originalSetTimeout
+    globalThis.clearTimeout = originalClearTimeout
+    console.error = originalError
+  }
+})
