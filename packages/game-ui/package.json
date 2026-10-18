@@ -35,7 +35,9 @@
     "./weapon-attack-tile": "./src/WeaponAttackTile.tsx",
     "./unarmed-attack-tile": "./src/UnarmedAttackTile.tsx",
     "./inventory-transfer-form": "./src/InventoryTransferForm.tsx",
-    "./combatant-inspector-panel": "./src/CombatantInspectorPanel.tsx"
+    "./combatant-inspector-panel": "./src/CombatantInspectorPanel.tsx",
+    "./class-configuration-selector": "./src/ClassConfigurationSelector.tsx",
+    "./cast-activation-fields": "./src/CastActivationFields.tsx"
   },
   "peerDependencies": {
     "react": "^19.0.0",
