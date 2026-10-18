@@ -2,7 +2,7 @@ import assert from "node:assert/strict"
 import { readFileSync } from "node:fs"
 
 const catalog = readFileSync("src/features/items/itemCompendium.ts", "utf8")
-const volumesFile = readFileSync("src/models/items/standardItemVolumes.ts", "utf8")
+const volumesFile = readFileSync("packages/game-core/src/standardItemVolumes.ts", "utf8")
 const catalogIds = [...catalog.matchAll(/(?:weapon|armor|item)\("([^"]+)"/g)].map(match => match[1])
 const table = volumesFile.split("export const STANDARD_ITEM_VOLUME_LITERS")[1]
   ?.split("/** 2014 D&D 5e container capacities")[0]
