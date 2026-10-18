@@ -1,3 +1,4 @@
+import { HpValue } from "../../../../packages/game-ui/src/HpValue"
 import { Select as SharedSelect } from "../../../components/ui/Select"
 import { useState } from "react"
 
@@ -261,13 +262,13 @@ export function CharacterHpControls({ character, updateCharacter, compact = fals
     <>
       <div className="grid gap-2">
         <div className="grid grid-cols-3 gap-2">
-          <HpDisplay label="Vida atual" value={hp.current} />
+          <HpValue label="Vida atual" value={hp.current} />
           <HpMaximumButton
             value={effectiveMax}
             reduced={currentMax < hp.max}
             onClick={() => openModal("maximum")}
           />
-          <HpDisplay label="Vida temporária" value={hp.temporary} />
+          <HpValue label="Vida temporária" value={hp.temporary} />
         </div>
 
         <div className={compact ? "grid grid-cols-2 gap-2" : "grid grid-cols-2 gap-3"}>
@@ -304,8 +305,8 @@ export function CharacterHpControls({ character, updateCharacter, compact = fals
         <Modal title="Curar" onClose={closeModal} className="max-w-md">
           <div className="grid gap-4">
             <div className="grid grid-cols-2 gap-2">
-              <HpSummary label="Vida atual" value={hp.current} />
-              <HpSummary label="Vida temporária" value={hp.temporary} />
+              <HpValue variant="summary" label="Vida atual" value={hp.current} />
+              <HpValue variant="summary" label="Vida temporária" value={hp.temporary} />
             </div>
 
             <label className="grid gap-1 text-xs text-textMuted">
@@ -354,10 +355,10 @@ export function CharacterHpControls({ character, updateCharacter, compact = fals
         >
           <div className="grid gap-4">
             <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-              <HpSummary label="Vida atual" value={hp.current} />
-              <HpSummary label="Vida temporária" value={hp.temporary} />
-              <HpSummary label="Dano informado" value={requestedDamage} />
-              <HpSummary label="Dano aplicado" value={appliedDamage} />
+              <HpValue variant="summary" label="Vida atual" value={hp.current} />
+              <HpValue variant="summary" label="Vida temporária" value={hp.temporary} />
+              <HpValue variant="summary" label="Dano informado" value={requestedDamage} />
+              <HpValue variant="summary" label="Dano aplicado" value={appliedDamage} />
             </div>
 
             <section className="grid gap-2 rounded-xl border border-border bg-bg-subtle p-3">
@@ -485,8 +486,8 @@ export function CharacterHpControls({ character, updateCharacter, compact = fals
             ) : null}
 
             <div className="grid grid-cols-2 gap-2">
-              <HpSummary label="Vida após" value={resultingCurrentHp} />
-              <HpSummary label="Vida temporária após" value={resultingTemporaryHp} />
+              <HpValue variant="summary" label="Vida após" value={resultingCurrentHp} />
+              <HpValue variant="summary" label="Vida temporária após" value={resultingTemporaryHp} />
             </div>
 
             {concentration && appliedDamage > 0 ? (
@@ -508,8 +509,8 @@ export function CharacterHpControls({ character, updateCharacter, compact = fals
         <Modal title="Pontos de vida máximos" onClose={closeModal} className="max-w-md">
           <div className="grid gap-4">
             <div className="grid grid-cols-2 gap-2">
-              <HpSummary label="Máximo real" value={hp.max} />
-              <HpSummary label="Máximo atual" value={currentMax} />
+              <HpValue variant="summary" label="Máximo real" value={hp.max} />
+              <HpValue variant="summary" label="Máximo atual" value={currentMax} />
             </div>
 
             <label className="grid gap-1 text-xs text-textMuted">
@@ -596,15 +597,6 @@ export function CharacterHpControls({ character, updateCharacter, compact = fals
   )
 }
 
-function HpDisplay({ label, value }: { label: string; value: number }) {
-  return (
-    <div className="rounded-lg border border-border bg-bg-subtle px-2 py-2 text-center">
-      <div className="text-[10px] uppercase tracking-wide text-textMuted">{label}</div>
-      <div className="mt-1 text-lg font-semibold text-textH">{value}</div>
-    </div>
-  )
-}
-
 function HpMaximumButton({ value, reduced, onClick }: { value: number; reduced: boolean; onClick: () => void }) {
   return (
     <button
@@ -619,11 +611,4 @@ function HpMaximumButton({ value, reduced, onClick }: { value: number; reduced: 
   )
 }
 
-function HpSummary({ label, value }: { label: string; value: number }) {
-  return (
-    <div className="rounded-lg border border-border bg-bg-subtle p-3 text-center">
-      <div className="text-[10px] uppercase tracking-wide text-textMuted">{label}</div>
-      <div className="mt-1 text-xl font-semibold text-textH">{value}</div>
-    </div>
-  )
-}
+
