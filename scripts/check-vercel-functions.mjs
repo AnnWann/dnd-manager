@@ -1,17 +1,17 @@
 import { readdir } from "node:fs/promises"
 import path from "node:path"
 
-const API_DIRECTORY = path.resolve("api")
+const API_DIRECTORY = path.resolve("apps/web/api")
 const EXPECTED_ENTRYPOINTS = new Set([
-  "api/auth.ts",
-  "api/campaigns.ts",
-  "api/compendium/spells.ts",
-  "api/custom-systems.ts",
-  "api/images/upload.ts",
-  "api/me.ts",
-  "api/session-connection.ts",
-  "api/state.ts",
-  "api/translate.ts",
+  "apps/web/api/auth.ts",
+  "apps/web/api/campaigns.ts",
+  "apps/web/api/compendium/spells.ts",
+  "apps/web/api/custom-systems.ts",
+  "apps/web/api/images/upload.ts",
+  "apps/web/api/me.ts",
+  "apps/web/api/session-connection.ts",
+  "apps/web/api/state.ts",
+  "apps/web/api/translate.ts",
 ])
 const FUNCTION_EXTENSIONS = new Set([".js", ".mjs", ".cjs", ".ts", ".mts", ".cts"])
 

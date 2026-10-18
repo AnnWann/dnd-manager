@@ -1,0 +1,25 @@
+import assert from "node:assert/strict"
+import { readFileSync, readdirSync } from "node:fs"
+import { join } from "node:path"
+
+const root = "packages/game-ui/src"
+const files = readdirSync(root).filter((file) => /\.tsx?$/.test(file))
+const forbidden = /(?:from\s*["']|import\s*\(["'])(?:\.\.\/\.\.\/\.\.\/src\/|@\/|react-router|@prisma|@cloudflare|next\/)/
+
+for (const file of files) {
+  const content = readFileSync(join(root, file), "utf8")
+  assert.ok(!forbidden.test(content), `game-ui must not import host app dependencies: ${file}`)
+}
+console.log(`Validated independence of ${files.length} shared UI modules`)
+
+const tailwind = readFileSync("apps/web/tailwind.config.js", "utf8")
+assert.ok(tailwind.includes("packages/game-ui/src/**/*.{ts,tsx}"), "Tailwind must scan shared UI source for utility classes")
+console.log("Tailwind includes game-ui source")
+
+const packageJson = JSON.parse(readFileSync("packages/game-ui/package.json", "utf8"))
+for (const [entry, relativePath] of Object.entries(packageJson.exports)) {
+  assert.ok(typeof relativePath === "string" && relativePath.startsWith("./src/"), `Invalid game-ui export ${entry}`)
+  const file = relativePath.slice(2)
+  assert.ok(files.includes(file.replace(/^src\//, "")), `Missing source for game-ui export ${entry}: ${relativePath}`)
+}
+console.log(`Validated ${Object.keys(packageJson.exports).length} shared UI package entrypoints`)

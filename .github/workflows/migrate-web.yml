@@ -1,0 +1,41 @@
+name: Migrate web workspace
+
+on:
+  push:
+    branches: [refactor/modular-workspaces-foundation]
+    paths:
+      - "scripts/migrate-web.mjs"
+      - ".github/workflows/migrate-web.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  migrate:
+    runs-on: ubuntu-latest
+    env:
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/postgres
+      DIRECT_URL: postgresql://postgres:postgres@localhost:5432/postgres
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: true
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - run: node scripts/migrate-web.mjs
+      - run: npm install --package-lock-only --ignore-scripts --no-audit --no-fund
+      - run: npm ci --ignore-scripts --no-audit --no-fund
+      - run: npm run check:workspace-boundaries && npm run audit:workspace-imports
+      - run: npx prisma generate --config apps/web/prisma.config.ts
+      - run: npm run --workspace @dnd-manager/web build
+      - run: npm run --workspace @dnd-manager/session-server-app typecheck
+      - name: Commit validated migration
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git diff --cached --quiet && exit 0
+          git commit -m "refactor: physically relocate website to apps/web"
+          git push origin HEAD:refactor/modular-workspaces-foundation

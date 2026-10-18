@@ -4,29 +4,34 @@
   "version": "1.0.0",
   "type": "module",
   "scripts": {
-    "dev": "vite",
-    "dev:vite": "vite",
+    "dev": "npm run --workspace @dnd-manager/web dev",
+    "dev:vite": "npm run --workspace @dnd-manager/web dev",
     "dev:vercel": "vercel dev",
     "dev:full": "node scripts/dev-full.mjs",
     "dev:full:prod-env": "node scripts/dev-full.mjs --production",
     "dev:link": "vercel link",
-    "dev:session-server": "npm --prefix session-server run dev",
-    "deploy:session-server": "npm --prefix session-server run deploy",
-    "deploy:session-server-qa": "npm --prefix session-server run deploy:qa",
-    "typecheck:session-server": "npm --prefix session-server run typecheck",
+    "dev:session-server": "npm --workspace @dnd-manager/session-server-app run dev",
+    "deploy:session-server": "npm --workspace @dnd-manager/session-server-app run deploy",
+    "deploy:session-server-qa": "npm --workspace @dnd-manager/session-server-app run deploy:qa",
+    "typecheck:session-server": "npm --workspace @dnd-manager/session-server-app run typecheck",
     "check:user-workspace-boundaries": "node scripts/check-user-workspace-boundaries.mjs",
     "check:vercel-functions": "node scripts/check-vercel-functions.mjs",
     "check:native-selects": "node scripts/check-native-selects.mjs",
     "check:compendium-volumes": "node scripts/check-compendium-volumes.mjs",
-    "build": "npm run check:compendium-volumes && npm run check:user-workspace-boundaries && npm run check:vercel-functions && npm run check:native-selects && tsc -b && vite build",
-    "lint": "eslint .",
-    "preview": "vite preview",
+    "build": "npm run --workspace @dnd-manager/web build",
+    "lint": "npm run --workspace @dnd-manager/web lint",
+    "preview": "npm run --workspace @dnd-manager/web preview",
     "db:migrate": "node scripts/migrate-relational.mjs",
     "spells:fetch": "node scripts/build-spells-json.mjs --force && npm run spells:enrich-resolution",
-    "prisma:generate": "prisma generate",
-    "prisma:migrate:deploy": "prisma migrate deploy",
-    "postinstall": "prisma generate",
-    "spells:enrich-resolution": "node scripts/enrich-spell-resolution.mjs"
+    "prisma:generate": "prisma generate --config apps/web/prisma.config.ts",
+    "prisma:migrate:deploy": "prisma migrate deploy --config apps/web/prisma.config.ts",
+    "postinstall": "prisma generate --config apps/web/prisma.config.ts",
+    "spells:enrich-resolution": "node scripts/enrich-spell-resolution.mjs",
+    "check:workspace-boundaries": "node scripts/check-workspace-layout.mjs",
+    "test:shared": "node --test packages/game-core/tests/*.test.mjs packages/session-protocol/tests/*.test.mjs packages/session-client/tests/*.test.mjs",
+    "build:app-web": "npm run --workspace @dnd-manager/web build",
+    "typecheck:app-session-server": "npm run --workspace @dnd-manager/session-server-app typecheck",
+    "audit:workspace-imports": "node scripts/audit-workspace-imports.mjs"
   },
   "dependencies": {
     "@better-auth/prisma-adapter": "^1.6.25",
@@ -66,5 +71,9 @@
     "typescript-eslint": "^8.58.0",
     "vercel": "^59.6.2",
     "vite": "^8.0.4"
-  }
+  },
+  "workspaces": [
+    "packages/*",
+    "apps/*"
+  ]
 }

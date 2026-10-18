@@ -1,0 +1,932 @@
+import {
+  addCustomAbility,
+  createCustomCollectionEntry,
+  removeCustomCollectionEntry,
+  updateCustomCollectionEntryField,
+  adjustCustomResource,
+  CustomSystemOperationError,
+  removeCustomAbility,
+  removeCustomFieldValue,
+  resetCustomResource,
+  setCustomAbilityUsage,
+  setCustomFieldValue,
+  setCustomResourceState,
+  updateCustomAbilityField,
+  type CustomSystemActor,
+} from "../../../../../web/src/lib/customSystems/CustomSystemState";
+import {
+  initializeCustomAbilityProgress,
+  setCustomAbilityLearned,
+  setCustomAbilityPrepared,
+} from "../../../../../web/src/lib/customSystems/CustomAbilityManagement";
+import {
+  activateCustomAbilityWithRoll,
+  activateCustomSystemActionWithRoll,
+  customRollManualDamageCount,
+  customRollRequiresManualPrimary,
+  formatCustomRollResolutionSummary,
+  getCustomAbilityRollDefinition,
+  type CustomAbilityRollResolution,
+} from "../../../../../web/src/lib/customSystems/CustomAbilityRoll";
+import type {
+  SessionActionRollResult,
+  SessionResolvedDamageRoll,
+  SessionResolvedPrimaryRoll,
+} from "../../../../../web/src/shared/session-runtime/diceRollProtocol";
+import {
+  runCustomSystemAutomation,
+  runCustomSystemAutomations,
+} from "../../../../../web/src/lib/customSystems/CustomAutomationRuntime";
+import {
+  CharacterTemplate,
+  type CharacterTemplateProps,
+} from "../../../../../web/src/models/characters/CharacterTemplate";
+import { getCharacterConditions } from "../../../../../web/src/models/characters/characterConditionStorage";
+import type {
+  CharacterCustomSystemState,
+  CustomAbilityInstance,
+  CustomSystemDefinition,
+} from "../../../../../web/src/models/customSystems/CustomSystemDefinition";
+import { SessionActor as BaseSessionActor } from "../../session/SessionActor";
+import type { SessionAbilityState } from "../abilities/abilityProtocol";
+import type {
+  SessionConditionsState,
+  SessionConnection,
+  SessionHpState,
+} from "../../session/protocol";
+import {
+  commitSessionMutation,
+  createSessionLogRecord,
+  readSessionLog,
+} from "../../session/sessionLog";
+import { isDigitalDiceRollingEnabled, readRuntimeConfig } from "../../session/runtimeConfigAccess";
+import { broadcastVisibilityFiltered } from "../../session/visibilityDelivery";
+import { MAX_CHARACTER_STATE_LOG_RECORDS } from "../sheet/characterState";
+import {
+  parseCustomSystemClientMessage,
+  type SessionCustomSystemOperation,
+} from "./customSystemProtocol";
+import { validateRuntimeCustomSystemAccess } from "./runtimeCustomSystemAccess";
+
+const ABILITIES_STATE_KEY = "abilities-state";
+const HP_STATE_KEY = "hp-state";
+const CONDITIONS_STATE_KEY = "conditions-state";
+
+type RuntimeConfigSnapshot = NonNullable<Awaited<ReturnType<typeof readRuntimeConfig>>>;
+type AccessError = { ok: false; code: string; message: string };
+type AggregateCustomSystemOperation = Extract<
+  SessionCustomSystemOperation,
+  {
+    type:
+      | "character.customSystem.ability.activate"
+      | "character.customSystem.action.execute"
+      | "character.customSystem.automation.execute";
+  }
+>;
+
+export class SessionActor extends BaseSessionActor {
+  override async webSocketMessage(
+    webSocket: WebSocket,
+    message: string | ArrayBuffer,
+  ): Promise<void> {
+    const raw = typeof message === "string" ? message : new TextDecoder().decode(message);
+    const parsed = parseCustomSystemClientMessage(raw);
+    if (!parsed) {
+      await super.webSocketMessage(webSocket, message);
+      return;
+    }
+
+    const connection = readConnection(webSocket);
+    if (!connection) {
+      webSocket.close(1011, "Missing connection attachment");
+      return;
+    }
+    connection.lastHeartbeatAt = Date.now();
+    webSocket.serializeAttachment(connection);
+
+    await this.handleOperation(webSocket, connection, parsed.operation);
+  }
+
+  private async handleOperation(
+    webSocket: WebSocket,
+    connection: SessionConnection,
+    operation: SessionCustomSystemOperation,
+  ): Promise<void> {
+    const [runtimeConfig, abilityState, hpState, conditionsState, log] = await Promise.all([
+      readRuntimeConfig(this.ctx.storage),
+      this.ctx.storage.get<Record<string, SessionAbilityState>>(ABILITIES_STATE_KEY).then((value) => value ?? {}),
+      this.ctx.storage.get<Record<string, SessionHpState>>(HP_STATE_KEY).then((value) => value ?? {}),
+      this.ctx.storage.get<Record<string, SessionConditionsState>>(CONDITIONS_STATE_KEY).then((value) => value ?? {}),
+      readSessionLog(this.ctx.storage),
+    ]);
+
+    const access = validateRuntimeCustomSystemAccess(
+      runtimeConfig,
+      operation.characterId,
+      operation.systemId,
+    );
+    if (!access.ok) {
+      sendError(webSocket, access.code, access.message);
+      return;
+    }
+    const activeRuntimeConfig = runtimeConfig as RuntimeConfigSnapshot;
+    const { definition, installation } = access.value;
+
+    const storedAbility = abilityState[operation.characterId];
+    const hp = hpState[operation.characterId];
+    const conditions = conditionsState[operation.characterId];
+    if (!storedAbility?.initialized || !hp || !conditions?.initialized) {
+      sendError(webSocket, "CUSTOM_SYSTEM_STATE_NOT_INITIALIZED", "Authoritative character state must be initialized before custom-system state can change.");
+      return;
+    }
+
+    let character: CharacterTemplate;
+    try {
+      character = CharacterTemplate.fromJSON(storedAbility.character as Partial<CharacterTemplateProps>);
+    } catch {
+      sendError(webSocket, "CUSTOM_SYSTEM_CHARACTER_INVALID", "The authoritative character snapshot is invalid.");
+      return;
+    }
+
+    const states = character.get("sheet").customSystems ?? [];
+    const currentState = states.find((state) => state.systemId === operation.systemId);
+    if (!currentState) {
+      sendError(webSocket, "CUSTOM_SYSTEM_RUNTIME_STATE_MISSING", "The character does not have runtime state for this installed custom system.");
+      return;
+    }
+    if (!currentState.enabled) {
+      sendError(webSocket, "CUSTOM_SYSTEM_RUNTIME_DISABLED", "The character runtime state for this custom system is disabled.");
+      return;
+    }
+    if (currentState.systemVersion !== installation.systemVersion) {
+      sendError(webSocket, "CUSTOM_SYSTEM_RUNTIME_VERSION_MISMATCH", "The live custom-system state does not match the installed Creation version.");
+      return;
+    }
+
+    const digitalDiceEnabled = isDigitalDiceRollingEnabled(activeRuntimeConfig);
+    if (
+      !digitalDiceEnabled
+      && (operation.type === "character.customSystem.ability.activate"
+        || operation.type === "character.customSystem.action.execute")
+    ) {
+      const roll =
+        operation.type === "character.customSystem.ability.activate"
+          ? getCustomAbilityRollDefinition(
+              definition,
+              currentState,
+              operation.abilityId,
+            )
+          : operation.type === "character.customSystem.action.execute"
+            ? definition.actions?.find(
+                (entry) => entry.id === operation.actionId,
+              )?.roll
+            : undefined;
+
+      if (roll) {
+        if (
+          customRollRequiresManualPrimary(roll)
+          && (
+            typeof operation.rollValue !== "number"
+            || !Number.isFinite(operation.rollValue)
+          )
+        ) {
+          sendError(
+            webSocket,
+            "PHYSICAL_ROLL_REQUIRED",
+            "Informe o resultado da rolagem física principal antes de executar.",
+          );
+          return;
+        }
+
+        const damageCount = customRollManualDamageCount(roll);
+        const damageValues = operation.rollDamageValues ?? [];
+        if (
+          damageCount > 0
+          && (
+            damageValues.length < damageCount
+            || damageValues
+              .slice(0, damageCount)
+              .some((value) => !Number.isFinite(value))
+          )
+        ) {
+          sendError(
+            webSocket,
+            "PHYSICAL_DAMAGE_ROLL_REQUIRED",
+            `Informe os ${damageCount} resultado(s) de dano físico antes de executar.`,
+          );
+          return;
+        }
+      }
+    }
+
+    let nextCharacter: CharacterTemplate;
+    let loggedOperation: SessionCustomSystemOperation = operation;
+    let resolvedCustomRoll: CustomAbilityRollResolution | undefined;
+    try {
+      if (operation.type === "character.customSystem.ability.activate") {
+        const activation = activateCustomAbilityWithRoll(
+          character,
+          activeRuntimeConfig.config.customSystems,
+          operation.systemId,
+          operation.abilityId,
+          operation.rollValue,
+          operation.activationLevel,
+          operation.rollDamageValues,
+        );
+        nextCharacter = activation.character;
+        if (activation.roll) {
+          resolvedCustomRoll = activation.roll;
+          loggedOperation = {
+            ...operation,
+            rollValue: activation.roll.value,
+            rollDice: activation.roll.dice,
+            rollTotal: activation.roll.total,
+            rollSummary: formatCustomRollResolutionSummary(
+              activation.roll,
+            ),
+          };
+        }
+        nextCharacter = runCustomSystemAutomations(
+          nextCharacter,
+          activeRuntimeConfig.config.customSystems,
+          "abilityUsed",
+        ).character;
+      } else if (operation.type === "character.customSystem.action.execute") {
+        const activation = activateCustomSystemActionWithRoll(
+          character,
+          activeRuntimeConfig.config.customSystems,
+          operation.systemId,
+          operation.actionId,
+          operation.rollValue,
+          operation.activationLevel,
+          operation.rollDamageValues,
+        );
+        nextCharacter = activation.character;
+        if (activation.roll) {
+          resolvedCustomRoll = activation.roll;
+          loggedOperation = {
+            ...operation,
+            rollValue: activation.roll.value,
+            rollDice: activation.roll.dice,
+            rollTotal: activation.roll.total,
+            rollSummary: formatCustomRollResolutionSummary(
+              activation.roll,
+            ),
+          };
+        }
+      } else if (operation.type === "character.customSystem.automation.execute") {
+        nextCharacter = runCustomSystemAutomation(
+          character,
+          activeRuntimeConfig.config.customSystems,
+          operation.systemId,
+          operation.automationId,
+        ).character;
+      } else {
+        const nextState = applyOperation(
+          definition,
+          currentState,
+          operation,
+          connection.role === "MASTER" ? "master" : "owner",
+          character,
+        );
+        if (!didOperationChangeState(currentState, nextState, operation)) {
+          sendError(webSocket, "CUSTOM_SYSTEM_OPERATION_NO_CHANGE", "The requested custom-system operation does not change the current state.");
+          return;
+        }
+        const nextStates = states.map((state) => state.systemId === operation.systemId ? nextState : state);
+        nextCharacter = character.withSheet("customSystems", nextStates);
+      }
+    } catch (error) {
+      if (error instanceof CustomSystemOperationError) {
+        const first = error.errors[0];
+        sendError(webSocket, `CUSTOM_SYSTEM_${(first?.code ?? "OPERATION_REJECTED").toUpperCase()}`, first?.message ?? error.message);
+        return;
+      }
+      sendError(
+        webSocket,
+        "CUSTOM_SYSTEM_OPERATION_REJECTED",
+        error instanceof Error ? error.message : "The custom-system operation is invalid for the current state.",
+      );
+      return;
+    }
+
+    const aggregateOperation = isAggregateOperation(operation);
+    if (aggregateOperation) {
+      const validation = validateRuntimeSystemChanges(
+        activeRuntimeConfig,
+        operation.characterId,
+        character,
+        nextCharacter,
+      );
+      if (!validation.ok) {
+        sendError(webSocket, validation.code, validation.message);
+        return;
+      }
+    }
+    const resolvedRollOnly =
+      aggregateOperation
+      && (
+        loggedOperation.type === "character.customSystem.ability.activate"
+        || loggedOperation.type === "character.customSystem.action.execute"
+      )
+      && Boolean(loggedOperation.rollSummary?.length);
+
+    if (
+      aggregateOperation
+      && !resolvedRollOnly
+      && JSON.stringify(character.toJSON()) === JSON.stringify(nextCharacter.toJSON())
+    ) {
+      sendError(webSocket, "CUSTOM_SYSTEM_OPERATION_NO_CHANGE", "The requested custom-system operation does not change the current state.");
+      return;
+    }
+
+    const nextAbility: SessionAbilityState = {
+      characterId: operation.characterId,
+      character: nextCharacter.toJSON() as unknown as Record<string, unknown>,
+      initialized: true,
+      revision: storedAbility.revision + 1,
+    };
+    abilityState[operation.characterId] = nextAbility;
+
+    const nextHp = aggregateOperation
+      ? projectAggregateHp(hp, nextCharacter)
+      : hp;
+    const nextConditions = aggregateOperation
+      ? projectAggregateConditions(conditions, nextCharacter)
+      : conditions;
+    const hpChanged = aggregateOperation && JSON.stringify(nextHp) !== JSON.stringify(hp);
+    const conditionsChanged = aggregateOperation && JSON.stringify(nextConditions) !== JSON.stringify(conditions);
+    if (hpChanged) hpState[operation.characterId] = nextHp;
+    if (conditionsChanged) conditionsState[operation.characterId] = nextConditions;
+
+    const record = createSessionLogRecord({
+      actorId: connection.userId,
+      operation: loggedOperation,
+      reverseOperation: {
+        type: "character.ability.restore",
+        characterId: operation.characterId,
+        snapshot: {
+          ability: structuredClone(storedAbility),
+          hp: structuredClone(hp),
+          conditions: structuredClone(conditions),
+        },
+      },
+    });
+
+    const writes: Record<string, unknown> = { [ABILITIES_STATE_KEY]: abilityState };
+    if (hpChanged) writes[HP_STATE_KEY] = hpState;
+    if (conditionsChanged) writes[CONDITIONS_STATE_KEY] = conditionsState;
+
+    await commitSessionMutation(this.ctx.storage, this.ctx.getWebSockets(), {
+      writes,
+      record,
+      currentLog: log,
+      maxRecords: MAX_CHARACTER_STATE_LOG_RECORDS,
+    });
+
+    const sockets = this.ctx.getWebSockets();
+    broadcastVisibilityFiltered(sockets, {
+      type: "session.abilities.updated",
+      character: nextAbility,
+    });
+    if (hpChanged) {
+      broadcastVisibilityFiltered(sockets, {
+        type: "session.hp.updated",
+        character: nextHp,
+      });
+    }
+    if (conditionsChanged) {
+      broadcastVisibilityFiltered(sockets, {
+        type: "session.conditions.updated",
+        character: nextConditions,
+      });
+    }
+
+    if (
+      resolvedCustomRoll
+      && (
+        loggedOperation.type === "character.customSystem.ability.activate"
+        || loggedOperation.type === "character.customSystem.action.execute"
+      )
+    ) {
+      const rollResult = buildCustomSystemActionRollResult(
+        connection.userId,
+        character,
+        definition,
+        currentState,
+        loggedOperation,
+        resolvedCustomRoll,
+      );
+      broadcastVisibilityFiltered(sockets, {
+        type: "session.action.result",
+        result: rollResult,
+      });
+    }
+  }
+}
+
+function buildCustomSystemActionRollResult(
+  actorId: string,
+  character: CharacterTemplate,
+  definition: CustomSystemDefinition,
+  state: CharacterCustomSystemState,
+  operation: Extract<
+    SessionCustomSystemOperation,
+    {
+      type:
+        | "character.customSystem.ability.activate"
+        | "character.customSystem.action.execute";
+    }
+  >,
+  resolution: CustomAbilityRollResolution,
+): SessionActionRollResult {
+  const presentation = customRollPresentation(
+    definition,
+    state,
+    operation,
+  );
+  const d20Mode = resolution.d20Mode ?? "normal";
+  const d20Rolls =
+    resolution.d20Rolls?.length
+      ? resolution.d20Rolls
+      : resolution.natural !== undefined
+        ? [resolution.natural]
+        : [];
+  const natural = resolution.natural ?? resolution.value;
+
+  const attack =
+    resolution.kind === "attack"
+      ? {
+          mode: d20Mode,
+          groups: [{
+            quantity: Math.max(1, d20Rolls.length),
+            sides: 20,
+            rolls: d20Rolls.length ? d20Rolls : [natural],
+            kept: natural,
+          }],
+          modifier: resolution.modifier ?? 0,
+          total: resolution.total ?? natural,
+          natural,
+        }
+      : undefined;
+
+  const primary: SessionResolvedPrimaryRoll | undefined =
+    resolution.kind === "abilityCheck"
+    || resolution.kind === "savingThrow"
+    || resolution.kind === "generic"
+      ? {
+          kind: resolution.kind,
+          label:
+            resolution.kind === "abilityCheck"
+              ? "Teste"
+              : resolution.kind === "savingThrow"
+                ? "Resistência"
+                : "Rolagem",
+          mode:
+            resolution.kind === "generic"
+              ? "normal"
+              : d20Mode,
+          groups:
+            resolution.kind === "generic"
+              ? resolution.groups ?? []
+              : [{
+                  quantity: Math.max(1, d20Rolls.length),
+                  sides: 20,
+                  rolls: d20Rolls.length ? d20Rolls : [natural],
+                  kept: natural,
+                }],
+          modifier:
+            (resolution.modifier ?? 0)
+            + (resolution.diceModifier ?? 0),
+          total: resolution.total ?? resolution.value,
+          natural:
+            resolution.kind === "generic"
+              ? undefined
+              : natural,
+          expression:
+            resolution.kind === "generic"
+              ? resolution.dice
+              : undefined,
+        }
+      : undefined;
+
+  const damages: SessionResolvedDamageRoll[] | undefined =
+    resolution.damages?.length
+      ? resolution.damages.map((damage) => ({
+          groups: damage.groups ?? [],
+          modifier:
+            damage.modifier
+            + (damage.diceModifier ?? 0),
+          total: damage.total,
+          critical: damage.critical,
+          label: damage.label,
+          damageType: damage.damageType,
+          expression: damage.dice,
+        }))
+      : undefined;
+
+  const details = [
+    ...(operation.activationLevel !== undefined
+      ? [`Nível de uso: ${operation.activationLevel}`]
+      : []),
+    ...(resolution.kind === "targetSave"
+        ? formatCustomRollResolutionSummary(resolution)
+        : []),
+  ];
+
+  return {
+    id: crypto.randomUUID(),
+    requestId: crypto.randomUUID(),
+    actorId,
+    characterId: operation.characterId,
+    sourceName: character.get("name"),
+    sourceType: "ability",
+    title: presentation.title,
+    subtitle: presentation.subtitle,
+    description: presentation.description,
+    details: details.length ? details : undefined,
+    attack,
+    primary,
+    save:
+      resolution.kind === "targetSave"
+      && resolution.saveAttribute
+      && resolution.dc !== undefined
+        ? {
+            attribute: resolution.saveAttribute,
+            dc: resolution.dc,
+            onSuccess: resolution.onSave,
+          }
+        : undefined,
+    damages,
+    critical:
+      resolution.kind === "attack"
+      && resolution.natural === 20,
+    visibility: operation.visibility ?? "public",
+    createdAt: new Date().toISOString(),
+  };
+}
+
+function customRollPresentation(
+  definition: CustomSystemDefinition,
+  state: CharacterCustomSystemState,
+  operation: Extract<
+    SessionCustomSystemOperation,
+    {
+      type:
+        | "character.customSystem.ability.activate"
+        | "character.customSystem.action.execute";
+    }
+  >,
+): {
+  title: string;
+  subtitle: string;
+  description?: string;
+} {
+  if (operation.type === "character.customSystem.action.execute") {
+    const action = definition.actions?.find(
+      (entry) => entry.id === operation.actionId,
+    );
+    return {
+      title: action?.name?.trim() || "Ação personalizada",
+      subtitle: definition.name,
+      description: action?.description?.trim() || undefined,
+    };
+  }
+
+  const ability = state.abilities.find(
+    (entry) => entry.id === operation.abilityId,
+  );
+  const type = ability
+    ? definition.abilityTypes.find(
+        (entry) => entry.id === ability.abilityTypeId,
+      )
+    : undefined;
+  const preset =
+    ability?.predefinedAbilityId && type
+      ? type.predefinedAbilities?.find(
+          (entry) => entry.id === ability.predefinedAbilityId,
+        )
+      : undefined;
+  const titleValue =
+    ability && type
+      ? displayCustomValue(
+          ability.values[type.display.titleFieldId],
+        )
+      : "";
+  const descriptionValue =
+    ability && type?.display.descriptionFieldId
+      ? displayCustomValue(
+          ability.values[type.display.descriptionFieldId],
+        )
+      : "";
+
+  return {
+    title:
+      titleValue
+      || type?.name?.trim()
+      || "Habilidade personalizada",
+    subtitle:
+      type?.name?.trim()
+        ? `${definition.name} · ${type.name}`
+        : definition.name,
+    description:
+      descriptionValue
+      || preset?.description?.trim()
+      || type?.description?.trim()
+      || undefined,
+  };
+}
+
+function displayCustomValue(value: unknown): string {
+  if (typeof value === "string") return value.trim();
+  if (typeof value === "number" || typeof value === "boolean") {
+    return String(value);
+  }
+  return "";
+}
+
+function didOperationChangeState(
+  before: CharacterCustomSystemState,
+  after: CharacterCustomSystemState,
+  operation: Exclude<SessionCustomSystemOperation, AggregateCustomSystemOperation>,
+): boolean {
+  switch (operation.type) {
+    case "character.customSystem.field.set":
+    case "character.customSystem.field.remove":
+      return !sameSmallJson(before.fields[operation.fieldId], after.fields[operation.fieldId])
+        || Object.prototype.hasOwnProperty.call(before.fields, operation.fieldId)
+          !== Object.prototype.hasOwnProperty.call(after.fields, operation.fieldId);
+    case "character.customSystem.resource.set":
+    case "character.customSystem.resource.adjust":
+    case "character.customSystem.resource.reset":
+      return !sameResourceState(before.resources[operation.resourceId], after.resources[operation.resourceId]);
+    case "character.customSystem.collection.entry.add":
+      return !(before.collections?.[operation.collectionId] ?? []).some((entry) => entry.id === operation.entryId)
+        && (after.collections?.[operation.collectionId] ?? []).some((entry) => entry.id === operation.entryId);
+    case "character.customSystem.collection.entry.remove":
+      return (before.collections?.[operation.collectionId] ?? []).some((entry) => entry.id === operation.entryId)
+        && !(after.collections?.[operation.collectionId] ?? []).some((entry) => entry.id === operation.entryId);
+    case "character.customSystem.collection.entry.field.set": {
+      const previous = (before.collections?.[operation.collectionId] ?? []).find((entry) => entry.id === operation.entryId);
+      const next = (after.collections?.[operation.collectionId] ?? []).find((entry) => entry.id === operation.entryId);
+      return !sameSmallJson(previous?.values[operation.fieldId], next?.values[operation.fieldId]);
+    }
+    case "character.customSystem.ability.add":
+      return !before.abilities.some((ability) => ability.id === operation.ability.id)
+        && after.abilities.some((ability) => ability.id === operation.ability.id);
+    case "character.customSystem.ability.remove":
+      return before.abilities.some((ability) => ability.id === operation.abilityId)
+        && !after.abilities.some((ability) => ability.id === operation.abilityId);
+    case "character.customSystem.ability.field.set": {
+      const previous = before.abilities.find((ability) => ability.id === operation.abilityId);
+      const next = after.abilities.find((ability) => ability.id === operation.abilityId);
+      return !sameSmallJson(previous?.values[operation.fieldId], next?.values[operation.fieldId]);
+    }
+    case "character.customSystem.ability.learned.set": {
+      const previous = before.abilities.find((ability) => ability.id === operation.abilityId);
+      const next = after.abilities.find((ability) => ability.id === operation.abilityId);
+      return previous?.learned !== next?.learned;
+    }
+    case "character.customSystem.ability.prepared.set": {
+      const previous = before.abilities.find((ability) => ability.id === operation.abilityId);
+      const next = after.abilities.find((ability) => ability.id === operation.abilityId);
+      return previous?.prepared !== next?.prepared;
+    }
+    case "character.customSystem.ability.usage.set": {
+      const previous = before.abilities.find((ability) => ability.id === operation.abilityId);
+      const next = after.abilities.find((ability) => ability.id === operation.abilityId);
+      return previous?.usage?.used !== next?.usage?.used
+        || previous?.usage?.maximum !== next?.usage?.maximum;
+    }
+  }
+}
+
+function sameResourceState(
+  left: CharacterCustomSystemState["resources"][string] | undefined,
+  right: CharacterCustomSystemState["resources"][string] | undefined,
+): boolean {
+  if (!left || !right) return left === right;
+  return left.current === right.current
+    && left.maximum === right.maximum
+    && left.temporary === right.temporary;
+}
+
+function sameSmallJson(left: unknown, right: unknown): boolean {
+  if (Object.is(left, right)) return true;
+  if (left === null || right === null || typeof left !== "object" || typeof right !== "object") return false;
+  return JSON.stringify(left) === JSON.stringify(right);
+}
+
+function applyOperation(
+  definition: CustomSystemDefinition,
+  state: CharacterCustomSystemState,
+  operation: Exclude<SessionCustomSystemOperation, AggregateCustomSystemOperation>,
+  actor: CustomSystemActor,
+  character: CharacterTemplate,
+): CharacterCustomSystemState {
+  switch (operation.type) {
+    case "character.customSystem.field.set":
+      return setCustomFieldValue(definition, state, operation.fieldId, operation.value, actor);
+    case "character.customSystem.field.remove":
+      return removeCustomFieldValue(definition, state, operation.fieldId, actor);
+    case "character.customSystem.resource.set":
+      return setCustomResourceState(definition, state, operation.resourceId, operation.state, actor);
+    case "character.customSystem.resource.adjust":
+      return adjustCustomResource(definition, state, operation.resourceId, operation.amount, actor);
+    case "character.customSystem.resource.reset":
+      return resetCustomResource(definition, state, operation.resourceId, actor);
+    case "character.customSystem.collection.entry.add":
+      return createCustomCollectionEntry(definition, state, operation.collectionId, operation.entryId, actor);
+    case "character.customSystem.collection.entry.remove":
+      return removeCustomCollectionEntry(definition, state, operation.collectionId, operation.entryId, actor);
+    case "character.customSystem.collection.entry.field.set":
+      return updateCustomCollectionEntryField(definition, state, operation.collectionId, operation.entryId, operation.fieldId, operation.value, actor);
+    case "character.customSystem.ability.add":
+      return addCustomAbility(
+        definition,
+        state,
+        normalizeAddedAbility(definition, operation.ability),
+        actor,
+      );
+    case "character.customSystem.ability.remove":
+      return removeCustomAbility(definition, state, operation.abilityId, actor);
+    case "character.customSystem.ability.field.set":
+      return updateCustomAbilityField(
+        definition,
+        state,
+        operation.abilityId,
+        operation.fieldId,
+        operation.value,
+        actor,
+      );
+    case "character.customSystem.ability.learned.set":
+      return setCustomAbilityLearned(
+        definition,
+        state,
+        operation.abilityId,
+        operation.learned,
+        character,
+      );
+    case "character.customSystem.ability.prepared.set":
+      return setCustomAbilityPrepared(
+        definition,
+        state,
+        operation.abilityId,
+        operation.prepared,
+        character,
+      );
+    case "character.customSystem.ability.usage.set":
+      return setCustomAbilityUsage(
+        definition,
+        state,
+        operation.abilityId,
+        operation.used,
+        actor,
+      );
+  }
+}
+
+function normalizeAddedAbility(
+  definition: CustomSystemDefinition,
+  submitted: CustomAbilityInstance,
+): CustomAbilityInstance {
+  const type = definition.abilityTypes.find((entry) => entry.id === submitted.abilityTypeId);
+  if (!type) throw new Error(`Tipo de habilidade “${submitted.abilityTypeId}” não encontrado.`);
+  const preset = submitted.predefinedAbilityId
+    ? type.predefinedAbilities?.find((entry) => entry.id === submitted.predefinedAbilityId)
+    : undefined;
+  if (submitted.predefinedAbilityId && !preset) {
+    throw new Error(`Habilidade predefinida “${submitted.predefinedAbilityId}” não encontrada.`);
+  }
+
+  const effectiveType = preset?.acquisition
+    ? { ...type, acquisition: { ...type.acquisition, ...preset.acquisition } }
+    : type;
+  const progress = initializeCustomAbilityProgress(effectiveType, {
+    ...submitted,
+    enabled: submitted.enabled !== false,
+  });
+  const usageDefinition = preset?.activation?.usage ?? type.activation?.usage;
+  const usage = usageDefinition && (usageDefinition.mode ?? "limited") === "limited"
+    ? { used: 0, maximum: usageDefinition.maximum }
+    : undefined;
+
+  return {
+    ...progress,
+    usage,
+  };
+}
+
+function validateRuntimeSystemChanges(
+  runtimeConfig: RuntimeConfigSnapshot,
+  characterId: string,
+  before: CharacterTemplate,
+  after: CharacterTemplate,
+): { ok: true } | AccessError {
+  const beforeStates = before.get("sheet").customSystems ?? [];
+  const afterStates = after.get("sheet").customSystems ?? [];
+  const beforeById = new Map(beforeStates.map((state) => [state.systemId, state]));
+  const afterIds = new Set(afterStates.map((state) => state.systemId));
+
+  if (beforeStates.some((state) => !afterIds.has(state.systemId))) {
+    return {
+      ok: false,
+      code: "CUSTOM_SYSTEM_EFFECT_INVALID_STATE_CHANGE",
+      message: "Custom-system runtime effects cannot install or remove custom systems.",
+    };
+  }
+
+  for (const nextState of afterStates) {
+    const previous = beforeById.get(nextState.systemId);
+    if (!previous) {
+      return {
+        ok: false,
+        code: "CUSTOM_SYSTEM_EFFECT_INVALID_STATE_CHANGE",
+        message: "Custom-system runtime effects cannot install or remove custom systems.",
+      };
+    }
+    if (JSON.stringify(previous) === JSON.stringify(nextState)) continue;
+
+    const access = validateRuntimeCustomSystemAccess(
+      runtimeConfig,
+      characterId,
+      nextState.systemId,
+    );
+    if (!access.ok) return access;
+    if (!nextState.enabled) {
+      return {
+        ok: false,
+        code: "CUSTOM_SYSTEM_RUNTIME_DISABLED",
+        message: `Custom system “${nextState.systemId}” changed by this effect is disabled at runtime.`,
+      };
+    }
+    if (nextState.systemVersion !== access.value.installation.systemVersion) {
+      return {
+        ok: false,
+        code: "CUSTOM_SYSTEM_RUNTIME_VERSION_MISMATCH",
+        message: `Custom system “${nextState.systemId}” changed by this effect does not match its saved Creation version.`,
+      };
+    }
+  }
+
+  return { ok: true };
+}
+
+function projectAggregateHp(
+  previous: SessionHpState,
+  character: CharacterTemplate,
+): SessionHpState {
+  const sheet = character.get("sheet");
+  const hp = sheet.HP;
+  const inspiration = sheet.stats.inspiration ?? false;
+  const exhaustion = sheet.stats.exhaustion ?? 0;
+  const changed = previous.current !== hp.current
+    || previous.temporary !== hp.temporary
+    || previous.stats.inspiration !== inspiration
+    || previous.stats.exhaustion !== exhaustion;
+  if (!changed) return previous;
+
+  return {
+    ...previous,
+    current: hp.current,
+    temporary: hp.temporary,
+    stats: {
+      ...previous.stats,
+      inspiration,
+      exhaustion,
+    },
+    statsInitialized: true,
+    revision: previous.revision + 1,
+  };
+}
+
+function projectAggregateConditions(
+  previous: SessionConditionsState,
+  character: CharacterTemplate,
+): SessionConditionsState {
+  const conditions = getCharacterConditions(character);
+  if (JSON.stringify(previous.conditions) === JSON.stringify(conditions)) return previous;
+  return {
+    ...previous,
+    conditions,
+    initialized: true,
+    revision: previous.revision + 1,
+  };
+}
+
+function isAggregateOperation(
+  operation: SessionCustomSystemOperation,
+): operation is AggregateCustomSystemOperation {
+  return operation.type === "character.customSystem.ability.activate"
+    || operation.type === "character.customSystem.action.execute"
+    || operation.type === "character.customSystem.automation.execute";
+}
+
+function readConnection(webSocket: WebSocket): SessionConnection | null {
+  try { return webSocket.deserializeAttachment() as SessionConnection | null; }
+  catch { return null; }
+}
+
+function sendError(webSocket: WebSocket, code: string, message: string): void {
+  try { webSocket.send(JSON.stringify({ type: "session.error", code, message })); } catch {}
+}

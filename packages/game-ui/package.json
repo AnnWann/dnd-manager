@@ -1,0 +1,62 @@
+{
+  "name": "@dnd-manager/game-ui",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "exports": {
+    "./experience-progress": "./src/ExperienceProgress.tsx",
+    "./hp-value": "./src/HpValue.tsx",
+    "./hp-action-buttons": "./src/HpActionButtons.tsx",
+    "./hp-maximum-button": "./src/HpMaximumButton.tsx",
+    "./hp-summary-grid": "./src/HpSummaryGrid.tsx",
+    "./mission-board": "./src/MissionBoard.tsx",
+    "./mission-toolbar": "./src/MissionBoardToolbar.tsx",
+    "./initiative-roster-table": "./src/InitiativeRosterTable.tsx",
+    "./inventory-tile-grid": "./src/InventoryTileGrid.tsx",
+    "./mission-card": "./src/MissionCard.tsx",
+    "./initiative-card-rail": "./src/InitiativeCardRail.tsx",
+    "./character-hp-panel": "./src/CharacterHpPanel.tsx",
+    "./stat-shell": "./src/StatShell.tsx",
+    "./hit-dice-row": "./src/HitDiceRow.tsx",
+    "./character-sheet-layout": "./src/CharacterSheetLayout.tsx",
+    "./spellcasting-hands-notice": "./src/SpellcastingHandsNotice.tsx",
+    "./character-sheet-fields": "./src/CharacterSheetFields.tsx",
+    "./character-sheet-skill-spell": "./src/CharacterSheetSkillAndSpell.tsx",
+    "./action-group": "./src/ActionGroup.tsx",
+    "./resource-pill": "./src/ResourcePill.tsx",
+    "./weapon-ammunition-bar": "./src/WeaponAmmunitionBar.tsx",
+    "./character-config-stats": "./src/CharacterConfigStats.tsx",
+    "./hand-grip-panel": "./src/HandGripPanel.tsx",
+    "./ammunition-selection-list": "./src/AmmunitionSelectionList.tsx",
+    "./spell-list-board": "./src/SpellListBoard.tsx",
+    "./character-action-tabs": "./src/CharacterActionTabs.tsx",
+    "./action-roll-feedback": "./src/ActionRollFeedback.tsx",
+    "./weapon-swap-dialog": "./src/WeaponSwapDialog.tsx",
+    "./weapon-attack-tile": "./src/WeaponAttackTile.tsx",
+    "./unarmed-attack-tile": "./src/UnarmedAttackTile.tsx",
+    "./inventory-transfer-form": "./src/InventoryTransferForm.tsx",
+    "./combatant-inspector-panel": "./src/CombatantInspectorPanel.tsx",
+    "./class-configuration-selector": "./src/ClassConfigurationSelector.tsx",
+    "./cast-activation-fields": "./src/CastActivationFields.tsx",
+    "./combat-hp-tabs": "./src/CombatHpModeTabs.tsx",
+    "./level-selection-grid": "./src/LevelSelectionGrid.tsx",
+    "./custom-class-basic-fields": "./src/CustomClassBasicFields.tsx",
+    "./combat-hp-editor": "./src/CombatHpEditor.tsx",
+    "./manual-action-roll-fields": "./src/ManualActionRollFields.tsx",
+    "./configuration-toggle-grid": "./src/ConfigurationToggleGrid.tsx",
+    "./mission-dialog": "./src/MissionDialog.tsx",
+    "./inventory-floating-menu": "./src/InventoryFloatingMenu.tsx",
+    "./inventory-item-tile": "./src/InventoryItemTile.tsx"
+  },
+  "peerDependencies": {
+    "react": "^19.0.0",
+    "lucide-react": "^1.17.0",
+    "react-dom": "^19.0.0"
+  },
+  "scripts": {
+    "typecheck": "tsc --project tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "@dnd-manager/session-protocol": "0.1.0"
+  }
+}

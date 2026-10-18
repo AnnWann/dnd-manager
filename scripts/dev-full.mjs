@@ -7,9 +7,9 @@ const environment = args.has("--production") ? "production" : "development"
 const vercelPort = process.env.LOCAL_VERCEL_PORT || "3000"
 const sessionServerUrl = process.env.VITE_SESSION_SERVER_URL || "http://localhost:8787"
 
-if (!existsSync("session-server/node_modules")) {
-  console.error("\n[dev:full] session-server dependencies are missing.")
-  console.error("Run `npm install --prefix session-server` once, then run this command again.\n")
+if (!existsSync("node_modules/wrangler")) {
+  console.error("\n[dev:full] workspace dependencies are missing.")
+  console.error("Run `npm ci` once, then run this command again.\n")
   process.exit(1)
 }
 

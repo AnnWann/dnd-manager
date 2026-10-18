@@ -1,0 +1,70 @@
+name: Validate modular refactor
+
+on:
+  pull_request:
+    paths:
+      - "src/**"
+      - "session-server/**"
+      - "apps/session-server/**"
+      - "packages/**"
+      - "api/**"
+      - "api-handlers/**"
+      - "server/**"
+      - "prisma/**"
+      - "package.json"
+      - "apps/**"
+      - "scripts/check-workspace-layout.mjs"
+      - "scripts/audit-workspace-imports.mjs"
+      - "package-lock.json"
+      - "tsconfig*.json"
+      - "vite.config.ts"
+      - ".github/workflows/validate-modular-refactor.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build-and-typecheck:
+    runs-on: ubuntu-latest
+    env:
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/postgres
+      DIRECT_URL: postgresql://postgres:postgres@localhost:5432/postgres
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - name: Install reproducible workspace dependencies
+        run: npm ci --ignore-scripts --no-audit --no-fund
+      - name: Check npm workspace registration
+        run: npm run check:workspace-boundaries && npm ls --workspaces --depth=0
+      - name: Audit scoped workspace imports
+        run: npm run audit:workspace-imports
+      - name: Typecheck portable packages
+        run: |
+          npm run typecheck --workspace @dnd-manager/session-protocol
+          npm run typecheck --workspace @dnd-manager/game-core
+          npm run typecheck --workspace @dnd-manager/session-client
+          npm run typecheck --workspace @dnd-manager/game-ui
+      - name: Generate Prisma client
+        run: npx prisma generate --config apps/web/prisma.config.ts
+      - name: Check shared UI boundaries
+        run: node scripts/check-game-ui-boundaries.mjs
+      - name: Check game-core boundaries
+        run: node scripts/check-game-core-boundaries.mjs
+      - name: Test game-core HP transitions
+        run: node --test packages/game-core/tests/*.test.mjs
+      - name: Check shared protocol boundaries
+        run: node scripts/check-session-protocol-boundaries.mjs
+      - name: Test shared session protocol routing
+        run: node --test packages/session-protocol/tests/*.test.mjs
+      - name: Test session client transport
+        run: node --test packages/session-client/tests/*.test.mjs
+      - name: Build website
+        run: npm run --workspace @dnd-manager/web build
+      - name: Build Owlbear extension
+        run: npm run --workspace @dnd-manager/owlbear-extension build
+      - name: Typecheck session server
+        run: npm run --workspace @dnd-manager/session-server-app typecheck

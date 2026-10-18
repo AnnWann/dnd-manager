@@ -1,0 +1,297 @@
+import { HandGripPanel } from "../../../../../../packages/game-ui/src/HandGripPanel"
+import { useEffect, useState } from "react"
+import { PackageOpen, Send } from "lucide-react"
+
+import { Button } from "../../../components/ui/Button"
+import { Modal } from "../../../components/ui/Modal"
+import { useCharacterWorkspace } from "../workspace/CharacterWorkspaceContext"
+import type { CharacterTemplate } from "../../../models/characters/CharacterTemplate"
+import {
+  handReferenceToEquippedItemReference,
+  type EquippedItemDestination,
+} from "../../../models/characters/characterEquippedItemMovement"
+import {
+  findHandOccupantByItemId,
+  getHandOccupants,
+  getUsedHands,
+  setHandOccupantHandsWithRules,
+  type HandOccupant,
+  type HeldHands,
+} from "../../../models/characters/characterHands"
+import { isWeaponImprovisedGrip } from "../../../models/items/equipment/Weapon"
+import { canItemGoInPocket } from "../../../models/items/itemPocketability"
+
+export type HandItemActionsDialogState = {
+  itemId: string
+}
+
+type LocalDestination = Exclude<EquippedItemDestination, "ground">
+
+export function HandItemActionsDialog({
+  character,
+  state,
+  onClose,
+}: {
+  character: CharacterTemplate
+  state: HandItemActionsDialogState | null
+  onClose: () => void
+}) {
+  const {
+    mode,
+    updateCharacter,
+    stowHandOccupant,
+    dropHandOccupant,
+    moveEquippedItem,
+    moveEquippedItemToGround,
+    canUseGroundInventory,
+  } = useCharacterWorkspace()
+  const [pendingHands, setPendingHands] = useState<HeldHands | null>(null)
+  const userMode = mode === "user"
+
+  useEffect(() => {
+    setPendingHands(null)
+  }, [state?.itemId])
+
+  if (!state) return null
+
+  const itemId: string = state.itemId
+  const resolvedOccupant = findHandOccupantByItemId(character, itemId)
+  if (!resolvedOccupant) return null
+  const occupant: HandOccupant = resolvedOccupant
+
+  const blockers = getHandOccupants(character).filter(
+    (entry) => entry.item.id !== occupant.item.id,
+  )
+  const itemIsWeapon = occupant.reference.type === "weapon"
+  const improvised =
+    itemIsWeapon && isWeaponImprovisedGrip(occupant.item)
+  const canPocketSelected =
+    !userMode && canItemGoInPocket(occupant.item)
+  const pocketFull = character.get("equipment").pockets.length >= 8
+  const canMoveToGround =
+    !userMode && canUseGroundInventory && Boolean(moveEquippedItemToGround)
+  const canDropToGround =
+    !userMode && canUseGroundInventory && Boolean(dropHandOccupant)
+
+  function setHands(hands: HeldHands) {
+    const availableAfterRemovingCurrent =
+      character.get("sheet").arms -
+      (getUsedHands(character) - occupant.hands)
+
+    if (availableAfterRemovingCurrent < hands) {
+      setPendingHands(hands)
+      return
+    }
+
+    updateCharacter(character.get("id"), (current) => {
+      const currentOccupant = findHandOccupantByItemId(
+        current,
+        itemId,
+      )
+      if (!currentOccupant) return current
+      return setHandOccupantHandsWithRules(
+        current,
+        currentOccupant.reference,
+        hands,
+      )
+    })
+    onClose()
+  }
+
+  function removeSelected(destination: LocalDestination) {
+    const currentOccupant = findHandOccupantByItemId(
+      character,
+      itemId,
+    )
+    if (!currentOccupant) return
+
+    moveEquippedItem(
+      character.get("id"),
+      handReferenceToEquippedItemReference(
+        currentOccupant.reference,
+        currentOccupant.item.id,
+      ),
+      destination,
+    )
+    onClose()
+  }
+
+  function moveSelectedToGround() {
+    if (!moveEquippedItemToGround || userMode) return
+
+    const currentOccupant = findHandOccupantByItemId(
+      character,
+      itemId,
+    )
+    if (!currentOccupant) return
+
+    moveEquippedItemToGround(
+      character.get("id"),
+      handReferenceToEquippedItemReference(
+        currentOccupant.reference,
+        currentOccupant.item.id,
+      ),
+    )
+    onClose()
+  }
+
+  function throwSelected() {
+    if (!dropHandOccupant || userMode) return
+
+    const currentOccupant = findHandOccupantByItemId(character, itemId)
+    if (!currentOccupant) return
+
+    dropHandOccupant(character.get("id"), currentOccupant.reference)
+    onClose()
+  }
+
+  function freeBlocker(
+    blocker: HandOccupant,
+    destination: "inventory" | "ground",
+  ) {
+    if (!pendingHands) return
+
+    if (destination === "inventory") {
+      stowHandOccupant(character.get("id"), blocker.reference)
+    } else {
+      if (!dropHandOccupant || userMode) return
+      dropHandOccupant(character.get("id"), blocker.reference)
+    }
+
+    updateCharacter(character.get("id"), (current) => {
+      const currentOccupant = findHandOccupantByItemId(
+        current,
+        itemId,
+      )
+      if (!currentOccupant) return current
+      return setHandOccupantHandsWithRules(
+        current,
+        currentOccupant.reference,
+        pendingHands,
+      )
+    })
+    onClose()
+  }
+
+  return (
+    <Modal
+      title={`Gerenciar: ${occupant.name}`}
+      onClose={onClose}
+      className="max-w-xl"
+    >
+      <HandGripPanel
+        hands={occupant.hands}
+        explanation={
+          improvised
+            ? "Esta arma exige duas mãos. Com uma mão, usa Força e causa 1d4 + Força como arma improvisada."
+            : itemIsWeapon
+              ? "Qualquer arma pode ocupar uma ou duas mãos. Apenas propriedades específicas alteram ataque ou dano."
+              : occupant.arcaneFocus
+                ? "Este foco não bloqueia conjuração, mesmo quando ocupa duas mãos."
+                : "O item pode ocupar uma ou duas mãos sem benefício adicional por padrão."
+        }
+        onSetHands={setHands}
+        controls={
+          <>
+<div className={userMode ? "grid gap-2" : "grid gap-2 sm:grid-cols-2 lg:grid-cols-4"}>
+            <Button
+              variant="secondary"
+              onClick={() => removeSelected("inventory")}
+            >
+              Inventário
+            </Button>
+            {canPocketSelected ? (
+              <Button
+                variant="secondary"
+                disabled={pocketFull}
+                title={pocketFull ? "Os oito espaços de bolso estão ocupados" : "Enviar ao bolso"}
+                onClick={() => removeSelected("pocket")}
+              >
+                {pocketFull ? "Bolso cheio" : "Bolso"}
+              </Button>
+            ) : null}
+            {canMoveToGround ? (
+              <Button
+                variant="danger"
+                onClick={moveSelectedToGround}
+              >
+                Chão
+              </Button>
+            ) : null}
+            {canDropToGround ? (
+              <Button
+                variant="primary"
+                title="Arremessar o objeto e transferi-lo para o chão"
+                onClick={throwSelected}
+              >
+                <Send className="h-4 w-4" />
+                Arremessar
+              </Button>
+            ) : null}
+          </div>
+
+          </>
+        }
+        blockers={
+          <>
+        {pendingHands ? (
+          <div className="grid gap-3 border-t border-border pt-4">
+            <div className="rounded-xl border border-warning bg-warningBg p-3">
+              <div className="text-sm font-semibold text-textH">
+                Não há mãos livres suficientes
+              </div>
+              <p className="mt-1 text-xs leading-5 text-textMuted">
+                Escolha outro item para guardar
+                {canDropToGround ? " ou largar" : ""}. Depois disso,{" "}
+                {occupant.name} passará automaticamente para {pendingHands}{" "}
+                {pendingHands === 1 ? "mão" : "mãos"}.
+              </p>
+            </div>
+
+            {blockers.map((blocker) => (
+              <article
+                key={blocker.key}
+                className="rounded-xl border border-border bg-bg-subtle p-3"
+              >
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <div className="truncate text-sm font-semibold text-textH">
+                      {blocker.name}
+                    </div>
+                    <div className="mt-1 text-xs text-textMuted">
+                      Ocupa {blocker.hands} {blocker.hands === 1 ? "mão" : "mãos"}
+                      {blocker.arcaneFocus ? " · foco arcano" : ""}
+                    </div>
+                  </div>
+                  <PackageOpen className="h-4 w-4 shrink-0 text-textMuted" />
+                </div>
+
+                <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                  <Button
+                    size="sm"
+                    variant="secondary"
+                    onClick={() => freeBlocker(blocker, "inventory")}
+                  >
+                    Guardar este item
+                  </Button>
+                  {canDropToGround ? (
+                    <Button
+                      size="sm"
+                      variant="danger"
+                      onClick={() => freeBlocker(blocker, "ground")}
+                    >
+                      Largar este item
+                    </Button>
+                  ) : null}
+                </div>
+              </article>
+            ))}
+          </div>
+        ) : null}
+
+          </>
+        }
+      />
+    </Modal>
+  )
+}

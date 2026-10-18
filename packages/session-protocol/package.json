@@ -1,0 +1,31 @@
+{
+  "name": "@dnd-manager/session-protocol",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    "./initiative-hp": "./src/initiativeHp.ts",
+    "./mission": "./src/mission.ts",
+    "./inventory-settings": "./src/inventorySettings.ts",
+    "./initiative-operations": "./src/initiativeOperations.ts",
+    "./inventory-operations": "./src/inventoryOperations.ts",
+    "./profile-operations": "./src/profileOperations.ts",
+    "./race-operations": "./src/raceOperations.ts",
+    "./proficiency-operations": "./src/proficiencyOperations.ts",
+    "./custom-class-operations": "./src/customClassOperations.ts",
+    "./equipment-operations": "./src/equipmentOperations.ts",
+    "./custom-system-operations": "./src/customSystemOperations.ts",
+    "./character-lifecycle": "./src/characterLifecycle.ts",
+    "./magic-operations": "./src/magicOperations.ts",
+    "./abilities": "./src/abilities.ts",
+    "./runtime-config": "./src/runtimeConfig.ts",
+    "./session-core": "./src/sessionCore.ts",
+    "./session-messages": "./src/sessionMessages.ts",
+    "./sheet-routes": "./src/sheetRoutes.ts",
+    "./dice-roll": "./src/diceRoll.ts",
+    "./session-log": "./src/sessionLog.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --project tsconfig.json --noEmit"
+  }
+}

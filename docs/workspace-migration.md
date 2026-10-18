@@ -1,0 +1,74 @@
+# Physical web relocation checkpoint
+
+The website is now physically located at `apps/web`, including `src`, `api`, `api-handlers`, `server`, `public`, `prisma`, `index.html`, Vite and TypeScript configurations. The migrated build and relocated Worker typecheck passed in [workflow run 39156589441](https://github.com/AnnWann/dnd-manager/actions/runs/39156589441), commit `92b9a296`. Root npm scripts delegate Vite to `@dnd-manager/web`. Root Vercel configuration specifies the web workspace build and output directory.
+
+**Deployment constraint:** This CI result validates compilation, not Vercel function discovery or a live deployed runtime. The functions live under `apps/web/api`, not root `api`. Before any release, confirm the Vercel project's configured Root Directory and its compatibility with monorepo shared packages, Prisma generation, runtime API routing, and the deployment behavior of the root `vercel.json`; update Vercel project settings or deployment configuration accordingly. Do not assume that a root build/output override makes nested API functions discoverable. Test QA first, retain the production deployment until validated, and preserve Better Auth, database migrations and the Cloudflare signing secret.
+
+The shared package import audit still allows known relative crossings as warnings. The application move does not complete package-boundary cleanup, QA multiplayer testing, or production release.
+
+---
+
+# Objective 5 — npm workspace migration
+
+## Current checkpoint (Worker physically relocated)
+
+The Cloudflare Worker application now lives at `apps/session-server` with its own source, `wrangler.jsonc`, `tsconfig.json`, generated worker configuration, README and npm workspace manifest. The old root `session-server/` application has been removed. Its Durable Object binding and migration tag remain unchanged, and secret-file arguments in deployment scripts were updated for the new relative root. The application and website builds passed in the migration workflow before the move was committed (migration commit `e379b410`). This does not validate a live Cloudflare deployment.
+
+Workspaces are declared via `packages/*` and `apps/*`, with a reconciled lockfile and `npm ci` checks. The website remains staged in `apps/web`; its active sources, Vercel handlers, and Prisma files are still at the repository root. The website TypeScript project explicitly excludes `apps/session-server` to avoid Worker DOM type interference.
+
+Remaining work: physically relocate website paths, finish portable package imports, verify Wrangler/Vercel deployment bundles and secrets in staging, and complete multiplayer integration testing. No production or QA deployment has been performed by this migration.
+
+---
+
+# Objective 5 — npm workspace migration
+
+## Current physical layout
+
+| Workspace | Path | Status |
+| --- | --- | --- |
+| `@dnd-manager/game-core` | `packages/game-core` | Native workspace |
+| `@dnd-manager/game-ui` | `packages/game-ui` | Native workspace |
+| `@dnd-manager/session-client` | `packages/session-client` | Native workspace |
+| `@dnd-manager/session-protocol` | `packages/session-protocol` | Native workspace |
+| `dnd-manager-session-server` | `session-server` | Native workspace, active Wrangler root |
+| `@dnd-manager/web` | `apps/web` | Staged app workspace; commands delegate to existing root |
+| `@dnd-manager/session-server-app` | `apps/session-server` | Staged app workspace; commands delegate to existing `session-server/` |
+
+Root `package.json` declares `packages/*`, `apps/*`, and `session-server` workspaces. App wrappers are genuine npm workspaces, but **the Vite/React and Worker source directories have not yet moved**. Their current physical roots remain the active deployment source of truth.
+
+The first migrated consumer uses `@dnd-manager/game-ui/*` and `@dnd-manager/game-core/*` package exports. More website and Worker imports still use relative source paths. The dependency graph must continue transitioning before treating the workspace separation as complete.
+
+## CI and package boundaries
+
+- `npm run check:workspace-boundaries`: verifies seven workspace manifests and package export source targets.
+- `npm run typecheck --workspace @dnd-manager/game-core` (likewise session-protocol, session-client, game-ui): package-scoped TypeScript checks.
+- Existing game-core/protocol/client Node tests, website build, and Worker typecheck remain active.
+- npm installation runs at the root and resolves workspace symlinks. The redundant separate server install was removed from the modular CI workflow.
+- Tailwind scans shared UI source.
+
+## Deployment preservation
+
+Do not change `vercel.json`, `prisma/`, `api/`, root `vite.config.ts`, or `session-server/wrangler.jsonc` until a physical move can preserve their paths, migrations, secrets and deployment output. The `apps/` package scripts deliberately invoke the existing roots.
+
+## Remaining work before objective 5 is complete
+
+1. **Lockfile reconciliation — implemented, pending final CI verification.** The workspace lockfile was regenerated on Node 24 and committed. CI now uses `npm ci` and enforces all seven workspace links.
+2. **Physical app migration.** Move Vite/React source and Worker files into `apps/web` and `apps/session-server`, respectively, updating every relative import, Vercel function, Prisma path, public/static asset path, Wrangler entrypoint, migration binding and tooling script. Remove compatibility wrappers after validation.
+3. **Package-name imports.** Replace remaining direct `packages/.../src` imports with exported workspace subpaths, declare direct dependencies, and add checks prohibiting cross-package source imports.
+4. **Build output verification.** Confirm Vercel and Wrangler bundle/runtime roots from the new physical app paths and repeat the CI checks.
+5. **Deployment tests.** Live integration and deployed-environment checks remain intentionally deferred.
+
+No deployment or database ownership changes are included in this stage.
+
+
+## Current follow-up checkpoint
+
+The lockfile integrity gate in `scripts/check-workspace-layout.mjs` now requires all seven workspace package entries and symlinks. The root `package-lock.json` was regenerated by the dedicated workspace lockfile workflow and committed to this branch. The npm workspace lockfile has now been regenerated using Node 24, with workspace registrations checked in CI. The validation workflow uses `npm ci --ignore-scripts` for reproducible installation.
+
+The physical application roots are still compatibility wrappers. This checkpoint does not count as objective 5 completion.
+
+## Pre-relocation import audit
+
+Run `npm run audit:workspace-imports` before moving either app. The audit scans website, server and shared-package source imports, rejects unresolved `@dnd-manager/*` package names, invalid package export subpaths and missing declared workspace dependencies, while reporting existing relative cross-workspace imports as migration warnings. It is now part of modular CI. This is intentionally a non-breaking preliminary audit; relative-import warnings must be eliminated or justified before removing the old application roots.
+
+The next physical relocation needs distinct checkpoints for the Worker (Wrangler main, Durable Object binding and migrations, .env secrets relative paths, generated types) and website (Vite root, Vercel functions, Prisma schema and migrations, public assets and tsconfig). No production deployment is authorized by this audit.
