@@ -1,17 +1,15 @@
-# Owlbear Rodeo — D&D Manager (fase 1)
+# Extensão Owlbear — fichas (MVP nativo)
 
-Extensão inicial para acesso às fichas do site dentro de um popover do Owlbear.
+O popover é um React independente sem iframe. Consulta a API de personagens da conta do D&D Manager e oferece edição básica de nome, com controle otimista de revisão. O módulo reaproveita o componente `CharacterSheetDerivedTile` de `@dnd-manager/game-ui`.
 
-## Desenvolvimento
+**Escopo:** não é ainda uma ficha completa. Ainda falta extrair todos os controles, regras, domínios, ações e o CharacterWorkspace para uma biblioteca independente. O MVP não sincroniza personagens de sessão via Durable Object. Autenticação via cookies cross-origin pode ser bloqueada em browsers; não existe pareamento/OAuth específico para a extensão. O usuário não deve fornecer credenciais ou tokens à extensão.
 
-- `npm ci` na raiz do monorepo.
-- `npm run build --workspace @dnd-manager/owlbear-extension`.
-- `npm run dev --workspace @dnd-manager/owlbear-extension`.
-- Adicione `http://localhost:5173/manifest.json` em Extensions do Owlbear (ambiente local com HTTPS/túnel se necessário).
-- Para outra origem, defina `VITE_DND_MANAGER_URL` na compilação. Não inclua segredos nesta variável pública.
+## Testar
 
-## Limitações explícitas
+1. Na raiz do repositório: `npm ci` e `npm run build --workspace @dnd-manager/owlbear-extension`.
+2. Rode `npm run dev --workspace @dnd-manager/owlbear-extension -- --host 0.0.0.0`.
+3. Hospede em URL pública **HTTPS**, ou exponha Vite por túnel HTTPS para testes locais.
+4. No Owlbear Rodeo, instale o manifesto `https://SUA-ORIGEM/manifest.json` em **Extensions**.
+5. Abra uma sala, clique em **D&D Manager — Fichas**, autentique-se no website em outra aba, use **Atualizar lista**, selecione um personagem, renomeie e salve. Confirme a atualização no site. Um erro de CORS/cookies indica a necessidade de autenticação cross-origin segura antes da integração completa.
 
-Esta fase **não é uma ficha nativa autônoma**. O painel incorpora a interface autenticada existente do website, preservando o código das fichas e suas operações de persistência. Não copia dados para o Owlbear e não mantém credenciais próprias. O navegador pode bloquear autenticação em iframe por política de cookies de terceiros ou `frame-ancestors` do servidor. A abertura em nova aba é o fallback funcional. O módulo isolado reutilizando `game-ui` e `CharacterWorkspace` dentro da extensão, com autenticação segura independente de cookies de terceiros, é a próxima etapa.
-
-Não use esta fase como evidência de integração bidirecional do estado da sessão: nenhuma conexão direta com o Worker foi adicionada aqui.
+A extensão deve ser publicada em um projeto separado da aplicação principal; `VITE_DND_MANAGER_URL` permite apontar para um ambiente de QA. Não faça deploy para produção sem concluir autenticação, autorização e as políticas de CORS apropriadas.
