@@ -37,3 +37,10 @@ Do not change `vercel.json`, `prisma/`, `api/`, root `vite.config.ts`, or `sessi
 5. **Deployment tests.** Live integration and deployed-environment checks remain intentionally deferred.
 
 No deployment or database ownership changes are included in this stage.
+
+
+## Current follow-up checkpoint
+
+A lockfile integrity gate has been staged in `scripts/check-workspace-layout.mjs`: once the root lockfile declares npm workspaces, CI will require entries and symlinks for all seven manifests. The committed lockfile currently predates workspace registration, so the check reports the pending migration rather than falsely treating the old lockfile as reconciled. CI must continue using `npm install --package-lock=false` until a real npm 11 lockfile is generated and reviewed. Do **not** switch to `npm ci` before then.
+
+The physical application roots are still compatibility wrappers. This checkpoint does not count as objective 5 completion.
