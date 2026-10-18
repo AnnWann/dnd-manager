@@ -1,3 +1,11 @@
+import {
+  CharacterSheetSection as CompactSection,
+  CharacterSheetNumberField as CompactNumberField,
+  CharacterSheetReadOnlyStat as ReadOnlyStat,
+  CharacterSheetDerivedTile as DerivedTile,
+  CharacterSheetAttributeCard,
+  CharacterSheetSaveCard,
+} from "../../../../packages/game-ui/src/CharacterSheetFields"
 import { getInitiativeRollSelection } from "../../initiative/initiativeRollSelection"
 import { Check, X } from "lucide-react"
 import { useEffect, useState } from "react"
@@ -352,54 +360,20 @@ export function MinimalCharacterSheet({
             const hasAdjustment = Math.abs(adjustment) >= 0.000001
 
             return (
-              <div
+              <CharacterSheetAttributeCard
                 key={attribute}
-                className={cn(
-                  "grid min-w-0 gap-1 rounded-lg border bg-bg-subtle p-2 text-center",
-                  hasAdjustment ? "border-accentBorder" : "border-border",
-                )}
-                title={
-                  hasAdjustment
-                    ? `Valor manual: ${effectiveScore}. Automático: ${automaticScore}; ajuste: ${formatSigned(adjustment)}`
-                    : `Valor automático: ${automaticScore}`
-                }
-              >
-                <span className="text-[10px] font-semibold uppercase tracking-wide text-textMuted">{attributeShort(attribute)}</span>
-                <Input
-                  type="number"
-                  min={1}
-                  max={30}
-                  inputMode="numeric"
-                  className="h-8 min-w-0 px-1 text-center text-sm font-bold"
-                  value={effectiveScore}
-                  onChange={(event) => updateAttribute(attribute, Number(event.target.value))}
-                />
-                <span
-                  className={cn(
-                    "truncate text-[9px] font-semibold",
-                    hasAdjustment ? "text-accent" : "text-textMuted",
-                  )}
-                >
-                  {hasAdjustment
-                    ? `Manual · Auto ${automaticScore} · ${formatSigned(adjustment)}`
-                    : "Automático"}
-                </span>
-                <button
-                  type="button"
-                  className="rounded text-xs font-bold text-textH hover:bg-accentBg hover:text-accent"
-                  title={rollModifierHint()}
-                  onClick={(event) =>
-                    requestD20Roll({
-                      characterId,
-                      label: `Teste de ${attributeShort(attribute)}`,
-                      source: { type: "ability", attribute },
-                      mode: rollModeFromEvent(event.nativeEvent),
-                    })
-                  }
-                >
-                  {formatSigned(character.getEffectiveAbilityCheckBonus(attribute))}
-                </button>
-              </div>
+                label={attributeShort(attribute)}
+                value={effectiveScore}
+                automaticValue={automaticScore}
+                modifier={formatSigned(character.getEffectiveAbilityCheckBonus(attribute))}
+                onChange={(value) => updateAttribute(attribute, value)}
+                onRoll={(event) => requestD20Roll({
+                  characterId,
+                  label: `Teste de ${attributeShort(attribute)}`,
+                  source: { type: "ability", attribute },
+                  mode: rollModeFromEvent(event.nativeEvent),
+                })}
+              />
             )
           })}
         </div>
@@ -410,42 +384,19 @@ export function MinimalCharacterSheet({
           {SAVING_THROWS.map(({ attribute, label }) => {
             const proficient = character.isSavingThrowProficient(attribute)
             return (
-              <div
+              <CharacterSheetSaveCard
                 key={attribute}
-                className={cn(
-                  "flex min-w-0 items-center gap-2 rounded-lg border px-2 py-2 text-left transition-colors",
-                  proficient ? "border-accentBorder bg-accentBg" : "border-border bg-bg-subtle",
-                )}
-              >
-                <button
-                  type="button"
-                  aria-pressed={proficient}
-                  title={`${label}: ${proficient ? "proficiente" : "não proficiente"}`}
-                  onClick={() => toggleSavingThrow(attribute)}
-                  className={cn(
-                    "flex h-4 w-4 shrink-0 items-center justify-center rounded-full border",
-                    proficient ? "border-accent bg-accent text-white" : "border-textMuted",
-                  )}
-                >
-                  {proficient ? <Check className="h-3 w-3" strokeWidth={3} /> : null}
-                </button>
-                <span className="min-w-0 flex-1 truncate text-xs font-semibold text-textH">{attributeShort(attribute)}</span>
-                <button
-                  type="button"
-                  className="shrink-0 rounded px-1 text-sm font-bold text-textH hover:bg-bg hover:text-accent"
-                  title={rollModifierHint()}
-                  onClick={(event) =>
-                    requestD20Roll({
-                      characterId,
-                      label: `Resistência de ${label}`,
-                      source: { type: "save", attribute },
-                      mode: rollModeFromEvent(event.nativeEvent),
-                    })
-                  }
-                >
-                  {formatSigned(character.getSavingThrowBonus(attribute))}
-                </button>
-              </div>
+                label={attributeShort(attribute)}
+                proficient={proficient}
+                bonus={formatSigned(character.getSavingThrowBonus(attribute))}
+                onToggle={() => toggleSavingThrow(attribute)}
+                onRoll={(event) => requestD20Roll({
+                  characterId,
+                  label: `Resistência de ${label}`,
+                  source: { type: "save", attribute },
+                  mode: rollModeFromEvent(event.nativeEvent),
+                })}
+              />
             )
           })}
         </div>
@@ -761,71 +712,6 @@ function WeaponSwapDialog({
   )
 }
 
-function CompactSection({ title, children }: { title: string; children: React.ReactNode }) {
-  return <section className="rounded-xl border border-border bg-bg p-3 shadow-theme-sm"><h2 className="mb-2 text-xs font-semibold uppercase tracking-wide text-textH">{title}</h2>{children}</section>
-}
-
-function CompactNumberField({
-  label,
-  value,
-  onChange,
-  min,
-  max,
-  signed = false,
-  automaticValue,
-  adjustment,
-}: {
-  label: string
-  value: number
-  onChange: (value: number) => void
-  min?: number
-  max?: number
-  signed?: boolean
-  automaticValue?: number
-  adjustment?: number
-}) {
-  const hasDerivedState =
-    automaticValue !== undefined && adjustment !== undefined
-  const hasManualAdjustment =
-    hasDerivedState && Math.abs(adjustment) >= 0.000001
-
-  return (
-    <label
-      className={cn(
-        "grid min-w-0 gap-1 rounded-lg border bg-bg-subtle p-2 text-center",
-        hasManualAdjustment ? "border-accentBorder" : "border-border",
-      )}
-      title={
-        hasDerivedState
-          ? hasManualAdjustment
-            ? `Valor manual. Automático: ${automaticValue}; ajuste: ${formatSigned(adjustment)}`
-            : `Valor automático: ${automaticValue}`
-          : undefined
-      }
-    >
-      <span className="truncate text-[10px] uppercase tracking-wide text-textMuted">{label}</span>
-      <Input type="number" inputMode="decimal" min={min} max={max} className="h-8 min-w-0 px-1 text-center text-sm font-bold" value={value} aria-label={label} onChange={(event) => onChange(Number(event.target.value))} />
-      {hasDerivedState ? (
-        <span
-          className={cn(
-            "truncate text-[9px] font-semibold",
-            hasManualAdjustment ? "text-accent" : "text-textMuted",
-          )}
-        >
-          {hasManualAdjustment
-            ? `Manual · Auto ${automaticValue} · ${formatSigned(adjustment)}`
-            : "Automático"}
-        </span>
-      ) : null}
-      {signed ? <span className="sr-only">Valor atual {formatSigned(value)}</span> : null}
-    </label>
-  )
-}
-
-function ReadOnlyStat({ label, value }: { label: string; value: string }) {
-  return <div className="flex min-h-16 flex-col items-center justify-center rounded-lg border border-accentBorder bg-accentBg px-2 py-2 text-center"><div className="text-[10px] uppercase tracking-wide text-textMuted">{label}</div><div className="mt-1 text-lg font-bold text-textH">{value}</div></div>
-}
-
 function CompactWeaponTile({
   character,
   weapon,
@@ -933,10 +819,6 @@ function CompactUnarmedTile({ character }: { character: CharacterTemplate }) {
       </button>
     </div>
   )
-}
-
-function DerivedTile({ label, value }: { label: string; value: string }) {
-  return <div className="rounded-lg border border-border bg-bg-subtle px-2 py-2 text-center"><div className="text-[10px] uppercase tracking-wide text-textMuted">{label}</div><div className="mt-1 text-lg font-bold text-textH">{value}</div></div>
 }
 
 function normalizeSearchText(value: string): string {
