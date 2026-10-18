@@ -21,6 +21,7 @@
     "./runtime-config": "./src/runtimeConfig.ts",
     "./session-core": "./src/sessionCore.ts",
     "./session-messages": "./src/sessionMessages.ts",
-    "./sheet-routes": "./src/sheetRoutes.ts"
+    "./sheet-routes": "./src/sheetRoutes.ts",
+    "./dice-roll": "./src/diceRoll.ts"
   }
 }
