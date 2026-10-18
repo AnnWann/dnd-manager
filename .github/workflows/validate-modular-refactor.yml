@@ -36,6 +36,8 @@ jobs:
         run: npm install --ignore-scripts --package-lock=false --no-audit --no-fund
       - name: Generate Prisma client
         run: npx prisma generate
+      - name: Check game-core boundaries
+        run: node scripts/check-game-core-boundaries.mjs
       - name: Test game-core HP transitions
         run: node --test packages/game-core/tests/*.test.mjs
       - name: Test shared session protocol routing
