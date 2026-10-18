@@ -31,7 +31,8 @@
     "./spell-list-board": "./src/SpellListBoard.tsx",
     "./character-action-tabs": "./src/CharacterActionTabs.tsx",
     "./action-roll-feedback": "./src/ActionRollFeedback.tsx",
-    "./weapon-swap-dialog": "./src/WeaponSwapDialog.tsx"
+    "./weapon-swap-dialog": "./src/WeaponSwapDialog.tsx",
+    "./weapon-attack-tile": "./src/WeaponAttackTile.tsx"
   },
   "peerDependencies": {
     "react": "^19.0.0",
