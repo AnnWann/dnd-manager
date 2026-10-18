@@ -16,6 +16,9 @@
     "./inventory-stacks": "./src/inventoryStacks.ts",
     "./weapon-rules": "./src/weaponRules.ts",
     "./character-math": "./src/characterMath.ts",
-    "./attack-riders": "./src/attackRiders.ts"
+    "./attack-riders": "./src/attackRiders.ts",
+    "./long-rest-settings": "./src/longRestSupplySettings.ts",
+    "./campaign-progression": "./src/campaignProgression.ts",
+    "./standard-volumes": "./src/standardItemVolumes.ts"
   }
 }
