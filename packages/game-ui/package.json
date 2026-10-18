@@ -19,7 +19,8 @@
     "./stat-shell": "./src/StatShell.tsx",
     "./hit-dice-row": "./src/HitDiceRow.tsx",
     "./character-sheet-layout": "./src/CharacterSheetLayout.tsx",
-    "./spellcasting-hands-notice": "./src/SpellcastingHandsNotice.tsx"
+    "./spellcasting-hands-notice": "./src/SpellcastingHandsNotice.tsx",
+    "./character-sheet-fields": "./src/CharacterSheetFields.tsx"
   },
   "peerDependencies": {
     "react": "^19.0.0",
