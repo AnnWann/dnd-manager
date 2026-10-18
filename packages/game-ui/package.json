@@ -33,7 +33,9 @@
     "./action-roll-feedback": "./src/ActionRollFeedback.tsx",
     "./weapon-swap-dialog": "./src/WeaponSwapDialog.tsx",
     "./weapon-attack-tile": "./src/WeaponAttackTile.tsx",
-    "./unarmed-attack-tile": "./src/UnarmedAttackTile.tsx"
+    "./unarmed-attack-tile": "./src/UnarmedAttackTile.tsx",
+    "./inventory-transfer-form": "./src/InventoryTransferForm.tsx",
+    "./combatant-inspector-panel": "./src/CombatantInspectorPanel.tsx"
   },
   "peerDependencies": {
     "react": "^19.0.0",
