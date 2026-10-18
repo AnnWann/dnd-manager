@@ -18,6 +18,7 @@ for(const file of ["scripts/check-compendium-volumes.mjs","scripts/check-native-
 if(file.includes("audit-workspace-imports"))s=s.replace('"src", "api", "api-handlers", "server",','"apps/web/src", "apps/web/api", "apps/web/api-handlers", "apps/web/server",')
 writeFileSync(file,s)}
 const w="apps/web/package.json",web=JSON.parse(readFileSync(w,"utf8"))
+web.dependencies={...web.dependencies,"@dnd-manager/game-ui":"0.1.0","@dnd-manager/game-core":"0.1.0"}
 web.scripts={dev:"vite",build:"npm --prefix ../.. run check:compendium-volumes && npm --prefix ../.. run check:user-workspace-boundaries && npm --prefix ../.. run check:vercel-functions && npm --prefix ../.. run check:native-selects && tsc -b && vite build",lint:"eslint .",preview:"vite preview"}
 writeFileSync(w,JSON.stringify(web,null,2)+"\n")
 const root="package.json",pkg=JSON.parse(readFileSync(root,"utf8"))
