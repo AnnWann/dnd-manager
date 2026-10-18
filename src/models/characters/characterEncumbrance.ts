@@ -1,10 +1,9 @@
-import type { CreatureSize } from "../races/CharacterRace"
 import { getItemStackWeightKg } from "../items/itemWeight"
 import { getInventoryCarriedWeightKg } from "../items/itemCompartments"
 import type { CharacterTemplate } from "./CharacterTemplate"
 
-import { calculateEncumbrance, getStrengthWeightLimitKg as calculateWeightLimit, getCreatureSizeCapacityMultiplier } from "../../../packages/game-core/src/encumbrance"
-import type { EncumbranceInfo, EncumbranceState } from "../../../packages/game-core/src/encumbrance"
+import { calculateEncumbrance, getStrengthWeightLimitKg as calculateWeightLimit } from "../../../packages/game-core/src/encumbrance"
+import type { EncumbranceInfo } from "../../../packages/game-core/src/encumbrance"
 export { POUNDS_TO_KILOGRAMS, getCreatureSizeCapacityMultiplier } from "../../../packages/game-core/src/encumbrance"
 export type { EncumbranceInfo, EncumbranceState } from "../../../packages/game-core/src/encumbrance"
 
