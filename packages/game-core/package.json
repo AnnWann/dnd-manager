@@ -7,6 +7,7 @@
     "./damage": "./src/damage.ts",
     "./hit-points": "./src/hitPoints.ts",
     "./death-saves": "./src/deathSaves.ts",
-    "./experience": "./src/experience.ts"
+    "./experience": "./src/experience.ts",
+    "./mission-board": "./src/missionBoard.ts"
   }
 }
