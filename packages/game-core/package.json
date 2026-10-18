@@ -23,5 +23,8 @@
     "./asi": "./src/asi.ts",
     "./item-weight": "./src/itemWeight.ts",
     "./numeric-bonuses": "./src/numericBonuses.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --project tsconfig.json --noEmit"
   }
 }
