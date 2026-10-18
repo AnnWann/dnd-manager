@@ -41,7 +41,8 @@
     "./combat-hp-tabs": "./src/CombatHpModeTabs.tsx",
     "./level-selection-grid": "./src/LevelSelectionGrid.tsx",
     "./custom-class-basic-fields": "./src/CustomClassBasicFields.tsx",
-    "./combat-hp-editor": "./src/CombatHpEditor.tsx"
+    "./combat-hp-editor": "./src/CombatHpEditor.tsx",
+    "./manual-action-roll-fields": "./src/ManualActionRollFields.tsx"
   },
   "peerDependencies": {
     "react": "^19.0.0",
