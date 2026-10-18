@@ -1,3 +1,4 @@
+import { applyHitPointDamage, applyHitPointHealing, applyTemporaryHitPoints } from "../../../packages/game-core/src/hitPoints"
 import type { Die, DieSides } from "../dice/Die"
 import type { HP } from "../sheet/HP"
 import type { CharacterTemplate } from "./CharacterTemplate"
@@ -133,30 +134,10 @@ export function takeDamage(
   character: CharacterTemplate,
   damage: number,
 ): CharacterTemplate {
-  const amount = Math.max(0, damage)
   const hp = character.get("sheet").HP
-
-  let remainingDamage = amount
-  let temporary = hp.temporary
-  let current = hp.current
-
-  if (temporary > 0) {
-    const absorbed = Math.min(temporary, remainingDamage)
-    temporary -= absorbed
-    remainingDamage -= absorbed
-  }
-
-  current = Math.max(0, current - remainingDamage)
-
+  const next = applyHitPointDamage(hp, damage)
   return character.withPatch({
-    sheet: {
-      ...character.get("sheet"),
-      HP: {
-        ...hp,
-        current,
-        temporary,
-      },
-    },
+    sheet: { ...character.get("sheet"), HP: next },
   })
 }
 
@@ -165,15 +146,7 @@ export function heal(
   amount: number,
 ): CharacterTemplate {
   const hp = character.get("sheet").HP
-
-  return withHp(
-    character,
-    "current",
-    Math.min(
-      getEffectiveMaxHp(character),
-      hp.current + Math.max(0, amount),
-    ),
-  )
+  return withHp(character, "current", applyHitPointHealing(hp, amount, getEffectiveMaxHp(character)).current)
 }
 
 export function addTemporaryHp(
@@ -181,12 +154,7 @@ export function addTemporaryHp(
   amount: number,
 ): CharacterTemplate {
   const hp = character.get("sheet").HP
-
-  return withHp(
-    character,
-    "temporary",
-    Math.max(hp.temporary, Math.max(0, amount)),
-  )
+  return withHp(character, "temporary", applyTemporaryHitPoints(hp, amount).temporary)
 }
 
 export function addDice(
