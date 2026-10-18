@@ -1,4 +1,4 @@
-import { SessionTransport, type SessionTransportOptions } from "./sessionTransport"
+import { SessionTransport, type SessionTransportOptions } from "./sessionTransport.ts"
 
 export type SessionMessageDecoder<TServerMessage> = (raw: string) => TServerMessage | null
 
