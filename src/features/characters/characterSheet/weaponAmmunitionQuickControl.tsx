@@ -1,4 +1,4 @@
-import { ChevronDown, Minus, Settings2 } from "lucide-react"
+import { WeaponAmmunitionBar } from "../../../../packages/game-ui/src/WeaponAmmunitionBar"
 import { useEffect, useMemo, useState } from "react"
 
 import { Button } from "../../../components/ui/Button"
@@ -110,59 +110,14 @@ export function WeaponAmmunitionQuickControl({
 
   return (
     <>
-      <div className="mt-2 border-t border-border pt-2">
-        <div className="flex min-w-0 items-center gap-1.5">
-          <button
-            type="button"
-            onClick={() => setOpen(true)}
-            className="flex min-w-0 flex-1 items-center gap-1 rounded-md px-1.5 py-1 text-left text-[10px] font-medium text-text hover:bg-bg"
-            title="Selecionar e configurar munições desta arma"
-          >
-            <span className="min-w-0 flex-1 truncate">
-              {activeItem?.name || (compatibleKeys.length ? "Selecionar munição" : "Configurar munição")}
-            </span>
-            <ChevronDown className="h-3 w-3 shrink-0" />
-          </button>
-
-          <span
-            className={activeQuantity > 0 ? "shrink-0 text-[10px] font-bold text-textH" : "shrink-0 text-[10px] font-bold text-danger"}
-            title="Quantidade disponível"
-          >
-            {activeQuantity}
-          </span>
-
-          <button
-            type="button"
-            aria-label={`Gastar 1 ${activeItem?.name ?? "munição"}`}
-            title={runtime ? "Gastar uma munição e enviá-la ao chão" : "Disponível durante uma sessão"}
-            disabled={!runtime || !activeItem || activeQuantity <= 0}
-            onClick={() => spend(1)}
-            className="flex h-7 w-8 shrink-0 items-center justify-center rounded-md border border-accentBorder bg-accentBg text-accent transition-colors hover:bg-bg disabled:cursor-not-allowed disabled:opacity-40"
-          >
-            <Minus className="h-3.5 w-3.5" />
-            <span className="sr-only">1</span>
-          </button>
-
-          <button
-            type="button"
-            aria-label="Configurar ou gastar várias munições"
-            title="Configurar munições"
-            onClick={() => setOpen(true)}
-            className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md border border-border text-textMuted hover:border-borderStrong hover:text-textH"
-          >
-            <Settings2 className="h-3.5 w-3.5" />
-          </button>
-        </div>
-
-        {activeItem?.desc?.trim() ? (
-          <div
-            className="mt-1 truncate px-1.5 text-[9px] text-textMuted"
-            title={activeItem.desc}
-          >
-            {activeItem.desc}
-          </div>
-        ) : null}
-      </div>
+      <WeaponAmmunitionBar
+        name={activeItem?.name || (compatibleKeys.length ? "Selecionar munição" : "Configurar munição")}
+        description={activeItem?.desc}
+        quantity={activeQuantity}
+        canSpend={Boolean(runtime && activeItem && activeQuantity > 0)}
+        onConfigure={() => setOpen(true)}
+        onSpend={() => spend(1)}
+      />
 
       {open ? (
         <Modal
