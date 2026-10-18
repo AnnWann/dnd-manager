@@ -38,6 +38,12 @@ jobs:
         run: npm install --ignore-scripts --package-lock=false --no-audit --no-fund
       - name: Check npm workspace registration
         run: npm run check:workspace-boundaries && npm ls --workspaces --depth=0
+      - name: Typecheck portable packages
+        run: |
+          npm run typecheck --workspace @dnd-manager/session-protocol
+          npm run typecheck --workspace @dnd-manager/game-core
+          npm run typecheck --workspace @dnd-manager/session-client
+          npm run typecheck --workspace @dnd-manager/game-ui
       - name: Generate Prisma client
         run: npx prisma generate
       - name: Check shared UI boundaries
