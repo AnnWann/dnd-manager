@@ -1,3 +1,4 @@
+import { MissionBoardToolbar } from "../../packages/game-ui/src/MissionBoardToolbar"
 import { MissionBoard } from "../../packages/game-ui/src/MissionBoard"
 import { filterMissions, countMissionsByStatus } from "../../packages/game-core/src/missionBoard"
 import { useEffect, useState } from "react"
@@ -13,7 +14,6 @@ import {
   MapPin,
   Pencil,
   Plus,
-  Search,
   Tag,
   Trash2,
   UserRound,
@@ -110,39 +110,16 @@ export function MissionsView() {
         </CardHeader>
 
         <CardContent>
-          <div className="grid gap-3 sm:grid-cols-3">
-            {(Object.keys(STATUS_CONFIG) as MissionStatus[]).map((status) => {
+          <MissionBoardToolbar
+            statuses={(Object.keys(STATUS_CONFIG) as MissionStatus[]).map((status) => {
               const config = STATUS_CONFIG[status]
               const Icon = config.icon
-
-              return (
-                <div
-                  key={status}
-                  className="flex items-center gap-3 rounded-xl border border-border bg-bg-subtle p-3"
-                >
-                  <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-accentBorder bg-accentBg text-accent">
-                    <Icon className="h-5 w-5" />
-                  </span>
-                  <div>
-                    <div className="text-xl font-bold text-textH">
-                      {missionCounts[status]}
-                    </div>
-                    <div className="text-xs text-textMuted">{config.label}</div>
-                  </div>
-                </div>
-              )
+              return { status, label: config.label, count: missionCounts[status], icon: <Icon className="h-5 w-5" /> }
             })}
-          </div>
-
-          <label className="relative mt-4 block">
-            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-textMuted" />
-            <Input
-              className="pl-9"
-              value={search}
-              onChange={(event) => setSearch(event.target.value)}
-              placeholder="Buscar por título, objetivo, local, contratante ou recompensa..."
-            />
-          </label>
+            search={search}
+            onSearchChange={setSearch}
+            placeholder="Buscar por título, objetivo, local, contratante ou recompensa..."
+          />
         </CardContent>
       </Card>
 
