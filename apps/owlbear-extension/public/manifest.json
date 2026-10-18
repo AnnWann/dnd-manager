@@ -1,0 +1,13 @@
+{
+  "name": "D&D Manager - Fichas",
+  "version": "0.1.0",
+  "manifest_version": 1,
+  "description": "Abra as fichas existentes do D&D Manager no Owlbear Rodeo.",
+  "action": {
+    "title": "D&D Manager - Fichas",
+    "icon": "/icon.svg",
+    "popover": "/",
+    "height": 780,
+    "width": 540
+  }
+}
