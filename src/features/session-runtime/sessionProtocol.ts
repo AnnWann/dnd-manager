@@ -2,55 +2,23 @@ import type { SessionActionRollRequest, SessionActionRollResult, SessionCreature
 import type { SessionRuntimeRole, SessionRuntimePresenceUser, SessionDieSides, SessionHitDicePool, SessionHitDiceState, SessionAttribute, SessionAttributesState, SessionSavingThrowsState, SessionSkill, SessionSkillProficiency, SessionSkillsState, SessionStatsState, SessionConditionDuration, SessionCondition, SessionConditionsState, SessionConditionSeed, SessionHpState, SessionHpSeed, SessionHpOperation, SessionHitDiceOperation, SessionCalculatedStatOperation, SessionSimpleStatOperation, SessionStatOperation, SessionAttributeOperation, SessionSavingThrowOperation, SessionSkillOperation, SessionConditionOperation, SessionConcentrationOperation, SessionLongRestSupplySelection, SessionRestOperation, SessionAuthoritativeOperation, SessionLoggedOperation, SessionHpLogRecord } from "../../../packages/session-protocol/src/sessionCore"
 export type { SessionRuntimeRole, SessionRuntimePresenceUser, SessionDieSides, SessionHitDicePool, SessionHitDiceState, SessionAttribute, SessionAttributesState, SessionSavingThrowsState, SessionSkill, SessionSkillProficiency, SessionSkillsState, SessionStatsState, SessionConditionDuration, SessionCondition, SessionConditionsState, SessionConditionSeed, SessionHpState, SessionHpSeed, SessionHpOperation, SessionHitDiceOperation, SessionCalculatedStatOperation, SessionSimpleStatOperation, SessionStatOperation, SessionAttributeOperation, SessionSavingThrowOperation, SessionSkillOperation, SessionConditionOperation, SessionConcentrationOperation, SessionLongRestSupplySelection, SessionRestOperation, SessionAuthoritativeOperation, SessionLoggedOperation, SessionHpLogRecord } from "../../../packages/session-protocol/src/sessionCore"
 
-export type SessionReadyMessage = { type: "session.ready"; sessionId: string; clientId: string; serverTime: number }
-export type SessionHeartbeatAckMessage = { type: "session.heartbeat.ack"; serverTime: number }
-export type SessionPresenceMessage = { type: "session.presence"; users: SessionRuntimePresenceUser[] }
-export type SessionHpSnapshotMessage = { type: "session.hp.snapshot"; characters: SessionHpState[] }
-export type SessionHpUpdatedMessage = { type: "session.hp.updated"; character: SessionHpState }
-export type SessionConditionsSnapshotMessage = { type: "session.conditions.snapshot"; characters: SessionConditionsState[] }
-export type SessionConditionsUpdatedMessage = { type: "session.conditions.updated"; character: SessionConditionsState }
-export type SessionHpLogMessage = { type: "session.hp.log"; records: SessionHpLogRecord[] }
-export type SessionPongMessage = { type: "session.pong"; serverTime: number }
-export type SessionDiceResultMessage = { type: "session.dice.result"; result: SessionDiceRollResult }
-export type SessionActionResultMessage = { type: "session.action.result"; result: SessionActionRollResult }
-export type SessionErrorMessage = { type: "session.error"; code: string; message: string }
-export type SessionCustomSystemNoticeMessage = { type: "session.customSystem.notice"; characterId: string; title: string; message: string }
-
-export type ServerSessionMessage =
-  | SessionReadyMessage | SessionHeartbeatAckMessage | SessionPresenceMessage
-  | SessionHpSnapshotMessage | SessionHpUpdatedMessage
-  | SessionConditionsSnapshotMessage | SessionConditionsUpdatedMessage
-  | SessionHpLogMessage | SessionPongMessage | SessionDiceResultMessage | SessionActionResultMessage | SessionCustomSystemNoticeMessage | SessionErrorMessage
-
-export type CharacterSheetRoute =
-  | "characters/sheet/hp"
-  | "characters/sheet/hitdice"
-  | "characters/sheet/stats/armor-class"
-  | "characters/sheet/stats/initiative"
-  | "characters/sheet/stats/mobility"
-  | "characters/sheet/stats/passive-perception"
-  | "characters/sheet/stats/exhaustion"
-  | "characters/sheet/stats/inspiration"
-  | "characters/sheet/stats/experience"
-  | "characters/sheet/attributes"
-  | "characters/sheet/saving-throws"
-  | "characters/sheet/skills"
-  | "characters/sheet/conditions"
-  | "characters/sheet/concentration"
-  | "characters/sheet/rest"
-
-export type ClientSessionMessage =
-  | { type: "session.heartbeat"; clientId: string }
-  | { type: "session.ping" }
-  | { type: "session.hp.initialize"; characters: SessionHpSeed[] }
-  | { type: "session.hp.operation"; operation: SessionAuthoritativeOperation }
-  | { type: "session.conditions.initialize"; characters: SessionConditionSeed[] }
-  | { type: "session.conditions.operation"; operation: SessionConditionOperation | SessionConcentrationOperation }
-  | { type: "session.sheet.operation"; route: CharacterSheetRoute; operation: SessionLoggedOperation }
-  | { type: "session.log.undo"; logId: string }
-  | { type: "session.dice.roll"; request: SessionDiceRollRequest }
-  | { type: "session.action.roll"; request: SessionActionRollRequest }
-  | { type: "session.creature.roll"; request: SessionCreatureRollRequest }
+import type { SessionDiceResultMessage as SharedDiceResultMessage, SessionActionResultMessage as SharedActionResultMessage, ServerSessionMessage as SharedServerMessage, ClientSessionMessage as SharedClientMessage } from "../../../packages/session-protocol/src/sessionMessages"
+export type { SessionReadyMessage } from "../../../packages/session-protocol/src/sessionMessages"
+export type { SessionHeartbeatAckMessage } from "../../../packages/session-protocol/src/sessionMessages"
+export type { SessionPresenceMessage } from "../../../packages/session-protocol/src/sessionMessages"
+export type { SessionHpSnapshotMessage } from "../../../packages/session-protocol/src/sessionMessages"
+export type { SessionHpUpdatedMessage } from "../../../packages/session-protocol/src/sessionMessages"
+export type { SessionConditionsSnapshotMessage } from "../../../packages/session-protocol/src/sessionMessages"
+export type { SessionConditionsUpdatedMessage } from "../../../packages/session-protocol/src/sessionMessages"
+export type { SessionHpLogMessage } from "../../../packages/session-protocol/src/sessionMessages"
+export type { SessionPongMessage } from "../../../packages/session-protocol/src/sessionMessages"
+export type SessionDiceResultMessage = SharedDiceResultMessage<SessionDiceRollResult>
+export type SessionActionResultMessage = SharedActionResultMessage<SessionActionRollResult>
+export type { SessionErrorMessage } from "../../../packages/session-protocol/src/sessionMessages"
+export type { SessionCustomSystemNoticeMessage } from "../../../packages/session-protocol/src/sessionMessages"
+export type ServerSessionMessage = SharedServerMessage<SessionDiceRollResult, SessionActionRollResult>
+export type { CharacterSheetRoute } from "../../../packages/session-protocol/src/sessionMessages"
+export type ClientSessionMessage = SharedClientMessage<SessionDiceRollRequest, SessionActionRollRequest, SessionCreatureRollRequest>
 
 export function parseServerSessionMessage(raw: string): ServerSessionMessage | null {
   let parsed: unknown
