@@ -1,3 +1,4 @@
+import { MissionBoard } from "../../packages/game-ui/src/MissionBoard"
 import { filterMissions, countMissionsByStatus } from "../../packages/game-core/src/missionBoard"
 import { useEffect, useState } from "react"
 import {
@@ -145,30 +146,35 @@ export function MissionsView() {
         </CardContent>
       </Card>
 
-      <div className="grid items-start gap-4 xl:grid-cols-3">
-        {(Object.keys(STATUS_CONFIG) as MissionStatus[]).map((status) => (
-          <MissionColumn
-            key={status}
-            status={status}
-            missions={filteredMissions.filter(
-              (mission) => mission.status === status,
-            )}
+      <MissionBoard
+        columns={(Object.keys(STATUS_CONFIG) as MissionStatus[]).map((status) => {
+          const config = STATUS_CONFIG[status]
+          const Icon = config.icon
+          return {
+            status,
+            label: config.label,
+            description: config.description,
+            emptyMessage: config.empty,
+            icon: <Icon className="h-5 w-5 text-accent" />,
+            items: filteredMissions.filter((mission) => mission.status === status).toSorted(compareMissions),
+          }
+        })}
+        getItemKey={(mission) => mission.id}
+        renderItem={(mission) => (
+          <MissionCard
+            mission={mission}
             canManageMissions={canManageMissions}
-            onEdit={setEditing}
-            onDelete={(mission) => {
-              if (
-                window.confirm(
-                  `Excluir permanentemente a missão “${mission.title}”?`,
-                )
-              ) {
+            onEdit={() => setEditing(mission)}
+            onDelete={() => {
+              if (window.confirm(`Excluir permanentemente a missão “${mission.title}”?`)) {
                 deleteMission(mission.id)
               }
             }}
-            onMove={moveMission}
-            onToggleObjective={toggleObjective}
+            onMove={(status) => moveMission(mission.id, status)}
+            onToggleObjective={(objectiveId) => toggleObjective(mission.id, objectiveId)}
           />
-        ))}
-      </div>
+        )}
+      />
 
       <MissionDialog
         open={creating || editing !== null}
@@ -189,72 +195,6 @@ export function MissionsView() {
         }}
       />
     </div>
-  )
-}
-
-function MissionColumn({
-  status,
-  missions,
-  canManageMissions,
-  onEdit,
-  onDelete,
-  onMove,
-  onToggleObjective,
-}: {
-  status: MissionStatus
-  missions: Mission[]
-  canManageMissions: boolean
-  onEdit: (mission: Mission) => void
-  onDelete: (mission: Mission) => void
-  onMove: (missionId: string, status: MissionStatus) => void
-  onToggleObjective: (missionId: string, objectiveId: string) => void
-}) {
-  const config = STATUS_CONFIG[status]
-  const Icon = config.icon
-
-  return (
-    <section className="overflow-hidden rounded-xl border border-border bg-bg">
-      <header className="border-b border-border bg-bg-subtle p-4">
-        <div className="flex items-center justify-between gap-3">
-          <div className="flex items-center gap-2.5">
-            <Icon className="h-5 w-5 text-accent" />
-            <h2 className="text-sm font-semibold text-textH">
-              {config.label}
-            </h2>
-          </div>
-          <span className="rounded-full border border-border bg-bg px-2.5 py-1 text-xs font-semibold text-textH">
-            {missions.length}
-          </span>
-        </div>
-        <p className="mt-1.5 text-xs leading-5 text-textMuted">
-          {config.description}
-        </p>
-      </header>
-
-      <div className="grid gap-3 p-3">
-        {missions.length === 0 ? (
-          <div className="rounded-xl border border-dashed border-border px-4 py-8 text-center text-xs text-textMuted">
-            {config.empty}
-          </div>
-        ) : (
-          missions
-            .toSorted(compareMissions)
-            .map((mission) => (
-              <MissionCard
-                key={mission.id}
-                mission={mission}
-                canManageMissions={canManageMissions}
-                onEdit={() => onEdit(mission)}
-                onDelete={() => onDelete(mission)}
-                onMove={(nextStatus) => onMove(mission.id, nextStatus)}
-                onToggleObjective={(objectiveId) =>
-                  onToggleObjective(mission.id, objectiveId)
-                }
-              />
-            ))
-        )}
-      </div>
-    </section>
   )
 }
 
