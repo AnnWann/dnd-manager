@@ -8,6 +8,9 @@
     "./hit-points": "./src/hitPoints.ts",
     "./death-saves": "./src/deathSaves.ts",
     "./experience": "./src/experience.ts",
-    "./mission-board": "./src/missionBoard.ts"
+    "./mission-board": "./src/missionBoard.ts",
+    "./manual-dice": "./src/manualDiceExpression.ts",
+    "./pocketability": "./src/pocketability.ts",
+    "./encumbrance": "./src/encumbrance.ts"
   }
 }
