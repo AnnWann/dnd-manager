@@ -85,6 +85,7 @@ export class SessionTransport {
     }
     this.socket = socket
     socket.onmessage = (event) => {
+      if (this.socket !== socket || this.stopped) return
       if (typeof event.data !== "string") return
       // Session readiness is delivered in-band before the first heartbeat.
       try {
