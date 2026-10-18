@@ -24,5 +24,8 @@
     "./sheet-routes": "./src/sheetRoutes.ts",
     "./dice-roll": "./src/diceRoll.ts",
     "./session-log": "./src/sessionLog.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --project tsconfig.json --noEmit"
   }
 }
