@@ -12,6 +12,7 @@
     "./manual-dice": "./src/manualDiceExpression.ts",
     "./pocketability": "./src/pocketability.ts",
     "./encumbrance": "./src/encumbrance.ts",
-    "./item-consumption": "./src/itemConsumption.ts"
+    "./item-consumption": "./src/itemConsumption.ts",
+    "./inventory-stacks": "./src/inventoryStacks.ts"
   }
 }
