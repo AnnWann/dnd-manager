@@ -5,7 +5,8 @@
   "type": "module",
   "exports": {
     "./experience-progress": "./src/ExperienceProgress.tsx",
-    "./hp-value": "./src/HpValue.tsx"
+    "./hp-value": "./src/HpValue.tsx",
+    "./hp-action-buttons": "./src/HpActionButtons.tsx"
   },
   "peerDependencies": {
     "react": "^19.0.0"
