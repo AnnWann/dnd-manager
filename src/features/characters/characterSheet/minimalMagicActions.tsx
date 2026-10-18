@@ -1,3 +1,4 @@
+import { ResourcePill } from "../../../../packages/game-ui/src/ResourcePill"
 import { Select as SharedSelect } from "../../../components/ui/Select"
 import { DAMAGE_TYPE_OPTIONS, type DamageType } from "../../../models/combat/Damage"
 import { getAttackRiderDamageChoices } from "../../../models/combat/AttackRider"
@@ -313,15 +314,5 @@ function getCastLevels(spell: Spell, resource: CastingResource, slots: SlotChoic
 function isAlwaysAvailableSpell(spell: Spell, source: SpellSource, classes: CharacterClassInterface[]): boolean { if (spell.slotLevel === 0 || source.type !== "class") return true; const data = classes.find((entry) => entry.className === source.name); return !data?.knownSpells || data.knownSpells.mode === "limited" }
 function normalizeCastingTime(spell: Spell): ActionFilter { return spell.castingTime.type === "bonusAction" ? "bonusAction" : spell.castingTime.type === "reaction" ? "reaction" : spell.castingTime.type === "action" ? "action" : "other" }
 function getSlotChoices(character: CharacterTemplate, spell: Spell): SlotChoice[] { if (spell.slotLevel <= 0) return []; const choices: SlotChoice[] = []; for (const [text, slot] of Object.entries(character.getSpellSlots())) { const level = Number(text) as MagicCircleLevel; if (slot && slot.current > 0 && level >= spell.slotLevel) choices.push({ level, pool: "normal" }) } const pact = character.getPactSlots(); if (pact && pact.current > 0 && pact.level >= spell.slotLevel) choices.push({ level: pact.level as MagicCircleLevel, pool: "pact" }); return choices.sort((a, b) => a.level - b.level) }
-function ResourcePill({ label, current, max, onDecrease, onIncrease }: { label: string; current: number; max: number; onDecrease?: () => void; onIncrease?: () => void }) {
-  return <div className="flex min-h-14 min-w-0 max-w-full items-center gap-3 rounded-xl border border-border bg-bg-subtle px-3 py-2.5 text-sm sm:min-h-0 sm:gap-2 sm:rounded-lg sm:px-2.5 sm:py-2 sm:text-xs">
-    <span className="min-w-0 break-words font-semibold text-textH">{label}</span>
-    <span className="shrink-0 text-textMuted">{current}/{max}</span>
-    {onDecrease || onIncrease ? <div className="ml-auto flex shrink-0 gap-2 sm:gap-1">
-      <button type="button" aria-label={`Diminuir ${label}`} disabled={!onDecrease || current <= 0} onClick={onDecrease} className="grid h-11 w-11 place-items-center rounded-lg border border-border bg-bg text-xl font-semibold text-textH transition-colors hover:border-accentBorder hover:bg-accentBg disabled:opacity-35 sm:h-7 sm:w-7 sm:text-sm">−</button>
-      <button type="button" aria-label={`Aumentar ${label}`} disabled={!onIncrease || current >= max} onClick={onIncrease} className="grid h-11 w-11 place-items-center rounded-lg border border-border bg-bg text-xl font-semibold text-textH transition-colors hover:border-accentBorder hover:bg-accentBg disabled:opacity-35 sm:h-7 sm:w-7 sm:text-sm">+</button>
-    </div> : null}
-  </div>
-}
 function spellName(spell: Spell) { return spell.displayName || spell.name }
 function sourceLabel(source: SpellSource) { if (source.type === "class") return CLASS_NAMES[source.name as keyof typeof CLASS_NAMES] ?? source.name ?? "Classe"; return source.name || "Habilidade" }
