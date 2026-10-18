@@ -11,7 +11,8 @@
     "./hp-summary-grid": "./src/HpSummaryGrid.tsx",
     "./mission-board": "./src/MissionBoard.tsx",
     "./mission-toolbar": "./src/MissionBoardToolbar.tsx",
-    "./initiative-roster-table": "./src/InitiativeRosterTable.tsx"
+    "./initiative-roster-table": "./src/InitiativeRosterTable.tsx",
+    "./inventory-tile-grid": "./src/InventoryTileGrid.tsx"
   },
   "peerDependencies": {
     "react": "^19.0.0"
