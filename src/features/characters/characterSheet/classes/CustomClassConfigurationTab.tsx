@@ -1,3 +1,4 @@
+import { CustomClassBasicFields } from "../../../../../packages/game-ui/src/CustomClassBasicFields"
 import { LevelSelectionGrid } from "../../../../../packages/game-ui/src/LevelSelectionGrid"
 import { ClassConfigurationSelector } from "../../../../../packages/game-ui/src/ClassConfigurationSelector"
 import { useEffect, useMemo, useState } from "react"
@@ -232,68 +233,25 @@ export function CustomClassConfigurationEditor({
           ) : null}
         </div>
 
-        <div className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          <label className="grid gap-1.5 sm:col-span-2 lg:col-span-1">
-            <span className="text-xs font-medium text-textH">Nome da classe</span>
-            <Input disabled={readOnly} value={draft.name} onChange={(event) => patch({ name: event.target.value })} />
-          </label>
-
-          <label className="grid gap-1.5">
-            <span className="text-xs font-medium text-textH">Dado de vida</span>
-            <Select
-              disabled={readOnly}
-              value={draft.hitDie}
-              onInput={(event) =>
-                patch({ hitDie: event.currentTarget.value as CustomClassRuntimeConfig["hitDie"] })
-              }
-            >
-              {HIT_DICE.map((die) => <option key={die} value={die}>{die}</option>)}
-            </Select>
-          </label>
-
-          <label className="grid gap-1.5">
-            <span className="text-xs font-medium text-textH">Perícias de classe</span>
-            <Input
-              disabled={readOnly}
-              type="number"
-              min={0}
-              max={18}
-              value={draft.skillChoices}
-              onChange={(event) => patch({ skillChoices: Math.max(0, Math.min(18, Math.trunc(Number(event.target.value) || 0))) })}
-            />
-          </label>
-
-          <label className="grid gap-1.5">
-            <span className="text-xs font-medium text-textH">Tipo de conjurador</span>
-            <Select disabled={readOnly} value={draft.casterType} onInput={(event) => patch({ casterType: event.currentTarget.value as CustomClassRuntimeConfig["casterType"] })}>
-              <option value="none">Não conjurador</option>
-              <option value="full">Conjurador completo</option>
-              <option value="half">Meio conjurador</option>
-              <option value="third">1/3 de conjurador</option>
-            </Select>
-          </label>
-
-          {draft.casterType !== "none" ? (
-            <>
-              <label className="grid gap-1.5">
-                <span className="text-xs font-medium text-textH">Atributo de conjuração</span>
-                <Select disabled={readOnly} value={draft.castingAttribute} onInput={(event) => patch({ castingAttribute: event.currentTarget.value as Attribute })}>
-                  {ATTRIBUTES.map((attribute) => <option key={attribute.value} value={attribute.value}>{attribute.label}</option>)}
-                </Select>
-              </label>
-
-              <label className="grid gap-1.5">
-                <span className="text-xs font-medium text-textH">Modelo de magias</span>
-                <Select disabled={readOnly} value={draft.knownSpellMode} onInput={(event) => patch({ knownSpellMode: event.currentTarget.value as KnownSpellMode })}>
-                  <option value="limited">Magias conhecidas</option>
-                  <option value="spellbook">Grimório</option>
-                  <option value="prepared-only">Somente preparadas</option>
-                </Select>
-              </label>
-
-            </>
-          ) : null}
-        </div>
+        <CustomClassBasicFields
+          value={draft}
+          hitDice={HIT_DICE}
+          casterTypes={[
+            { value: "none", label: "Não conjurador" },
+            { value: "full", label: "Conjurador completo" },
+            { value: "half", label: "Meio conjurador" },
+            { value: "third", label: "1/3 de conjurador" },
+          ]}
+          attributes={ATTRIBUTES}
+          spellModes={[
+            { value: "limited", label: "Magias conhecidas" },
+            { value: "spellbook", label: "Grimório" },
+            { value: "prepared-only", label: "Somente preparadas" },
+          ]}
+          noneCasterValue="none"
+          disabled={readOnly}
+          onChange={patch}
+        />
 
         <LevelSelectionGrid
           title="Níveis de ASI / talentos"
