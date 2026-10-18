@@ -39,7 +39,8 @@
     "./class-configuration-selector": "./src/ClassConfigurationSelector.tsx",
     "./cast-activation-fields": "./src/CastActivationFields.tsx",
     "./combat-hp-tabs": "./src/CombatHpModeTabs.tsx",
-    "./level-selection-grid": "./src/LevelSelectionGrid.tsx"
+    "./level-selection-grid": "./src/LevelSelectionGrid.tsx",
+    "./custom-class-basic-fields": "./src/CustomClassBasicFields.tsx"
   },
   "peerDependencies": {
     "react": "^19.0.0",
