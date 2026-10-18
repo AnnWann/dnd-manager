@@ -1,3 +1,4 @@
+import { addDeathSaveSuccess as incrementDeathSaveSuccess, addDeathSaveFailure as incrementDeathSaveFailure, resetDeathSaveState } from "../../../packages/game-core/src/deathSaves"
 import { applyHitPointDamage, applyHitPointHealing, applyTemporaryHitPoints } from "../../../packages/game-core/src/hitPoints"
 import type { Die, DieSides } from "../dice/Die"
 import type { HP } from "../sheet/HP"
@@ -257,10 +258,7 @@ export function addDeathSaveSuccess(
     failures: 0,
   }
 
-  return character.with("deathSaves", {
-    ...deathSaves,
-    successes: clamp(deathSaves.successes + 1, 0, 3),
-  })
+  return character.with("deathSaves", incrementDeathSaveSuccess(deathSaves))
 }
 
 export function addDeathSaveFailure(
@@ -271,19 +269,13 @@ export function addDeathSaveFailure(
     failures: 0,
   }
 
-  return character.with("deathSaves", {
-    ...deathSaves,
-    failures: clamp(deathSaves.failures + 1, 0, 3),
-  })
+  return character.with("deathSaves", incrementDeathSaveFailure(deathSaves))
 }
 
 export function resetDeathSaves(
   character: CharacterTemplate,
 ): CharacterTemplate {
-  return character.with("deathSaves", {
-    successes: 0,
-    failures: 0,
-  })
+  return character.with("deathSaves", resetDeathSaveState())
 }
 
 export function longRestHp(
