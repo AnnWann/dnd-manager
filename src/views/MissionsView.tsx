@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useState } from "react"
+import { filterMissions, countMissionsByStatus } from "../../packages/game-core/src/missionBoard"
+import { useEffect, useState } from "react"
 import {
   ArchiveRestore,
   Check,
@@ -81,36 +82,8 @@ export function MissionsView() {
   const [creating, setCreating] = useState(false)
   const [editing, setEditing] = useState<Mission | null>(null)
 
-  const normalizedSearch = search.trim().toLocaleLowerCase("pt-BR")
-  const filteredMissions = useMemo(
-    () =>
-      missions.filter((mission) => {
-        if (!normalizedSearch) return true
-
-        const searchable = [
-          mission.title,
-          mission.summary,
-          mission.description,
-          mission.giver,
-          mission.location,
-          mission.reward,
-          mission.notes,
-          ...mission.tags,
-          ...mission.objectives.map((objective) => objective.text),
-        ]
-          .join(" ")
-          .toLocaleLowerCase("pt-BR")
-
-        return searchable.includes(normalizedSearch)
-      }),
-    [missions, normalizedSearch],
-  )
-
-  const missionCounts = {
-    available: missions.filter((mission) => mission.status === "available").length,
-    accepted: missions.filter((mission) => mission.status === "accepted").length,
-    completed: missions.filter((mission) => mission.status === "completed").length,
-  }
+  const filteredMissions = filterMissions(missions, search)
+  const missionCounts = countMissionsByStatus(missions)
 
   return (
     <div className="mx-auto grid w-full max-w-[1600px] gap-4">
