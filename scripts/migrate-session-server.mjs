@@ -66,9 +66,6 @@ let audit = readFileSync(auditPath, "utf8")
 audit = audit.replace('"apps/session-server", "session-server",', '"apps/session-server",')
 audit = audit.replace('"session-server/src",', '"apps/session-server/src",')
 writeFileSync(auditPath, audit)
-const wfPath = ".github/workflows/validate-modular-refactor.yml"
-let wf = readFileSync(wfPath, "utf8").replaceAll('"session-server/**"', '"apps/session-server/**"')
-writeFileSync(wfPath, wf)
 const tsPath = "tsconfig.app.json"
 let ts = readFileSync(tsPath, "utf8")
 ts = ts.replace('"exclude": ["session-server", "legacy-functions"]', '"exclude": ["session-server", "apps/session-server", "legacy-functions"]')
