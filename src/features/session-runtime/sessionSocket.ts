@@ -1,3 +1,4 @@
+import { SessionTransport } from "../../../packages/session-client/src/sessionTransport"
 import {
   parseServerSessionMessage,
   type ClientSessionMessage,
@@ -65,36 +66,32 @@ export type SessionSocketOptions = {
   ) => void
 }
 
-type SessionConnectionTokenResponse = {
-  token: string
-  expiresAt: number
-  role: SessionRuntimeRole
-}
-
-const HEARTBEAT_MIN_MS = 27_000
-const HEARTBEAT_MAX_MS = 33_000
-const RECONNECT_MAX_MS = 10_000
-const SESSION_KICKED_CLOSE_CODE = 4002
-
 export class SessionSocket {
-  private socket: WebSocket | null = null
-  private heartbeatTimer: number | null = null
-  private reconnectTimer: number | null = null
-  private reconnectAttempt = 0
-  private connectionAttempt = 0
-  private stopped = false
-  private hasConnectedOnce = false
+  private readonly transport: SessionTransport
   private pendingMagicOperations: SessionMagicOperation[] = []
   private magicFlushQueued = false
   private latestAbilityStates = new Map<string, SessionAbilityState>()
 
-  constructor(private readonly options: SessionSocketOptions) {}
-
-  connect(): void {
-    this.stopped = false
-    this.clearReconnectTimer()
-    void this.openSocket()
+  constructor(private readonly options: SessionSocketOptions) {
+    const configured = import.meta.env.VITE_SESSION_AUTH_MODE?.trim().toLowerCase()
+    const useTokenAuth = configured === "token" ? true : configured === "development" ? false : !import.meta.env.DEV
+    this.transport = new SessionTransport({
+      baseUrl: options.baseUrl,
+      sessionId: options.sessionId,
+      userId: options.userId,
+      role: options.role,
+      clientId: options.clientId,
+      useTokenAuth,
+      tokenEndpoint: "/api/session-connection",
+      onStatusChange: options.onStatusChange,
+      onMessage: (raw) => this.handleMessage(raw),
+      onDisconnected: () => this.clearLocalState(),
+      onKicked: () => window.location.assign("/user"),
+    })
   }
+
+
+  connect(): void { this.transport.connect() }
 
   send(message:
     | ClientSessionMessage
@@ -113,12 +110,12 @@ export class SessionSocket {
     | { type: "session.magic.operation"; operation: SessionMagicOperation }
     | { type: "session.equipment.operation"; operation: SessionEquipmentOperation }
   ): boolean {
-    if (this.socket?.readyState !== WebSocket.OPEN) return false
+    if (!this.transport.connected) return false
 
     if (message.type === "session.magic.operation") {
       if (message.operation.type === "character.spell.cast") {
         this.flushMagicOperations()
-        this.socket.send(JSON.stringify(message))
+        this.transport.sendRaw(JSON.stringify(message))
         return true
       }
       this.pendingMagicOperations.push(message.operation)
@@ -126,64 +123,30 @@ export class SessionSocket {
       return true
     }
 
-    this.socket.send(JSON.stringify(message))
+    this.transport.sendRaw(JSON.stringify(message))
     return true
   }
 
   disconnect(): void {
-    this.stopped = true
-    this.connectionAttempt += 1
-    this.clearHeartbeatTimer()
-    this.clearReconnectTimer()
+    this.transport.disconnect()
+    this.clearLocalState()
+  }
+
+  private clearLocalState(): void {
     this.pendingMagicOperations = []
     this.magicFlushQueued = false
     this.latestAbilityStates.clear()
     setRuntimeCustomSystemOverride(null)
-    const socket = this.socket
-    this.socket = null
-    if (socket && socket.readyState < WebSocket.CLOSING) socket.close(1000, "Session runtime disconnected")
-    this.options.onStatusChange("disconnected")
   }
 
-  private async openSocket(): Promise<void> {
-    if (this.stopped) return
-    const attempt = ++this.connectionAttempt
-    this.options.onStatusChange(this.hasConnectedOnce ? "reconnecting" : "connecting")
-
-    let socketUrl: string
-    try {
-      socketUrl = await this.buildUrl()
-    } catch (error) {
-      if (this.stopped || attempt !== this.connectionAttempt) return
-      console.error("[session-runtime] failed to authorize websocket connection", error)
-      this.options.onStatusChange("error")
-      this.scheduleReconnect()
-      return
-    }
-
-    if (this.stopped || attempt !== this.connectionAttempt) return
-
-    let socket: WebSocket
-    try {
-      socket = new WebSocket(socketUrl)
-    } catch (error) {
-      console.error("[session-runtime] failed to open websocket connection", error)
-      this.options.onStatusChange("error")
-      this.scheduleReconnect()
-      return
-    }
-
-    this.socket = socket
-
-    socket.onmessage = (event) => {
-      if (typeof event.data !== "string") return
-      const runtimeConfigMessage = parseRuntimeConfigServerMessage(event.data)
-      const lifecycleMessage = parseCharacterLifecycleServerMessage(event.data)
-      const inventoryMessage = parseInventoryServerMessage(event.data)
-      const missionMessage = parseMissionServerMessage(event.data)
-      const initiativeMessage = parseInitiativeServerMessage(event.data)
-      const abilityMessage = parseAbilityServerMessage(event.data)
-      const message = runtimeConfigMessage ?? lifecycleMessage ?? inventoryMessage ?? missionMessage ?? initiativeMessage ?? abilityMessage ?? parseServerSessionMessage(event.data)
+  private handleMessage(raw: string): void {
+      const runtimeConfigMessage = parseRuntimeConfigServerMessage(raw)
+      const lifecycleMessage = parseCharacterLifecycleServerMessage(raw)
+      const inventoryMessage = parseInventoryServerMessage(raw)
+      const missionMessage = parseMissionServerMessage(raw)
+      const initiativeMessage = parseInitiativeServerMessage(raw)
+      const abilityMessage = parseAbilityServerMessage(raw)
+      const message = runtimeConfigMessage ?? lifecycleMessage ?? inventoryMessage ?? missionMessage ?? initiativeMessage ?? abilityMessage ?? parseServerSessionMessage(raw)
       if (!message) return
 
       if (abilityMessage?.type === "session.abilities.snapshot") {
@@ -226,32 +189,7 @@ export class SessionSocket {
           })
         }
       }
-    }
-
-    socket.onclose = (event) => {
-      if (this.socket === socket) this.socket = null
-      this.clearHeartbeatTimer()
-
-      if (event.code === SESSION_KICKED_CLOSE_CODE) {
-        this.stopped = true
-        this.connectionAttempt += 1
-        this.clearReconnectTimer()
-        this.pendingMagicOperations = []
-        this.magicFlushQueued = false
-        this.latestAbilityStates.clear()
-        setRuntimeCustomSystemOverride(null)
-        this.options.onStatusChange("disconnected")
-        window.location.assign("/user")
-        return
-      }
-
-      if (!this.stopped) this.scheduleReconnect()
-    }
-    socket.onerror = () => {
-      if (!this.stopped) this.options.onStatusChange("error")
-    }
   }
-
   private scheduleMagicFlush(): void {
     if (this.magicFlushQueued) return
     this.magicFlushQueued = true
@@ -263,9 +201,9 @@ export class SessionSocket {
 
   private flushMagicOperations(): void {
     this.magicFlushQueued = false
-    const socket = this.socket
+    const transport = this.transport
     const pending = this.pendingMagicOperations.splice(0)
-    if (!pending.length || socket?.readyState !== WebSocket.OPEN) return
+    if (!pending.length || !transport.connected) return
 
     const byCharacter = new Map<string, SessionMagicOperation[]>()
     for (const operation of pending) {
@@ -278,99 +216,10 @@ export class SessionSocket {
       const payload = operations.length === 1
         ? { type: "session.magic.operation", operation: operations[0] }
         : { type: "session.magic.operations", operations }
-      socket.send(JSON.stringify(payload))
+      transport.sendRaw(JSON.stringify(payload))
     }
   }
 
-  private async buildUrl(): Promise<string> {
-    const url = new URL(this.options.baseUrl)
-    url.protocol = url.protocol === "https:" ? "wss:" : "ws:"
-    url.pathname = `/session/${encodeURIComponent(this.options.sessionId)}/connect`
-    url.search = ""
-
-    if (this.usesTokenAuth()) {
-      url.searchParams.set("token", await this.requestConnectionToken())
-    } else {
-      url.searchParams.set("userId", this.options.userId)
-      url.searchParams.set("role", this.options.role)
-      url.searchParams.set("clientId", this.options.clientId)
-    }
-
-    return url.toString()
-  }
-
-  private usesTokenAuth(): boolean {
-    const configured = import.meta.env.VITE_SESSION_AUTH_MODE?.trim().toLowerCase()
-    if (configured === "token") return true
-    if (configured === "development") return false
-    return !import.meta.env.DEV
-  }
-
-  private async requestConnectionToken(): Promise<string> {
-    const response = await fetch("/api/session-connection", {
-      method: "POST",
-      credentials: "include",
-      cache: "no-store",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        sessionId: this.options.sessionId,
-        clientId: this.options.clientId,
-      }),
-    })
-
-    if (!response.ok) {
-      throw new Error(
-        `Session connection token request failed with HTTP ${response.status}.`,
-      )
-    }
-
-    const payload = await response.json() as Partial<SessionConnectionTokenResponse>
-    if (
-      typeof payload.token !== "string" ||
-      !payload.token ||
-      typeof payload.expiresAt !== "number" ||
-      (payload.role !== "MASTER" && payload.role !== "PLAYER")
-    ) {
-      throw new Error("Session connection token response is invalid.")
-    }
-
-    return payload.token
-  }
-
-  private scheduleHeartbeat(): void {
-    this.clearHeartbeatTimer()
-    const delay = HEARTBEAT_MIN_MS + Math.floor(Math.random() * (HEARTBEAT_MAX_MS - HEARTBEAT_MIN_MS + 1))
-    this.heartbeatTimer = window.setTimeout(() => {
-      this.heartbeatTimer = null
-      if (this.socket?.readyState !== WebSocket.OPEN) return
-      this.socket.send(JSON.stringify({ type: "session.heartbeat", clientId: this.options.clientId }))
-      this.scheduleHeartbeat()
-    }, delay)
-  }
-
-  private scheduleReconnect(): void {
-    this.clearReconnectTimer()
-    this.options.onStatusChange("reconnecting")
-    const delay = Math.min(1_000 * 2 ** this.reconnectAttempt, RECONNECT_MAX_MS)
-    this.reconnectAttempt += 1
-    this.reconnectTimer = window.setTimeout(() => {
-      this.reconnectTimer = null
-      void this.openSocket()
-    }, delay)
-  }
-
-  private clearHeartbeatTimer(): void {
-    if (this.heartbeatTimer === null) return
-    window.clearTimeout(this.heartbeatTimer)
-    this.heartbeatTimer = null
-  }
-  private clearReconnectTimer(): void {
-    if (this.reconnectTimer === null) return
-    window.clearTimeout(this.reconnectTimer)
-    this.reconnectTimer = null
-  }
 }
 
 function parseInventoryServerMessage(raw: string): SessionInventoryServerMessage | null {
