@@ -16,6 +16,8 @@
     "./equipment-operations": "./src/equipmentOperations.ts",
     "./custom-system-operations": "./src/customSystemOperations.ts",
     "./character-lifecycle": "./src/characterLifecycle.ts",
-    "./magic-operations": "./src/magicOperations.ts"
+    "./magic-operations": "./src/magicOperations.ts",
+    "./abilities": "./src/abilities.ts",
+    "./runtime-config": "./src/runtimeConfig.ts"
   }
 }
