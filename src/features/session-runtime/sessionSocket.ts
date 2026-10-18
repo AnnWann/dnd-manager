@@ -1,4 +1,4 @@
-import { SessionTransport } from "../../../packages/session-client/src/sessionTransport"
+import { SessionMessageClient } from "../../../packages/session-client/src/sessionMessageClient"
 import {
   parseServerSessionMessage,
   type ClientSessionMessage,
@@ -66,35 +66,7 @@ export type SessionSocketOptions = {
   ) => void
 }
 
-export class SessionSocket {
-  private readonly transport: SessionTransport
-  private pendingMagicOperations: SessionMagicOperation[] = []
-  private magicFlushQueued = false
-  private latestAbilityStates = new Map<string, SessionAbilityState>()
-
-  constructor(private readonly options: SessionSocketOptions) {
-    const configured = import.meta.env.VITE_SESSION_AUTH_MODE?.trim().toLowerCase()
-    const useTokenAuth = configured === "token" ? true : configured === "development" ? false : !import.meta.env.DEV
-    this.transport = new SessionTransport({
-      baseUrl: options.baseUrl,
-      sessionId: options.sessionId,
-      userId: options.userId,
-      role: options.role,
-      clientId: options.clientId,
-      useTokenAuth,
-      tokenEndpoint: "/api/session-connection",
-      onStatusChange: options.onStatusChange,
-      onMessage: (raw) => this.handleMessage(raw),
-      onDisconnected: () => this.clearLocalState(),
-      onKicked: () => window.location.assign("/user"),
-    })
-  }
-
-
-  connect(): void { this.transport.connect() }
-
-  send(message:
-    | ClientSessionMessage
+type SessionOutgoingMessage = | ClientSessionMessage
     | SessionSheetOperationMessage
     | SessionAbilityClientMessage
     | SessionInventoryClientMessage
@@ -109,13 +81,58 @@ export class SessionSocket {
     | SessionCustomSystemClientMessage
     | { type: "session.magic.operation"; operation: SessionMagicOperation }
     | { type: "session.equipment.operation"; operation: SessionEquipmentOperation }
-  ): boolean {
+type SessionIncomingMessage = Parameters<SessionSocketOptions["onMessage"]>[0]
+type DecodedSessionMessage = {
+  message: SessionIncomingMessage
+  abilityMessage: SessionAbilityServerMessage | null
+  lifecycleMessage: SessionCharacterLifecycleServerMessage | null
+  runtimeConfigMessage: SessionRuntimeConfigServerMessage | null
+}
+
+function decodeSessionMessage(raw: string): DecodedSessionMessage | null {
+  const runtimeConfigMessage = parseRuntimeConfigServerMessage(raw)
+  const lifecycleMessage = parseCharacterLifecycleServerMessage(raw)
+  const inventoryMessage = parseInventoryServerMessage(raw)
+  const missionMessage = parseMissionServerMessage(raw)
+  const initiativeMessage = parseInitiativeServerMessage(raw)
+  const abilityMessage = parseAbilityServerMessage(raw)
+  const message = runtimeConfigMessage ?? lifecycleMessage ?? inventoryMessage ?? missionMessage ?? initiativeMessage ?? abilityMessage ?? parseServerSessionMessage(raw)
+  return message ? { message, abilityMessage, lifecycleMessage, runtimeConfigMessage } : null
+}
+
+export class SessionSocket {
+  private readonly transport: SessionMessageClient<SessionOutgoingMessage, DecodedSessionMessage>
+  private pendingMagicOperations: SessionMagicOperation[] = []
+  private magicFlushQueued = false
+  private latestAbilityStates = new Map<string, SessionAbilityState>()
+
+  constructor(private readonly options: SessionSocketOptions) {
+    const configured = import.meta.env.VITE_SESSION_AUTH_MODE?.trim().toLowerCase()
+    const useTokenAuth = configured === "token" ? true : configured === "development" ? false : !import.meta.env.DEV
+    this.transport = new SessionMessageClient({
+      baseUrl: options.baseUrl,
+      sessionId: options.sessionId,
+      userId: options.userId,
+      role: options.role,
+      clientId: options.clientId,
+      useTokenAuth,
+      tokenEndpoint: "/api/session-connection",
+      onStatusChange: options.onStatusChange,
+      onDisconnected: () => this.clearLocalState(),
+      onKicked: () => window.location.assign("/user"),
+    }, decodeSessionMessage, (decoded) => this.handleMessage(decoded))
+  }
+
+
+  connect(): void { this.transport.connect() }
+
+  send(message: SessionOutgoingMessage): boolean {
     if (!this.transport.connected) return false
 
     if (message.type === "session.magic.operation") {
       if (message.operation.type === "character.spell.cast") {
         this.flushMagicOperations()
-        this.transport.sendRaw(JSON.stringify(message))
+        this.transport.send(message)
         return true
       }
       this.pendingMagicOperations.push(message.operation)
@@ -139,16 +156,7 @@ export class SessionSocket {
     setRuntimeCustomSystemOverride(null)
   }
 
-  private handleMessage(raw: string): void {
-      const runtimeConfigMessage = parseRuntimeConfigServerMessage(raw)
-      const lifecycleMessage = parseCharacterLifecycleServerMessage(raw)
-      const inventoryMessage = parseInventoryServerMessage(raw)
-      const missionMessage = parseMissionServerMessage(raw)
-      const initiativeMessage = parseInitiativeServerMessage(raw)
-      const abilityMessage = parseAbilityServerMessage(raw)
-      const message = runtimeConfigMessage ?? lifecycleMessage ?? inventoryMessage ?? missionMessage ?? initiativeMessage ?? abilityMessage ?? parseServerSessionMessage(raw)
-      if (!message) return
-
+  private handleMessage({ message, abilityMessage, lifecycleMessage, runtimeConfigMessage }: DecodedSessionMessage): void {
       if (abilityMessage?.type === "session.abilities.snapshot") {
         this.latestAbilityStates = new Map(
           abilityMessage.characters.map((character) => [character.characterId, character]),
