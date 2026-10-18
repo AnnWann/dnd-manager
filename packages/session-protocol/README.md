@@ -21,3 +21,11 @@ CI validates pure routing behavior, game-core rules, session-client behavior, we
 ## Remaining deduplication
 
 The Worker still maintains its own session actor runtime state and some specialized protocol/validator types, while the website retains dice-roll and log-specific types. Those should be reconciled against the shared contracts without weakening existing runtime validation.
+
+### Additional shared contracts
+
+- `diceRoll.ts`: typed roll requests/results for characters, creatures and action resolution.
+- `sessionLog.ts`: cross-client undo scope classification and latest-undoable checks.
+- `sessionMessages.ts`: base message decoder as well as typed wire envelopes.
+
+The website uses compatibility re-exports for these modules. Worker-specific runtime validators and mutation logic remain in the Worker, including expanded HP log metadata and operation authorizations; they must not move into browser packages.
