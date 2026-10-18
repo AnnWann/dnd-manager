@@ -4,20 +4,11 @@ import { MissionBoard } from "../../packages/game-ui/src/MissionBoard"
 import { filterMissions, countMissionsByStatus } from "../../packages/game-core/src/missionBoard"
 import { useEffect, useState } from "react"
 import {
-  ArchiveRestore,
-  Check,
   CheckCircle2,
-  Circle,
   ClipboardCheck,
-  Clock3,
-  Coins,
   Flag,
-  MapPin,
-  Pencil,
   Plus,
-  Tag,
   Trash2,
-  UserRound,
 } from "lucide-react"
 
 import { Button } from "../components/ui/Button"
