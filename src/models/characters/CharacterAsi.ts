@@ -1,3 +1,4 @@
+import { sumAsiAttributeIncreases } from "../../../packages/game-core/src/asi"
 import type { Ability } from "../abilities/Ability"
 import type { Attribute } from "../sheet/Attribute"
 import type { ClassName } from "../sheet/Class"
@@ -29,10 +30,7 @@ export function getAsiAttributeIncrease(
   character: CharacterTemplate,
   attribute: Attribute,
 ): number {
-  return getCharacterAsis(character).reduce(
-    (total, entry) => total + Math.max(0, entry.increases[attribute] ?? 0),
-    0,
-  )
+  return sumAsiAttributeIncreases(getCharacterAsis(character), attribute)
 }
 
 export function withCharacterAsis(
