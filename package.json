@@ -28,7 +28,9 @@
     "postinstall": "prisma generate",
     "spells:enrich-resolution": "node scripts/enrich-spell-resolution.mjs",
     "check:workspace-boundaries": "node scripts/check-workspace-layout.mjs",
-    "test:shared": "node --test packages/game-core/tests/*.test.mjs packages/session-protocol/tests/*.test.mjs packages/session-client/tests/*.test.mjs"
+    "test:shared": "node --test packages/game-core/tests/*.test.mjs packages/session-protocol/tests/*.test.mjs packages/session-client/tests/*.test.mjs",
+    "build:app-web": "npm run --workspace @dnd-manager/web build",
+    "typecheck:app-session-server": "npm run --workspace @dnd-manager/session-server-app typecheck"
   },
   "dependencies": {
     "@better-auth/prisma-adapter": "^1.6.25",
@@ -71,6 +73,7 @@
   },
   "workspaces": [
     "packages/*",
+    "apps/*",
     "session-server"
   ]
 }
