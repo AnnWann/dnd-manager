@@ -11,6 +11,7 @@
     "./mission-board": "./src/missionBoard.ts",
     "./manual-dice": "./src/manualDiceExpression.ts",
     "./pocketability": "./src/pocketability.ts",
-    "./encumbrance": "./src/encumbrance.ts"
+    "./encumbrance": "./src/encumbrance.ts",
+    "./item-consumption": "./src/itemConsumption.ts"
   }
 }
