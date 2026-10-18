@@ -7,7 +7,8 @@
     "./experience-progress": "./src/ExperienceProgress.tsx",
     "./hp-value": "./src/HpValue.tsx",
     "./hp-action-buttons": "./src/HpActionButtons.tsx",
-    "./hp-maximum-button": "./src/HpMaximumButton.tsx"
+    "./hp-maximum-button": "./src/HpMaximumButton.tsx",
+    "./hp-summary-grid": "./src/HpSummaryGrid.tsx"
   },
   "peerDependencies": {
     "react": "^19.0.0"
