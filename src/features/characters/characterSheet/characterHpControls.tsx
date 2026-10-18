@@ -1,3 +1,4 @@
+import { HpSummaryGrid } from "../../../../packages/game-ui/src/HpSummaryGrid"
 import { HpMaximumButton } from "../../../../packages/game-ui/src/HpMaximumButton"
 import { HpActionButtons } from "../../../../packages/game-ui/src/HpActionButtons"
 import { HpValue } from "../../../../packages/game-ui/src/HpValue"
@@ -291,10 +292,10 @@ export function CharacterHpControls({ character, updateCharacter, compact = fals
       {modal === "heal" ? (
         <Modal title="Curar" onClose={closeModal} className="max-w-md">
           <div className="grid gap-4">
-            <div className="grid grid-cols-2 gap-2">
+            <HpSummaryGrid>
               <HpValue variant="summary" label="Vida atual" value={hp.current} />
               <HpValue variant="summary" label="Vida temporária" value={hp.temporary} />
-            </div>
+            </HpSummaryGrid>
 
             <label className="grid gap-1 text-xs text-textMuted">
               Valor da cura
@@ -341,12 +342,12 @@ export function CharacterHpControls({ character, updateCharacter, compact = fals
           className="max-w-3xl"
         >
           <div className="grid gap-4">
-            <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+            <HpSummaryGrid wide>
               <HpValue variant="summary" label="Vida atual" value={hp.current} />
               <HpValue variant="summary" label="Vida temporária" value={hp.temporary} />
               <HpValue variant="summary" label="Dano informado" value={requestedDamage} />
               <HpValue variant="summary" label="Dano aplicado" value={appliedDamage} />
-            </div>
+            </HpSummaryGrid>
 
             <section className="grid gap-2 rounded-xl border border-border bg-bg-subtle p-3">
               <div className="flex items-center justify-between gap-3">
@@ -472,10 +473,10 @@ export function CharacterHpControls({ character, updateCharacter, compact = fals
               </section>
             ) : null}
 
-            <div className="grid grid-cols-2 gap-2">
+            <HpSummaryGrid>
               <HpValue variant="summary" label="Vida após" value={resultingCurrentHp} />
               <HpValue variant="summary" label="Vida temporária após" value={resultingTemporaryHp} />
-            </div>
+            </HpSummaryGrid>
 
             {concentration && appliedDamage > 0 ? (
               <div className="rounded-lg border border-accentBorder bg-accentBg px-3 py-2 text-xs text-text">
@@ -495,10 +496,10 @@ export function CharacterHpControls({ character, updateCharacter, compact = fals
       {modal === "maximum" ? (
         <Modal title="Pontos de vida máximos" onClose={closeModal} className="max-w-md">
           <div className="grid gap-4">
-            <div className="grid grid-cols-2 gap-2">
+            <HpSummaryGrid>
               <HpValue variant="summary" label="Máximo real" value={hp.max} />
               <HpValue variant="summary" label="Máximo atual" value={currentMax} />
-            </div>
+            </HpSummaryGrid>
 
             <label className="grid gap-1 text-xs text-textMuted">
               Máximo real
