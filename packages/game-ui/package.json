@@ -18,7 +18,8 @@
     "./character-hp-panel": "./src/CharacterHpPanel.tsx",
     "./stat-shell": "./src/StatShell.tsx",
     "./hit-dice-row": "./src/HitDiceRow.tsx",
-    "./character-sheet-layout": "./src/CharacterSheetLayout.tsx"
+    "./character-sheet-layout": "./src/CharacterSheetLayout.tsx",
+    "./spellcasting-hands-notice": "./src/SpellcastingHandsNotice.tsx"
   },
   "peerDependencies": {
     "react": "^19.0.0",
