@@ -12,9 +12,11 @@
     "./mission-board": "./src/MissionBoard.tsx",
     "./mission-toolbar": "./src/MissionBoardToolbar.tsx",
     "./initiative-roster-table": "./src/InitiativeRosterTable.tsx",
-    "./inventory-tile-grid": "./src/InventoryTileGrid.tsx"
+    "./inventory-tile-grid": "./src/InventoryTileGrid.tsx",
+    "./mission-card": "./src/MissionCard.tsx"
   },
   "peerDependencies": {
-    "react": "^19.0.0"
+    "react": "^19.0.0",
+    "lucide-react": "^0.4.0"
   }
 }
