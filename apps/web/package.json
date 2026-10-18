@@ -1,0 +1,12 @@
+{
+  "name": "@dnd-manager/web",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "npm --prefix ../.. run dev",
+    "build": "npm --prefix ../.. run build",
+    "lint": "npm --prefix ../.. run lint",
+    "preview": "npm --prefix ../.. run preview"
+  }
+}
