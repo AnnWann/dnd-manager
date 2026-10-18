@@ -14,6 +14,7 @@
     "./encumbrance": "./src/encumbrance.ts",
     "./item-consumption": "./src/itemConsumption.ts",
     "./inventory-stacks": "./src/inventoryStacks.ts",
-    "./weapon-rules": "./src/weaponRules.ts"
+    "./weapon-rules": "./src/weaponRules.ts",
+    "./character-math": "./src/characterMath.ts"
   }
 }
