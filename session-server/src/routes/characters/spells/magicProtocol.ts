@@ -3,69 +3,9 @@ import type { CharacterGrantedEquipmentSpellUsageSource, CharacterGrantedSpellUs
 import type { SpellResourceType } from "../../../../../src/models/magic/spells/Spell";
 import type { SessionDiceRollMode, SessionRollVisibility } from "../../../../../src/shared/session-runtime/diceRollProtocol";
 
-export type SessionSpellCastPayment =
-  | { type: "none" }
-  | { type: "scroll"; itemId: string }
-  | { type: "slot"; pool: "normal" | "pact"; level: number }
-  | { type: "resource"; resource: SpellResourceType }
-  | { type: "ability-use"; source: CharacterGrantedSpellUsageSource }
-  | { type: "equipment-spell-use"; source: CharacterGrantedEquipmentSpellUsageSource };
-
-export type SessionMagicOperation =
-  | { type: "character.spell.cast"; characterId: string; requestId: string; spellIndex: string; sourceId: string; castLevel: number; mode: SessionDiceRollMode; visibility?: SessionRollVisibility; payment: SessionSpellCastPayment; targetEntryId?: string; selectedDamageType?: DamageType; selectedWeaponId?: string }
-  | { type: "character.spell.prepare"; characterId: string; spellIndex: string; prepared: boolean }
-  | { type: "character.spell.add"; characterId: string; spellEntry: Record<string, unknown> }
-  | { type: "character.spell.remove"; characterId: string; spellIndex: string }
-  | { type: "character.spell.castingDescription.add"; characterId: string; spellIndex: string }
-  | { type: "character.spell.castingDescription.update"; characterId: string; spellIndex: string; descriptionIndex: number; description: string }
-  | { type: "character.spell.castingDescription.remove"; characterId: string; spellIndex: string; descriptionIndex: number }
-  | { type: "character.spellSlot.spend"; characterId: string; level: number }
-  | { type: "character.spellSlot.restore"; characterId: string; level: number }
-  | { type: "character.pactSlot.spend"; characterId: string }
-  | { type: "character.pactSlot.restore"; characterId: string }
-  | { type: "character.customSpellSlot.spend"; characterId: string; poolId: string; level: number }
-  | { type: "character.customSpellSlot.restore"; characterId: string; poolId: string; level: number }
-  | { type: "character.metamagic.add"; characterId: string; metamagicId: string }
-  | { type: "character.metamagic.remove"; characterId: string; metamagicId: string }
-  | { type: "character.sorceryPoint.spend"; characterId: string }
-  | { type: "character.sorceryPoint.restore"; characterId: string }
-  | { type: "character.ki.spend"; characterId: string }
-  | { type: "character.ki.restore"; characterId: string }
-  | { type: "character.channelDivinity.spend"; characterId: string }
-  | { type: "character.channelDivinity.restore"; characterId: string };
-
-export type SessionMagicClientMessage =
-  | {
-      type: "session.magic.operation";
-      operation: SessionMagicOperation;
-    }
-  | {
-      type: "session.magic.operations";
-      operations: SessionMagicOperation[];
-    };
-
-const MAX_MAGIC_BATCH_OPERATIONS = 200;
-const SPELL_SOURCE_TYPES = new Set(["class", "feat", "ability", "race", "equipment"]);
-const ATTRIBUTES = new Set(["str", "dex", "con", "int", "wis", "cha"]);
-const ACQUISITION_SOURCE_TYPES = new Set([
-  "characterCreation",
-  "class",
-  "race",
-  "background",
-  "feat",
-  "ability",
-  "equipment",
-  "campaign",
-  "manual",
-  "import",
-]);
-const ACQUISITION_REASONS = new Set([
-  "character-creation",
-  "level-up",
-  "manual",
-  "import",
-  "campaign-grant",
-]);
+import type { SessionSpellCastPayment as SharedSessionSpellCastPayment, SessionMagicOperation as SharedSessionMagicOperation } from "../../../../../packages/session-protocol/src/magicOperations"
+export type SessionSpellCastPayment = SharedSessionSpellCastPayment<SpellResourceType, CharacterGrantedSpellUsageSource, CharacterGrantedEquipmentSpellUsageSource>
+export type SessionMagicOperation = SharedSessionMagicOperation<SpellResourceType, CharacterGrantedSpellUsageSource, CharacterGrantedEquipmentSpellUsageSource, DamageType, SessionDiceRollMode, SessionRollVisibility>
 
 export function parseMagicClientMessage(raw: string): SessionMagicClientMessage | null {
   let parsed: unknown;
