@@ -28,11 +28,11 @@ export function consumeItemQuantity<TItem extends ConsumableStack>(
   }
 }
 
-export function consumeInventoryItem(
-  items: ConsumableStack[],
+export function consumeInventoryItem<TItem extends ConsumableStack>(
+  items: TItem[],
   itemId: string,
   amount = 1,
-): ConsumableStack[] {
+): TItem[] {
   const index = items.findIndex((item) => item.id === itemId)
   if (index < 0) return items
 
