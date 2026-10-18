@@ -1,3 +1,4 @@
+import type { SessionDieSides as SharedSessionDieSides, SessionHitDicePool as SharedSessionHitDicePool, SessionHitDiceState as SharedSessionHitDiceState, SessionAttribute as SharedSessionAttribute, SessionAttributesState as SharedSessionAttributesState, SessionSavingThrowsState as SharedSessionSavingThrowsState, SessionSkill as SharedSessionSkill, SessionSkillProficiency as SharedSessionSkillProficiency, SessionSkillsState as SharedSessionSkillsState, SessionStatsState as SharedSessionStatsState, SessionConditionDuration as SharedSessionConditionDuration, SessionCondition as SharedSessionCondition, SessionConditionsState as SharedSessionConditionsState, SessionConditionSeed as SharedSessionConditionSeed, SessionHpState as SharedSessionHpState, SessionHpSeed as SharedSessionHpSeed, SessionHitDiceOperation as SharedSessionHitDiceOperation, SessionCalculatedStatOperation as SharedSessionCalculatedStatOperation, SessionSimpleStatOperation as SharedSessionSimpleStatOperation, SessionStatOperation as SharedSessionStatOperation, SessionAttributeOperation as SharedSessionAttributeOperation, SessionSavingThrowOperation as SharedSessionSavingThrowOperation, SessionSkillOperation as SharedSessionSkillOperation, SessionConditionOperation as SharedSessionConditionOperation, SessionConcentrationOperation as SharedSessionConcentrationOperation, SessionLoggedOperation as SharedSessionLoggedOperation } from "../../../../packages/session-protocol/src/sessionCore"
 import { routeForSheetOperation, type CharacterSheetRoute } from "../characters/sheet";
 import type { SessionActionRollRequest, SessionActionRollResult, SessionCreatureRollRequest, SessionDiceRollRequest, SessionDiceRollResult } from "../../../../src/shared/session-runtime/diceRollProtocol";
 import { parseManualDiceExpression } from "../../../../src/shared/session-runtime/manualDiceExpression";
@@ -18,109 +19,37 @@ export type SessionConnection = {
   visibleCharacterIds?: string[];
 };
 
-export type SessionDieSides =
-  | "d2" | "d3" | "d4" | "d6" | "d8" | "d10" | "d12" | "d20" | "d100";
+export type SessionDieSides = SharedSessionDieSides;
 
-export type SessionHitDicePool = { current: number; max: number };
-export type SessionHitDiceState = Partial<Record<SessionDieSides, SessionHitDicePool>>;
+export type SessionHitDicePool = SharedSessionHitDicePool;
 
-export type SessionAttribute = "str" | "dex" | "con" | "int" | "wis" | "cha";
-export type SessionAttributesState = Record<SessionAttribute, number>;
-export type SessionSavingThrowsState = Record<SessionAttribute, boolean>;
-export type SessionSkill =
-  | "acrobatics" | "arcana" | "athletics" | "animalHandling" | "performance"
-  | "deception" | "stealth" | "history" | "intimidation" | "insight"
-  | "investigation" | "medicine" | "nature" | "perception" | "persuasion"
-  | "sleightOfHand" | "religion" | "survival";
-export type SessionSkillProficiency = "none" | "proficient" | "expertise";
-export type SessionSkillsState = Record<SessionSkill, SessionSkillProficiency>;
+export type SessionHitDiceState = SharedSessionHitDiceState;
 
-export type SessionStatsState = {
-  armorClassAdjustment: number;
-  initiativeAdjustment: number;
-  mobilityAdjustment: number;
-  passivePerceptionAdjustment: number;
-  exhaustion: number;
-  inspiration: boolean;
-  experience: number;
-};
+export type SessionAttribute = SharedSessionAttribute;
 
-export type SessionConditionDuration = {
-  type:
-    | "rounds" | "turns" | "minutes" | "hours" | "days"
-    | "until-start-of-turn" | "until-end-of-turn" | "until-save"
-    | "concentration" | "permanent" | "custom";
-  total?: number;
-  remaining?: number;
-  tickOn?: "start-of-turn" | "end-of-turn" | "manual";
-  tickOwner?: "affected" | "source";
-  autoRemoveAtZero?: boolean;
-  customLabel?: string;
-  expiresAt?: string;
-};
+export type SessionAttributesState = SharedSessionAttributesState;
 
-export type SessionCondition = {
-  id: string;
-  name: string;
-  description: string;
-  behavior: string;
-  source: string;
-  notes: string;
-  tags: string[];
-  bonuses?: unknown;
-  grantedSpells?: unknown[];
-  grantedProficiencies?: unknown[];
-  grantedAbilities?: unknown[];
-  duration: SessionConditionDuration;
-  createdAt: string;
-  sourceAbilityId?: string;
-  sourceAbilityLocation?: "character" | "race" | "equipment" | "condition";
-  sourceItemId?: string;
-  sourceAbilityOptionId?: string;
-  sourceCharacterId?: string;
-  linkedCombatantId?: string;
-  initiativeEffectId?: string;
-};
+export type SessionSavingThrowsState = SharedSessionSavingThrowsState;
 
-export type SessionConditionsState = {
-  characterId: string;
-  conditions: SessionCondition[];
-  initialized: boolean;
-  revision: number;
-};
+export type SessionSkill = SharedSessionSkill;
 
-export type SessionConditionSeed = {
-  characterId: string;
-  conditions: SessionCondition[];
-};
+export type SessionSkillProficiency = SharedSessionSkillProficiency;
 
-export type SessionHpState = {
-  characterId: string;
-  ownerUserId?: string;
-  current: number;
-  temporary: number;
-  max: number;
-  currentMax: number;
-  maxHpBonus: number;
-  hitDice: SessionHitDiceState;
-  stats: SessionStatsState;
-  statsInitialized: boolean;
-  attributes: SessionAttributesState;
-  attributesInitialized: boolean;
-  savingThrows: SessionSavingThrowsState;
-  savingThrowsInitialized: boolean;
-  skills: SessionSkillsState;
-  skillsInitialized: boolean;
-  revision: number;
-};
+export type SessionSkillsState = SharedSessionSkillsState;
 
-export type SessionHpSeed = Omit<SessionHpState, "revision" | "hitDice" | "stats" | "statsInitialized" | "attributes" | "attributesInitialized" | "savingThrows" | "savingThrowsInitialized" | "skills" | "skillsInitialized"> & {
-  hitDice?: SessionHitDiceState;
-  stats?: SessionStatsState;
-  attributes?: SessionAttributesState;
-  savingThrows?: Partial<SessionSavingThrowsState>;
-  skills?: Partial<SessionSkillsState>;
-};
+export type SessionStatsState = SharedSessionStatsState;
+
+export type SessionConditionDuration = SharedSessionConditionDuration;
+
+export type SessionCondition = SharedSessionCondition;
+
+export type SessionConditionsState = SharedSessionConditionsState;
+
+export type SessionConditionSeed = SharedSessionConditionSeed;
+
+export type SessionHpState = SharedSessionHpState;
+
+export type SessionHpSeed = SharedSessionHpSeed;
 
 export type SessionHpOperation =
   | { type: "character.hp.set"; characterId: string; value: number }
@@ -132,27 +61,19 @@ export type SessionHpOperation =
   | { type: "character.hp.currentMax.adjust"; characterId: string; amount: number }
   | { type: "character.hp.currentMax.restore"; characterId: string };
 
-export type SessionHitDiceOperation =
-  | { type: "character.hitDice.use"; characterId: string; side: SessionDieSides; amount: number }
-  | { type: "character.hitDice.recover"; characterId: string; side: SessionDieSides; amount: number }
-  | { type: "character.hitDice.add"; characterId: string; side: SessionDieSides; amount: number }
-  | { type: "character.hitDice.remove"; characterId: string; side: SessionDieSides };
+export type SessionHitDiceOperation = SharedSessionHitDiceOperation;
 
-export type SessionCalculatedStatOperation =
-  | { type: "character.stat.armorClass.set"; characterId: string; value: number; calculatedValue: number }
-  | { type: "character.stat.initiative.set"; characterId: string; value: number; calculatedValue: number }
-  | { type: "character.stat.mobility.set"; characterId: string; value: number; calculatedValue: number }
-  | { type: "character.stat.passivePerception.set"; characterId: string; value: number; calculatedValue: number };
+export type SessionCalculatedStatOperation = SharedSessionCalculatedStatOperation;
 
-export type SessionSimpleStatOperation =
-  | { type: "character.stat.exhaustion.set"; characterId: string; value: number }
-  | { type: "character.stat.inspiration.set"; characterId: string; value: boolean }
-  | { type: "character.stat.experience.set"; characterId: string; value: number };
+export type SessionSimpleStatOperation = SharedSessionSimpleStatOperation;
 
-export type SessionStatOperation = SessionCalculatedStatOperation | SessionSimpleStatOperation;
-export type SessionAttributeOperation = { type: "character.attribute.set"; characterId: string; attribute: SessionAttribute; value: number };
-export type SessionSavingThrowOperation = { type: "character.savingThrow.set"; characterId: string; attribute: SessionAttribute; proficient: boolean };
-export type SessionSkillOperation = { type: "character.skill.set"; characterId: string; skill: SessionSkill; proficiency: SessionSkillProficiency };
+export type SessionStatOperation = SharedSessionStatOperation;
+
+export type SessionAttributeOperation = SharedSessionAttributeOperation;
+
+export type SessionSavingThrowOperation = SharedSessionSavingThrowOperation;
+
+export type SessionSkillOperation = SharedSessionSkillOperation;
 
 export type SessionRestOperation =
   | {
@@ -170,14 +91,9 @@ export type SessionRestOperation =
       resourceFree?: boolean;
     };
 
-export type SessionConditionOperation =
-  | { type: "character.condition.add"; characterId: string; condition: SessionCondition }
-  | { type: "character.condition.update"; characterId: string; condition: SessionCondition }
-  | { type: "character.condition.remove"; characterId: string; conditionId: string };
+export type SessionConditionOperation = SharedSessionConditionOperation;
 
-export type SessionConcentrationOperation =
-  | { type: "character.concentration.start"; characterId: string; spellIndex: string; spellName: string }
-  | { type: "character.concentration.end"; characterId: string; reason?: "manual" | "failed-save" };
+export type SessionConcentrationOperation = SharedSessionConcentrationOperation;
 
 export type SessionConditionReverseOperation =
   | { type: "character.condition.delete"; characterId: string; conditionId: string }
@@ -214,7 +130,7 @@ export type SessionAuthoritativeOperation =
   | SessionSkillOperation
   | SessionRestOperation;
 
-export type SessionLoggedOperation = SessionAuthoritativeOperation | SessionConditionOperation | SessionConcentrationOperation;
+export type SessionLoggedOperation = SharedSessionLoggedOperation;
 
 export type SessionHpLogRecord = {
   id: string;
