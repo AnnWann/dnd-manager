@@ -2,7 +2,7 @@ export type WeaponRuleInput = {
   properties?: ReadonlyArray<{ id: string }>
   wieldedTwoHanded?: boolean
   modifierAttribute?: "str" | "dex" | "con" | "int" | "wis" | "cha"
-  versatileDamage?: { quantity: number; sides: string }
+  versatileDamage?: { quantity: number; sides: "d2" | "d3" | "d4" | "d6" | "d8" | "d10" | "d12" | "d20" | "d100" }
   damage?: { quantity: number; sides: string }
 }
 export type WeaponPropertyId = string
