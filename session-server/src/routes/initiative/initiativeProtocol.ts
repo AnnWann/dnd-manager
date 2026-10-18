@@ -1,38 +1,10 @@
 import { DAMAGE_TYPES, type DamageType } from "../../../../src/models/combat/Damage";
 
-export type InitiativeDamagePart = {
-  amount: number;
-  damageType?: DamageType;
-  magical?: boolean;
-};
-
+import type { InitiativeDamagePart as SharedDamagePart, SessionInitiativeOperation as SharedInitiativeOperation } from "../../../../packages/session-protocol/src/initiativeOperations"
 import type { InitiativeHpApplicationResult } from "../../../../packages/session-protocol/src/initiativeHp"
 export type { InitiativeHpApplicationResult } from "../../../../packages/session-protocol/src/initiativeHp"
-
-export type SessionInitiativeOperation =
-  | { type: "initiative.entries.add"; characterId: "session"; entries: Record<string, unknown>[] }
-  | { type: "initiative.entry.update"; characterId: "session"; entryId: string; patch: Record<string, unknown> }
-  | { type: "initiative.entry.remove"; characterId: "session"; entryId: string }
-  | { type: "initiative.sort"; characterId: "session" }
-  | { type: "initiative.combat.start"; characterId: "session" }
-  | { type: "initiative.combat.end"; characterId: "session" }
-  | { type: "initiative.turn.next"; characterId: "session" }
-  | { type: "initiative.turn.previous"; characterId: "session" }
-  | { type: "initiative.allies.trade"; characterId: "session"; entryId: string; direction: 1 }
-  | { type: "initiative.viewMode.set"; characterId: "session"; viewMode: "table" | "cards" }
-  | { type: "initiative.settings.update"; characterId: "session"; patch: { deathSaveVisibility?: "masterOnly" | "owner" | "everyone"; deathSaveOwnerCanEdit?: boolean } }
-  | { type: "initiative.deathSaves.set"; characterId: "session"; entryId: string; successes: number; failures: number }
-  | { type: "initiative.conditions.bulk"; characterId: "session"; entryIds: string[]; mode: "add" | "remove"; condition?: Record<string, unknown>; conditionName?: string }
-  | { type: "initiative.hp.apply"; characterId: "session"; entryIds: string[]; mode: "damage"; parts: InitiativeDamagePart[]; results?: InitiativeHpApplicationResult[] }
-  | { type: "initiative.hp.apply"; characterId: "session"; entryIds: string[]; mode: "heal" | "temporary"; amount: number; results?: InitiativeHpApplicationResult[] }
-  | { type: "initiative.customAction.execute"; characterId: "session"; systemId: string; actionId: string; entryIds: string[] }
-  | { type: "initiative.reset"; characterId: "session" };
-
-export type SessionInitiativeState = {
-  initialized: boolean;
-  revision: number;
-  session: Record<string, unknown>;
-};
+export type InitiativeDamagePart = SharedDamagePart<DamageType>
+export type SessionInitiativeOperation = SharedInitiativeOperation<DamageType>
 
 export type SessionInitiativeClientMessage =
   | { type: "session.initiative.initialize"; session: Record<string, unknown> }
