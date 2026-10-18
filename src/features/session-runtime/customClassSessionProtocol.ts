@@ -1,15 +1,10 @@
 import type { CustomClassRuntimeConfig } from "../../models/characters/customClassConfig"
 import type { ClassName } from "../../models/sheet/Class"
 
-export type SessionCustomClassOperation = {
-  type: "character.class.custom.configure"
-  characterId: string
-  /** Optional during the rolling frontend/Worker upgrade; omitted legacy messages target the first custom class. */
-  className?: ClassName
-  config: CustomClassRuntimeConfig
-}
+import type {
+  SessionCustomClassOperation as SharedSessionCustomClassOperation,
+  SessionCustomClassClientMessage as SharedSessionCustomClassClientMessage,
+} from "../../../packages/session-protocol/src/customClassOperations"
 
-export type SessionCustomClassClientMessage = {
-  type: "session.custom-class.operation"
-  operation: SessionCustomClassOperation
-}
+export type SessionCustomClassOperation = SharedSessionCustomClassOperation<CustomClassRuntimeConfig, ClassName>
+export type SessionCustomClassClientMessage = SharedSessionCustomClassClientMessage<CustomClassRuntimeConfig, ClassName>
