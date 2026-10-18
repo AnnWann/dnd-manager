@@ -5,6 +5,7 @@ on:
     paths:
       - "src/**"
       - "session-server/**"
+      - "apps/session-server/**"
       - "packages/**"
       - "api/**"
       - "api-handlers/**"
