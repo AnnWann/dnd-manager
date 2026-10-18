@@ -1,4 +1,3 @@
-import { hasWeaponProperty, isVersatileWeapon, isTwoHandedWeapon, isWeaponImprovisedGrip, getWeaponHandsUsed, getWeaponAttackAttribute, getWeaponDamageDie } from "../../../../packages/game-core/src/weaponRules"
 export { hasWeaponProperty, isVersatileWeapon, isTwoHandedWeapon, isWeaponImprovisedGrip, getWeaponHandsUsed, getWeaponAttackAttribute, getWeaponDamageDie } from "../../../../packages/game-core/src/weaponRules"
 
 import type { Die } from "../../dice/Die"
