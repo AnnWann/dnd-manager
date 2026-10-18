@@ -1,3 +1,13 @@
+# Physical web relocation checkpoint
+
+The website is now physically located at `apps/web`, including `src`, `api`, `api-handlers`, `server`, `public`, `prisma`, `index.html`, Vite and TypeScript configurations. The migrated build and relocated Worker typecheck passed in [workflow run 39156589441](https://github.com/AnnWann/dnd-manager/actions/runs/39156589441), commit `92b9a296`. Root npm scripts delegate Vite to `@dnd-manager/web`. Root Vercel configuration specifies the web workspace build and output directory.
+
+**Deployment constraint:** This CI result validates compilation, not Vercel function discovery or a live deployed runtime. The functions live under `apps/web/api`, not root `api`. Before any release, confirm the Vercel project's configured Root Directory and its compatibility with monorepo shared packages, Prisma generation, runtime API routing, and the deployment behavior of the root `vercel.json`; update Vercel project settings or deployment configuration accordingly. Do not assume that a root build/output override makes nested API functions discoverable. Test QA first, retain the production deployment until validated, and preserve Better Auth, database migrations and the Cloudflare signing secret.
+
+The shared package import audit still allows known relative crossings as warnings. The application move does not complete package-boundary cleanup, QA multiplayer testing, or production release.
+
+---
+
 # Objective 5 — npm workspace migration
 
 ## Current checkpoint (Worker physically relocated)
