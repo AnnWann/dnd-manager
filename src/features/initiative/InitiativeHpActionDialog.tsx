@@ -1,18 +1,13 @@
 import { CombatHpEditor } from "../../../packages/game-ui/src/CombatHpEditor"
 import { CombatHpModeTabs } from "../../../packages/game-ui/src/CombatHpModeTabs"
-import { Select as SharedSelect } from "../../components/ui/Select"
 import { useMemo, useState } from "react"
-import { Plus, Trash2 } from "lucide-react"
 
-import { Button } from "../../components/ui/Button"
-import { Input } from "../../components/ui/Input"
 import { Modal } from "../../components/ui/Modal"
 import { useCharacterContext } from "../../contexts/characterContext"
 import { getEffectiveDamageAffinities } from "../../models/characters/characterDamageAffinities"
 import {
   DAMAGE_TYPE_OPTIONS,
   damageAffinityLabel,
-  damageTypeLabel,
   resolveDamage,
   type DamageAffinity,
   type DamageType,
@@ -30,9 +25,6 @@ export type InitiativeHpActionTarget = {
   entry: InitiativeEntry
   affinities: DamageAffinity[]
 }
-
-const selectClassName =
-  "h-10 w-full rounded-lg border border-border bg-bg px-3 text-sm text-textH shadow-theme-sm outline-none focus:border-accent focus:ring-2 focus:ring-accent/25"
 
 export function InitiativeHpActionDialog({
   targets,
