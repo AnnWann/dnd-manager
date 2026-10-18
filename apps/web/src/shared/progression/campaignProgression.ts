@@ -1,1 +1,1 @@
-export * from "../../../../../packages/game-core/src/campaignProgression"
+export * from "@dnd-manager/game-core/campaign-progression"
