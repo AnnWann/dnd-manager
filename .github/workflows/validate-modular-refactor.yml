@@ -49,7 +49,7 @@ jobs:
           npm run typecheck --workspace @dnd-manager/session-client
           npm run typecheck --workspace @dnd-manager/game-ui
       - name: Generate Prisma client
-        run: npx prisma generate
+        run: npx prisma generate --config apps/web/prisma.config.ts
       - name: Check shared UI boundaries
         run: node scripts/check-game-ui-boundaries.mjs
       - name: Check game-core boundaries
@@ -64,5 +64,7 @@ jobs:
         run: node --test packages/session-client/tests/*.test.mjs
       - name: Build website
         run: npm run --workspace @dnd-manager/web build
+      - name: Build Owlbear extension
+        run: npm run --workspace @dnd-manager/owlbear-extension build
       - name: Typecheck session server
         run: npm run --workspace @dnd-manager/session-server-app typecheck
