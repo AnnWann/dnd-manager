@@ -7,46 +7,9 @@ export type SessionEquipmentReference =
   | { type: "necklace"; itemId: string }
   | { type: "body-part"; itemId: string };
 
-export type SessionEquipmentOperation =
-  | {
-      type: "character.equipment.item.update";
-      characterId: string;
-      reference: SessionEquipmentReference;
-      item: Record<string, unknown>;
-    }
-  | {
-      type: "character.equipment.move";
-      characterId: string;
-      reference: SessionEquipmentReference;
-      destination: "inventory" | "pocket";
-    }
-  | {
-      type: "character.equipment.attunement.toggle";
-      characterId: string;
-      itemId: string;
-    }
-  | {
-      type: "character.equipment.pocket.unequip";
-      characterId: string;
-      index: number;
-    }
-  | {
-      type: "character.equipment.pocket.wield";
-      characterId: string;
-      index: number;
-      replaceWeaponId?: string;
-      hands?: 1 | 2;
-    }
-  | {
-      type: "character.equipment.pocket.use";
-      characterId: string;
-      index: number;
-    };
-
-export type SessionEquipmentClientMessage = {
-  type: "session.equipment.operation";
-  operation: SessionEquipmentOperation;
-};
+import type { SessionEquipmentOperation as SharedSessionEquipmentOperation, SessionEquipmentClientMessage as SharedSessionEquipmentClientMessage } from "../../../../../packages/session-protocol/src/equipmentOperations"
+export type SessionEquipmentOperation = SharedSessionEquipmentOperation<SessionEquipmentReference, "inventory" | "pocket">
+export type SessionEquipmentClientMessage = SharedSessionEquipmentClientMessage<SessionEquipmentReference, "inventory" | "pocket">
 
 const OPERATION_TYPES = new Set<SessionEquipmentOperation["type"]>([
   "character.equipment.item.update",
