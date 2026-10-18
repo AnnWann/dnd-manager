@@ -1,3 +1,4 @@
+import { AmmunitionSelectionList } from "../../../../packages/game-ui/src/AmmunitionSelectionList"
 import { WeaponAmmunitionBar } from "../../../../packages/game-ui/src/WeaponAmmunitionBar"
 import { useEffect, useMemo, useState } from "react"
 
@@ -133,59 +134,19 @@ export function WeaponAmmunitionQuickControl({
               </p>
             </div>
 
-            {ammunitionGroups.length ? (
-              <div className="grid gap-2">
-                {ammunitionGroups.map((group) => {
-                  const compatible = draftCompatible.includes(group.key)
-                  const selected = draftSelected === group.key
-                  return (
-                    <article
-                      key={group.key}
-                      className="rounded-xl border border-border bg-bg-subtle p-3"
-                    >
-                      <div className="flex items-start gap-3">
-                        <input
-                          type="checkbox"
-                          className="mt-1"
-                          checked={compatible}
-                          onChange={(event) => toggleCompatible(group.key, event.target.checked)}
-                          aria-label={`${group.item.name}: compatível`}
-                        />
-                        <div className="min-w-0 flex-1">
-                          <div className="flex items-center justify-between gap-3">
-                            <div className="truncate text-sm font-semibold text-textH">
-                              {group.item.name || "Munição"}
-                            </div>
-                            <div className="shrink-0 text-xs font-bold text-textH">
-                              {group.quantity}
-                            </div>
-                          </div>
-                          {group.item.desc?.trim() ? (
-                            <p className="mt-1 text-xs leading-5 text-textMuted">
-                              {group.item.desc}
-                            </p>
-                          ) : null}
-                          <label className="mt-2 flex items-center gap-2 text-xs text-text">
-                            <input
-                              type="radio"
-                              name={`active-ammunition-${weapon.id}`}
-                              checked={selected}
-                              disabled={!compatible}
-                              onChange={() => setDraftSelected(group.key)}
-                            />
-                            Usar como munição ativa
-                          </label>
-                        </div>
-                      </div>
-                    </article>
-                  )
-                })}
-              </div>
-            ) : (
-              <div className="rounded-xl border border-dashed border-border p-5 text-center text-sm text-textMuted">
-                Nenhum item do tipo Munição está no inventário deste personagem.
-              </div>
-            )}
+            <AmmunitionSelectionList
+              options={ammunitionGroups.map((group) => ({
+                key: group.key,
+                name: group.item.name || "Munição",
+                description: group.item.desc,
+                quantity: group.quantity,
+              }))}
+              compatibleKeys={draftCompatible}
+              selectedKey={draftSelected}
+              groupName={`active-ammunition-${weapon.id}`}
+              onToggleCompatible={toggleCompatible}
+              onSelect={setDraftSelected}
+            />
 
             {runtime && activeItem && activeQuantity > 0 ? (
               <div className="grid gap-2 border-t border-border pt-4 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-end">
