@@ -159,3 +159,53 @@ test("reconnects after an unexpected close and ignores a stale socket", async ()
     globalThis.clearTimeout = originalClearTimeout
   }
 })
+
+test("an older delayed authorization cannot create a stale socket", async () => {
+  FakeWebSocket.instances = []
+  globalThis.WebSocket = FakeWebSocket
+  let releaseFirst
+  let authorizations = 0
+  try {
+    const { client } = createClient({
+      useTokenAuth: true,
+      getConnectionToken: () => ++authorizations === 1
+        ? new Promise((resolve) => { releaseFirst = resolve })
+        : Promise.resolve("second-token"),
+    })
+    client.connect()
+    await tick()
+    client.connect()
+    await tick()
+    assert.equal(FakeWebSocket.instances.length, 1)
+    assert.equal(new URL(FakeWebSocket.instances[0].url).searchParams.get("token"), "second-token")
+    releaseFirst("obsolete-token")
+    await tick()
+    assert.equal(FakeWebSocket.instances.length, 1)
+    client.disconnect()
+  } finally { globalThis.WebSocket = originalWebSocket }
+})
+
+test("manual reconnect replaces the active socket and ignores late errors", async () => {
+  FakeWebSocket.instances = []
+  globalThis.WebSocket = FakeWebSocket
+  try {
+    const { client, statuses, received } = createClient()
+    client.connect()
+    await tick()
+    const original = FakeWebSocket.instances.at(-1)
+    original.readyState = FakeWebSocket.OPEN
+    original.receive('{"type":"session.ready"}')
+    client.connect()
+    await tick()
+    const replacement = FakeWebSocket.instances.at(-1)
+    assert.notEqual(replacement, original)
+    original.onerror?.()
+    original.receive('{"type":"event","value":"obsolete"}')
+    assert.notEqual(statuses.at(-1), "error")
+    replacement.readyState = FakeWebSocket.OPEN
+    replacement.receive('{"type":"session.ready"}')
+    replacement.receive('{"type":"event","value":"latest"}')
+    assert.deepEqual(received, [{ type: "event", value: "latest" }])
+    client.disconnect()
+  } finally { globalThis.WebSocket = originalWebSocket }
+})
