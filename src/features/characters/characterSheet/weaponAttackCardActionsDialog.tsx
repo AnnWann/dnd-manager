@@ -1,5 +1,6 @@
+import { HandGripPanel } from "../../../../packages/game-ui/src/HandGripPanel"
 import { useEffect, useState } from "react"
-import { Hand, PackageOpen, Send } from "lucide-react"
+import { PackageOpen, Send } from "lucide-react"
 
 import { Button } from "../../../components/ui/Button"
 import { Modal } from "../../../components/ui/Modal"
@@ -178,47 +179,21 @@ export function HandItemActionsDialog({
       onClose={onClose}
       className="max-w-xl"
     >
-      <div className="grid gap-4">
-        <div className="rounded-xl border border-border bg-bg-subtle p-3">
-          <div className="flex items-start gap-3">
-            <Hand className="mt-0.5 h-4 w-4 shrink-0 text-accent" />
-            <div>
-              <div className="text-sm font-semibold text-textH">
-                Empunhadura atual: {occupant.hands} {occupant.hands === 1 ? "mão" : "mãos"}
-              </div>
-              <p className="mt-1 text-xs leading-5 text-textMuted">
-                {improvised
-                  ? "Esta arma exige duas mãos. Com uma mão, usa Força e causa 1d4 + Força como arma improvisada."
-                  : itemIsWeapon
-                    ? "Qualquer arma pode ocupar uma ou duas mãos. Apenas propriedades específicas alteram ataque ou dano."
-                    : occupant.arcaneFocus
-                      ? "Este foco não bloqueia conjuração, mesmo quando ocupa duas mãos."
-                      : "O item pode ocupar uma ou duas mãos sem benefício adicional por padrão."}
-              </p>
-            </div>
-          </div>
-        </div>
-
-        <div className="grid grid-cols-2 gap-2">
-          <Button
-            variant={occupant.hands === 1 ? "primary" : "secondary"}
-            onClick={() => setHands(1)}
-          >
-            Uma mão
-          </Button>
-          <Button
-            variant={occupant.hands === 2 ? "primary" : "secondary"}
-            onClick={() => setHands(2)}
-          >
-            Duas mãos
-          </Button>
-        </div>
-
-        <div className="grid gap-2 border-t border-border pt-4">
-          <div className="text-[11px] font-semibold uppercase tracking-wide text-textMuted">
-            Destino ao retirar
-          </div>
-          <div className={userMode ? "grid gap-2" : "grid gap-2 sm:grid-cols-2 lg:grid-cols-4"}>
+      <HandGripPanel
+        hands={occupant.hands}
+        explanation={
+          improvised
+            ? "Esta arma exige duas mãos. Com uma mão, usa Força e causa 1d4 + Força como arma improvisada."
+            : itemIsWeapon
+              ? "Qualquer arma pode ocupar uma ou duas mãos. Apenas propriedades específicas alteram ataque ou dano."
+              : occupant.arcaneFocus
+                ? "Este foco não bloqueia conjuração, mesmo quando ocupa duas mãos."
+                : "O item pode ocupar uma ou duas mãos sem benefício adicional por padrão."
+        }
+        onSetHands={setHands}
+        controls={
+          <>
+<div className={userMode ? "grid gap-2" : "grid gap-2 sm:grid-cols-2 lg:grid-cols-4"}>
             <Button
               variant="secondary"
               onClick={() => removeSelected("inventory")}
@@ -254,8 +229,11 @@ export function HandItemActionsDialog({
               </Button>
             ) : null}
           </div>
-        </div>
 
+          </>
+        }
+        blockers={
+          <>
         {pendingHands ? (
           <div className="grid gap-3 border-t border-border pt-4">
             <div className="rounded-xl border border-warning bg-warningBg p-3">
@@ -310,7 +288,10 @@ export function HandItemActionsDialog({
             ))}
           </div>
         ) : null}
-      </div>
+
+          </>
+        }
+      />
     </Modal>
   )
 }
