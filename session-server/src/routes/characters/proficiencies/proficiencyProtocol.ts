@@ -1,13 +1,8 @@
 import type { Proficiency, ProficiencyCategory } from "../../../../../src/models/sheet/Proficiency";
 
-export type SessionProficiencyOperation =
-  | { type: "character.proficiency.add"; characterId: string; proficiency: Proficiency }
-  | { type: "character.proficiency.remove"; characterId: string; proficiencyId: string; proficiencyName?: string };
-
-export type SessionProficiencyClientMessage = {
-  type: "session.proficiency.operation";
-  operation: SessionProficiencyOperation;
-};
+import type { SessionProficiencyOperation as SharedSessionProficiencyOperation, SessionProficiencyClientMessage as SharedSessionProficiencyClientMessage } from "../../../../../packages/session-protocol/src/proficiencyOperations"
+export type SessionProficiencyOperation = SharedSessionProficiencyOperation<Proficiency>;
+export type SessionProficiencyClientMessage = SharedSessionProficiencyClientMessage<Proficiency>;
 
 const CATEGORIES = new Set<ProficiencyCategory>([
   "armor", "shield", "weapon", "tool", "vehicle", "mount", "language",
