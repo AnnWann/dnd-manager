@@ -310,7 +310,7 @@ export function MinimalMagicActions({ character, updateCharacter, scrollOnlyItem
   value={selectedDamageType}
   onChange={setSelectedDamageType}
   options={[{ value: "" as const, label: "Escolha o tipo de dano" }, ...DAMAGE_TYPE_OPTIONS.filter(option => getSpellCastDamageChoices(selected.spell).includes(option.value)).map(option => ({ value: option.value, label: option.label }))]}
-/> : null}}
+/> : null}
 {getSpellOnCastAttackRiders(selected.spell).some(rider => rider.weaponSelection === "onActivation") ? <label className="grid gap-1 text-xs text-textMuted">Arma afetada pela magia
   <SharedSelect className="h-9 rounded-lg border border-border bg-bg px-2 text-textH" value={selectedWeaponId} onChange={event => setSelectedWeaponId(event.target.value)}>
     <option value="">Escolha uma arma equipada</option>
