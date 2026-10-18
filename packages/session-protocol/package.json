@@ -6,6 +6,8 @@
   "exports": {
     "./initiative-hp": "./src/initiativeHp.ts",
     "./mission": "./src/mission.ts",
-    "./inventory-settings": "./src/inventorySettings.ts"
+    "./inventory-settings": "./src/inventorySettings.ts",
+    "./initiative-operations": "./src/initiativeOperations.ts",
+    "./inventory-operations": "./src/inventoryOperations.ts"
   }
 }
