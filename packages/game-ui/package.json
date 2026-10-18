@@ -1,0 +1,12 @@
+{
+  "name": "@dnd-manager/game-ui",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "exports": {
+    "./experience-progress": "./src/ExperienceProgress.tsx"
+  },
+  "peerDependencies": {
+    "react": "^19.0.0"
+  }
+}
