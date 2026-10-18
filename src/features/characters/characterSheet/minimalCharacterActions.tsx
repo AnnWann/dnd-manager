@@ -1,3 +1,4 @@
+import { ActionRollFeedback } from "../../../../packages/game-ui/src/ActionRollFeedback"
 import { CharacterActionTabs } from "../../../../packages/game-ui/src/CharacterActionTabs"
 import { ActionGroup } from "../../../../packages/game-ui/src/ActionGroup"
 import { getInitiativeRollSelection } from "../../initiative/initiativeRollSelection"
@@ -737,24 +738,7 @@ export function MinimalCharacterActions({
               ))}
             </div>
             <p className="whitespace-pre-wrap text-sm leading-6 text-text">{selected.description}</p>
-            {rollFeedback.length > 0 ? (
-              <div className="grid gap-2 rounded-xl border border-accentBorder bg-accentBg/30 p-3">
-                <div className="text-xs font-semibold text-textH">Resultado da rolagem</div>
-                {rollFeedback.map((result, index) => (
-                  <div key={`${result.label}-${index}`} className="rounded-lg border border-border bg-bg px-3 py-2 text-xs">
-                    <div className="font-semibold text-textH">{result.label}</div>
-                    <div className="mt-1 text-textMuted">
-                      {result.dice ? `${result.dice} = ` : "Dado = "}
-                      <span className="font-semibold text-textH">{result.diceValue}</span>
-                      {result.formulaBonus ? (
-                        <> {result.formulaBonus > 0 ? "+" : "−"} {Math.abs(result.formulaBonus)} de fórmula</>
-                      ) : null}
-                    </div>
-                    <div className="mt-1 font-semibold text-accent">Total: {result.total}</div>
-                  </div>
-                ))}
-              </div>
-            ) : null}
+            <ActionRollFeedback results={rollFeedback} />
             {selected.activationLevelBase !== undefined ? (
               <label className="grid gap-1 rounded-xl border border-accentBorder bg-accentBg/30 p-3">
                 <span className="text-xs font-semibold text-textH">
