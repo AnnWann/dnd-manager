@@ -1,8 +1,8 @@
-import { MissionDialog } from "../../packages/game-ui/src/MissionDialog"
-import { MissionCard } from "../../packages/game-ui/src/MissionCard"
-import { MissionBoardToolbar } from "../../packages/game-ui/src/MissionBoardToolbar"
-import { MissionBoard } from "../../packages/game-ui/src/MissionBoard"
-import { filterMissions, countMissionsByStatus } from "../../packages/game-core/src/missionBoard"
+import { MissionDialog } from "@dnd-manager/game-ui/mission-dialog"
+import { MissionCard } from "@dnd-manager/game-ui/mission-card"
+import { MissionBoardToolbar } from "@dnd-manager/game-ui/mission-toolbar"
+import { MissionBoard } from "@dnd-manager/game-ui/mission-board"
+import { filterMissions, countMissionsByStatus } from "@dnd-manager/game-core/mission-board"
 import { useEffect, useState } from "react"
 import {
   CheckCircle2,
