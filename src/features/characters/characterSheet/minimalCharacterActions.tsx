@@ -1,3 +1,4 @@
+import { AbilityActivationLevelField } from "../../../../packages/game-ui/src/CastActivationFields"
 import { ActionRollFeedback } from "../../../../packages/game-ui/src/ActionRollFeedback"
 import { CharacterActionTabs } from "../../../../packages/game-ui/src/CharacterActionTabs"
 import { ActionGroup } from "../../../../packages/game-ui/src/ActionGroup"
@@ -740,32 +741,15 @@ export function MinimalCharacterActions({
             <p className="whitespace-pre-wrap text-sm leading-6 text-text">{selected.description}</p>
             <ActionRollFeedback results={rollFeedback} />
             {selected.activationLevelBase !== undefined ? (
-              <label className="grid gap-1 rounded-xl border border-accentBorder bg-accentBg/30 p-3">
-                <span className="text-xs font-semibold text-textH">
-                  {selected.activationLevelLabel?.trim() || "Nível de uso"}
-                </span>
-                <span className="text-[11px] leading-4 text-textMuted">
-                  Escolha o nível desta ativação. Custos e fórmulas podem
-                  escalar com esse valor.
-                </span>
-                <Input
-                  type="number"
-                  inputMode="numeric"
-                  min={selected.activationLevelBase}
-                  max={selected.activationLevelMaximum}
-                  step={1}
-                  value={customActivationLevel}
-                  onChange={(event) =>
-                    setCustomActivationLevel(
-                      clampActivationLevel(
-                        Number(event.target.value),
-                        selected.activationLevelBase!,
-                        selected.activationLevelMaximum,
-                      ),
-                    )
-                  }
-                />
-              </label>
+              <AbilityActivationLevelField
+                label={selected.activationLevelLabel?.trim() || "Nível de uso"}
+                min={selected.activationLevelBase}
+                max={selected.activationLevelMaximum}
+                value={customActivationLevel}
+                onChange={value => setCustomActivationLevel(clampActivationLevel(
+                  value, selected.activationLevelBase!, selected.activationLevelMaximum,
+                ))}
+              />
             ) : null}
             {selected.customAbilityRoll
               && isManualCustomRoll(
