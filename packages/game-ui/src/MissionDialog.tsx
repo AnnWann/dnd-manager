@@ -243,7 +243,7 @@ export function MissionDialog({
                       type="checkbox"
                       checked={objective.completed}
                       title="Objetivo concluído"
-                      onChange={(event: ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) =>
+                      onChange={(event: ChangeEvent<HTMLInputElement>) =>
                         updateObjective(objective.id, (current) => ({
                           ...current,
                           completed: event.target.checked,
