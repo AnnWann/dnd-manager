@@ -1,58 +1,9 @@
+import { mergeItemIntoInventory } from "../../../packages/game-core/src/inventoryStacks"
+export { mergeItemIntoInventory } from "../../../packages/game-core/src/inventoryStacks"
 import type { CharacterTemplate } from "./CharacterTemplate"
 import type { EquipmentDestination } from "./characterEquipmentInteractions"
 import type { Itemmable } from "../items/item"
 import { canItemGoInPocket } from "../items/itemPocketability"
-
-const EQUIPMENT_STATE_FIELDS = new Set([
-  "id",
-  "quantity",
-  "insideBagOfHolding",
-  "heldHands",
-  "wieldedTwoHanded",
-])
-
-function comparableItem(item: Itemmable): Record<string, unknown> {
-  return Object.fromEntries(
-    Object.entries(item)
-      .filter(([key]) => !EQUIPMENT_STATE_FIELDS.has(key))
-      .sort(([left], [right]) => left.localeCompare(right)),
-  )
-}
-
-function itemsShareStack(left: Itemmable, right: Itemmable): boolean {
-  return JSON.stringify(comparableItem(left)) === JSON.stringify(comparableItem(right))
-}
-
-export function mergeItemIntoInventory(
-  inventory: Itemmable[],
-  item: Itemmable,
-): Itemmable[] {
-  const quantity = Math.max(1, Math.trunc(item.quantity ?? 1))
-  const unpacked = { ...item, containerId: undefined, insideBagOfHolding: false }
-  const index = inventory.findIndex((entry) => itemsShareStack(entry, unpacked))
-
-  if (index < 0) {
-    return [
-      ...inventory,
-      {
-        ...unpacked,
-        quantity,
-        heldHands: undefined,
-        wieldedTwoHanded: undefined,
-        insideBagOfHolding: false,
-      },
-    ]
-  }
-
-  return inventory.map((entry, currentIndex) =>
-    currentIndex === index
-      ? {
-          ...entry,
-          quantity: Math.max(1, Math.trunc(entry.quantity ?? 1)) + quantity,
-        }
-      : entry,
-  )
-}
 
 export function equipInventoryStackWithRules(
   character: CharacterTemplate,
