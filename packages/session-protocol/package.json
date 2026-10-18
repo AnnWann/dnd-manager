@@ -19,6 +19,7 @@
     "./magic-operations": "./src/magicOperations.ts",
     "./abilities": "./src/abilities.ts",
     "./runtime-config": "./src/runtimeConfig.ts",
-    "./session-core": "./src/sessionCore.ts"
+    "./session-core": "./src/sessionCore.ts",
+    "./session-messages": "./src/sessionMessages.ts"
   }
 }
