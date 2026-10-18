@@ -4,6 +4,7 @@
   "private": true,
   "type": "module",
   "exports": {
-    "./damage": "./src/damage.ts"
+    "./damage": "./src/damage.ts",
+    "./hit-points": "./src/hitPoints.ts"
   }
 }
