@@ -7,7 +7,7 @@ import {
   CharacterSheetSaveCard,
 } from "../../../../packages/game-ui/src/CharacterSheetFields"
 import { getInitiativeRollSelection } from "../../initiative/initiativeRollSelection"
-import { Check, X } from "lucide-react"
+import { X } from "lucide-react"
 import { useEffect, useState } from "react"
 
 import { Input } from "../../../components/ui/Input"
@@ -356,8 +356,6 @@ export function MinimalCharacterSheet({
             const effectiveScore = character.getEffectiveAttribute(attribute)
             const automaticScore =
               automaticAttributeCharacter.getEffectiveAttribute(attribute)
-            const adjustment = effectiveScore - automaticScore
-            const hasAdjustment = Math.abs(adjustment) >= 0.000001
 
             return (
               <CharacterSheetAttributeCard
