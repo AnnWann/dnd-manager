@@ -20,6 +20,7 @@
     "./long-rest-settings": "./src/longRestSupplySettings.ts",
     "./campaign-progression": "./src/campaignProgression.ts",
     "./standard-volumes": "./src/standardItemVolumes.ts",
-    "./asi": "./src/asi.ts"
+    "./asi": "./src/asi.ts",
+    "./item-weight": "./src/itemWeight.ts"
   }
 }
