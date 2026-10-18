@@ -1,3 +1,4 @@
+import { CombatHpModeTabs } from "../../../packages/game-ui/src/CombatHpModeTabs"
 import { Select as SharedSelect } from "../../components/ui/Select"
 import { useMemo, useState } from "react"
 import { HeartPulse, Plus, ShieldPlus, Trash2, Zap } from "lucide-react"
@@ -96,20 +97,7 @@ export function InitiativeHpActionDialog({
       className="max-w-3xl"
     >
       <div className="grid gap-4">
-        <div className="flex flex-wrap gap-2">
-          <Button size="sm" variant={mode === "damage" ? "danger" : "secondary"} onClick={() => setMode("damage")}>
-            <Zap className="h-4 w-4" /> Dano
-          </Button>
-          <Button size="sm" variant={mode === "heal" ? "primary" : "secondary"} onClick={() => setMode("heal")}>
-            <HeartPulse className="h-4 w-4" /> Cura
-          </Button>
-          <Button size="sm" variant={mode === "temporary" ? "primary" : "secondary"} onClick={() => setMode("temporary")}>
-            <ShieldPlus className="h-4 w-4" /> PV temp.
-          </Button>
-          <span className="ml-auto self-center text-xs text-textMuted">
-            {targets.length} alvo{targets.length === 1 ? "" : "s"}
-          </span>
-        </div>
+        <CombatHpModeTabs mode={mode} count={targets.length} onChange={setMode} />
 
         {mode === "damage" ? (
           <div className="grid gap-3">
