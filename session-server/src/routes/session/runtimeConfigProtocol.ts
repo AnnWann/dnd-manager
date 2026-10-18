@@ -1,16 +1,10 @@
+import type { SessionRuntimeConfigPublishMessage as SharedSessionRuntimeConfigPublishMessage, SessionRuntimeConfigSnapshotMessage as SharedSessionRuntimeConfigSnapshotMessage } from "../../../../packages/session-protocol/src/runtimeConfig"
 import type { SessionRuntimeConfigSnapshot } from "../../../../src/shared/session-runtime/sessionRuntimeConfig";
 import { isCampaignProgressionSettings } from "../../../../src/shared/progression/campaignProgression";
 import { isLongRestSupplySettings } from "../../../../src/shared/rest/longRestSupplySettings";
 
-export type SessionRuntimeConfigPublishMessage = {
-  type: "session.config.publish";
-  snapshot: SessionRuntimeConfigSnapshot;
-};
-
-export type SessionRuntimeConfigSnapshotMessage = {
-  type: "session.config.snapshot";
-  snapshot: SessionRuntimeConfigSnapshot | null;
-};
+export type SessionRuntimeConfigPublishMessage = SharedSessionRuntimeConfigPublishMessage<SessionRuntimeConfigSnapshot>
+export type SessionRuntimeConfigSnapshotMessage = SharedSessionRuntimeConfigSnapshotMessage<SessionRuntimeConfigSnapshot>
 
 export function parseRuntimeConfigPublishMessage(
   raw: string,
