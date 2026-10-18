@@ -1,4 +1,4 @@
-import type { ReactNode } from "react"
+import { Fragment, type ReactNode } from "react"
 
 /** Framework-neutral (other than React) table layout with externally rendered combat rows. */
 export function InitiativeRosterTable<TEntry>({
@@ -21,7 +21,7 @@ export function InitiativeRosterTable<TEntry>({
             ))}
           </tr>
         </thead>
-        <tbody>{entries.map((entry) => <>{/* Host provides a keyed rows fragment. */}{renderRows(entry)}</>)}</tbody>
+        <tbody>{entries.map((entry) => <Fragment key={getKey(entry)}>{renderRows(entry)}</Fragment>)}</tbody>
       </table>
     </div>
   )
