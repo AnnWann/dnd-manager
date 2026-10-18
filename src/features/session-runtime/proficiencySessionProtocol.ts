@@ -1,10 +1,9 @@
 import type { Proficiency } from "../../models/sheet/Proficiency"
 
-export type SessionProficiencyOperation =
-  | { type: "character.proficiency.add"; characterId: string; proficiency: Proficiency }
-  | { type: "character.proficiency.remove"; characterId: string; proficiencyId: string; proficiencyName?: string }
+import type {
+  SessionProficiencyOperation as SharedSessionProficiencyOperation,
+  SessionProficiencyClientMessage as SharedSessionProficiencyClientMessage,
+} from "../../../packages/session-protocol/src/proficiencyOperations"
 
-export type SessionProficiencyClientMessage = {
-  type: "session.proficiency.operation"
-  operation: SessionProficiencyOperation
-}
+export type SessionProficiencyOperation = SharedSessionProficiencyOperation<Proficiency>
+export type SessionProficiencyClientMessage = SharedSessionProficiencyClientMessage<Proficiency>
