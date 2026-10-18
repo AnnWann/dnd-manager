@@ -54,3 +54,10 @@ Prepare the D&D Manager for a second frontend (Owlbear Rodeo) without duplicatin
 
 ### Migration rule
 Every extracted component must have a clear owner for state and authorization. UI can request operations but cannot become the source of truth for Cloudflare-managed session state.
+
+
+## Objective 5 intermediate checkpoint (2026-10-18)
+
+Registered seven npm workspaces, including the four shared packages, the existing Worker, and compatibility workspace entrypoints in `apps/web` and `apps/session-server`. Added per-package TypeScript checks, migrated initial mission consumers to public `@dnd-manager/*` export paths, and validated app-level scripts in CI. The active source/deployment roots remain at the repository root and `session-server/` to prevent breakage during staging.
+
+See [workspace-migration.md](./workspace-migration.md) for the remaining lockfile regeneration, physical moves, import rewrite and deployment preservation requirements. This is a staged milestone, not completion of objective 5.
