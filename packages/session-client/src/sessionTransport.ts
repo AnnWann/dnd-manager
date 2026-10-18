@@ -30,7 +30,9 @@ export class SessionTransport {
   private stopped = false
   private hasConnectedOnce = false
 
-  constructor(private readonly options: SessionTransportOptions) {}
+  private readonly options: SessionTransportOptions
+
+  constructor(options: SessionTransportOptions) { this.options = options }
 
   get connected(): boolean {
     return this.socket?.readyState === WebSocket.OPEN
