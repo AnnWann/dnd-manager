@@ -8,6 +8,8 @@
     "./mission": "./src/mission.ts",
     "./inventory-settings": "./src/inventorySettings.ts",
     "./initiative-operations": "./src/initiativeOperations.ts",
-    "./inventory-operations": "./src/inventoryOperations.ts"
+    "./inventory-operations": "./src/inventoryOperations.ts",
+    "./profile-operations": "./src/profileOperations.ts",
+    "./race-operations": "./src/raceOperations.ts"
   }
 }
