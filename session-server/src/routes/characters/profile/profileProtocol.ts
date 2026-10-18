@@ -2,27 +2,9 @@ import type { CharacterBackground } from "../../../../../src/models/characters/C
 import type { CharacterProfile, CharacterRelationship } from "../../../../../src/models/characters/characterProfile";
 import type { ProficiencyCategory } from "../../../../../src/models/sheet/Proficiency";
 
-export type SessionProfileOperation =
-  | {
-      type: "character.profile.replace";
-      characterId: string;
-      profile: CharacterProfile;
-    }
-  | {
-      type: "character.profile.background.save";
-      characterId: string;
-      background: CharacterBackground;
-      addEquipment: boolean;
-    }
-  | {
-      type: "character.profile.background.remove";
-      characterId: string;
-    };
-
-export type SessionProfileClientMessage = {
-  type: "session.profile.operation";
-  operation: SessionProfileOperation;
-};
+import type { SessionProfileOperation as SharedSessionProfileOperation, SessionProfileClientMessage as SharedSessionProfileClientMessage } from "../../../../../packages/session-protocol/src/profileOperations"
+export type SessionProfileOperation = SharedSessionProfileOperation<CharacterProfile, CharacterBackground>;
+export type SessionProfileClientMessage = SharedSessionProfileClientMessage<CharacterProfile, CharacterBackground>;
 
 const ALIGNMENTS = new Set([
   "lawful-good", "neutral-good", "chaotic-good",
