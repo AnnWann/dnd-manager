@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "npm --prefix ../.. run check:compendium-volumes && npm --prefix ../.. run check:user-workspace-boundaries && npm --prefix ../.. run check:vercel-functions && npm --prefix ../.. run check:native-selects && tsc -b && vite build",
+    "build": "node ../../scripts/build-game-core-runtime.mjs && npm --prefix ../.. run check:compendium-volumes && npm --prefix ../.. run check:user-workspace-boundaries && npm --prefix ../.. run check:vercel-functions && npm --prefix ../.. run check:native-selects && tsc -b && vite build",
     "lint": "eslint .",
     "preview": "vite preview"
   },
