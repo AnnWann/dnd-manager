@@ -1,5 +1,17 @@
 # Objective 5 — npm workspace migration
 
+## Current checkpoint (Worker physically relocated)
+
+The Cloudflare Worker application now lives at `apps/session-server` with its own source, `wrangler.jsonc`, `tsconfig.json`, generated worker configuration, README and npm workspace manifest. The old root `session-server/` application has been removed. Its Durable Object binding and migration tag remain unchanged, and secret-file arguments in deployment scripts were updated for the new relative root. The application and website builds passed in the migration workflow before the move was committed (migration commit `e379b410`). This does not validate a live Cloudflare deployment.
+
+Workspaces are declared via `packages/*` and `apps/*`, with a reconciled lockfile and `npm ci` checks. The website remains staged in `apps/web`; its active sources, Vercel handlers, and Prisma files are still at the repository root. The website TypeScript project explicitly excludes `apps/session-server` to avoid Worker DOM type interference.
+
+Remaining work: physically relocate website paths, finish portable package imports, verify Wrangler/Vercel deployment bundles and secrets in staging, and complete multiplayer integration testing. No production or QA deployment has been performed by this migration.
+
+---
+
+# Objective 5 — npm workspace migration
+
 ## Current physical layout
 
 | Workspace | Path | Status |
