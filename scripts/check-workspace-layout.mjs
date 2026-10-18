@@ -4,7 +4,7 @@ import { join } from "node:path"
 
 const read = (file) => JSON.parse(readFileSync(file, "utf8"))
 const root = read("package.json")
-assert.deepEqual(root.workspaces, ["packages/*", "session-server"])
+assert.deepEqual(root.workspaces, ["packages/*", "apps/*", "session-server", "apps/web", "apps/session-server"])
 assert.equal(root.private, true, "workspace root must be private")
 
 const names = new Set()
@@ -19,4 +19,10 @@ for (const folder of ["packages/game-core", "packages/game-ui", "packages/sessio
   }
 }
 assert.ok(root.scripts["typecheck:session-server"])
-console.log("Validated 5 local workspace manifests, independent exports and root scripts")
+console.log("Validated 7 local workspace manifests, independent exports and root scripts")
+
+const web = read("apps/web/package.json")
+const workerApp = read("apps/session-server/package.json")
+assert.equal(web.scripts.build, "npm --prefix ../.. run build")
+assert.equal(workerApp.scripts.typecheck, "npm --prefix ../../session-server run typecheck")
+console.log("App workspace entry points preserve active deployment roots")
