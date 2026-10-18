@@ -55,5 +55,8 @@
   },
   "scripts": {
     "typecheck": "tsc --project tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "@dnd-manager/session-protocol": "0.1.0"
   }
 }
