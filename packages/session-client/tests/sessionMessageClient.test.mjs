@@ -113,3 +113,46 @@ test("kicked connection clears state and does not reconnect", async () => {
     client.disconnect()
   } finally { globalThis.WebSocket = originalWebSocket }
 })
+
+test("reconnects after an unexpected close and ignores a stale socket", async () => {
+  FakeWebSocket.instances = []
+  globalThis.WebSocket = FakeWebSocket
+  const originalSetTimeout = globalThis.setTimeout
+  const originalClearTimeout = globalThis.clearTimeout
+  const scheduled = new Map()
+  let sequence = 0
+  globalThis.setTimeout = (callback, delay) => {
+    const id = ++sequence
+    scheduled.set(id, { callback, delay })
+    return id
+  }
+  globalThis.clearTimeout = (id) => scheduled.delete(id)
+  try {
+    const { client, statuses, received } = createClient()
+    client.connect()
+    await tick()
+    const first = FakeWebSocket.instances.at(-1)
+    first.readyState = FakeWebSocket.OPEN
+    first.receive('{"type":"session.ready"}')
+    first.close(1006)
+    assert.equal(statuses.at(-1), "reconnecting")
+    const retry = [...scheduled.values()].find((timer) => timer.delay === 1000)
+    assert.ok(retry, "first reconnect uses one-second backoff")
+    retry.callback()
+    await tick()
+    const second = FakeWebSocket.instances.at(-1)
+    assert.notEqual(second, first)
+    // A delayed packet on the superseded connection must not mutate session data.
+    first.receive('{"type":"event","value":"stale"}')
+    second.readyState = FakeWebSocket.OPEN
+    second.receive('{"type":"session.ready"}')
+    second.receive('{"type":"event","value":"current"}')
+    assert.deepEqual(received, [{ type: "event", value: "current" }])
+    client.disconnect()
+    assert.equal(scheduled.size, 0)
+  } finally {
+    globalThis.WebSocket = originalWebSocket
+    globalThis.setTimeout = originalSetTimeout
+    globalThis.clearTimeout = originalClearTimeout
+  }
+})
