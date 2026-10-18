@@ -1,33 +1,17 @@
+import type { SessionInventoryOperation as SharedInventoryOperation } from "../../../../../packages/session-protocol/src/inventoryOperations"
 import type { InventorySettingsOperation } from "../../../../../packages/session-protocol/src/inventorySettings"
-export type SessionInventoryOperation =
-  | { type: "character.inventory.item.add"; characterId: string; item: Record<string, unknown> }
-  | { type: "character.inventory.item.update"; characterId: string; itemId: string; item: Record<string, unknown> }
-  | { type: "character.inventory.item.remove"; characterId: string; itemId: string }
-  | { type: "character.inventory.item.consume"; characterId: string; itemId: string }
-  | { type: "character.inventory.item.equip"; characterId: string; itemId: string; destination: { type: "natural" } | { type: "pocket" } | { type: "hand"; hands?: 1 | 2; wieldedTwoHanded?: boolean } }
-  | { type: "character.inventory.bag.toggle"; characterId: string; itemId: string }
-  | { type: "character.inventory.currenciesBag.set"; characterId: string; insideBagOfHolding: boolean }
-  | { type: "character.inventory.attunement.toggle"; characterId: string; itemId: string }
-  | { type: "character.ammunition.spend"; characterId: string; weaponId: string; ammunitionKey: string; ammunitionName: string; quantity: number }
-  | { type: "inventory.item.transfer"; characterId: string; request: { itemId: string; quantity: number; from: InventoryLocation; to: InventoryLocation; destinationItemId?: string } }
-  | { type: "party.item.add"; characterId: string; item: Record<string, unknown> }
-  | { type: "party.item.update"; characterId: string; itemId: string; item: Record<string, unknown> }
-  | { type: "party.item.remove"; characterId: string; itemId: string }
-  | InventorySettingsOperation
-  | { type: "ground.item.add"; characterId: string; item: Record<string, unknown> }
-  | { type: "ground.item.update"; characterId: string; itemId: string; item: Record<string, unknown> }
-  | { type: "ground.item.remove"; characterId: string; itemId: string }
-  | { type: "conditional.loot.resolve"; characterId: "session"; pendingId: string; drop: boolean }
-  | { type: "character.equipment.move.ground"; characterId: string; reference: EquippedReference };
-
 type InventoryLocation = { type: "party" } | { type: "ground" } | { type: "character"; characterId: string };
-type EquippedReference =
+type ServerEquipmentDestination = { type: "natural" } | { type: "pocket" } | { type: "hand"; hands?: 1 | 2; wieldedTwoHanded?: boolean };
+type ServerInventoryTransfer = { itemId: string; quantity: number; from: InventoryLocation; to: InventoryLocation; destinationItemId?: string };
+type ServerEquippedReference =
   | { type: "weapon"; itemId: string }
   | { type: "shield" }
   | { type: "held-item"; itemId: string }
   | { type: "slot"; slot: "armor" | "helmet" | "gloves" | "boots" | "cape" }
   | { type: "ring"; itemId: string }
   | { type: "necklace"; itemId: string };
+
+export type SessionInventoryOperation = SharedInventoryOperation<Record<string, unknown>, ServerEquipmentDestination, ServerInventoryTransfer, ServerEquippedReference>
 
 export type SessionInventoryClientMessage =
   | {
