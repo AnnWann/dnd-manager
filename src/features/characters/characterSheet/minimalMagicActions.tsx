@@ -1,3 +1,4 @@
+import { SpellListBoard } from "../../../../packages/game-ui/src/SpellListBoard"
 import { ResourcePill } from "../../../../packages/game-ui/src/ResourcePill"
 import { Select as SharedSelect } from "../../../components/ui/Select"
 import { DAMAGE_TYPE_OPTIONS, type DamageType } from "../../../models/combat/Damage"
@@ -267,11 +268,27 @@ export function MinimalMagicActions({ character, updateCharacter, scrollOnlyItem
 
   return <section className={scrollOnlyItemId ? "mt-2" : "rounded-xl border border-border bg-bg p-3 shadow-theme-sm"}>
     {allSpells.length && scrollOnlyItemId ? <Button size="sm" variant="secondary" onClick={() => openSpell(allSpells[0])}>Conjurar pergaminho</Button> : null}
-    {allSpells.length && !scrollOnlyItemId ? <>
-      <div className="flex flex-wrap items-end justify-between gap-2"><div><h2 className="text-xs font-semibold uppercase tracking-wide text-textH">Magias</h2><p className="mt-1 text-[10px] text-textMuted">Magias conhecidas, preparadas ou concedidas.</p></div>{availableLevels.length > 1 ? <label className="grid gap-1 text-[10px] text-textMuted">Nível<SharedSelect className="h-8 rounded-lg border border-border bg-bg px-2 text-xs text-textH" value={levelFilter} onChange={(e) => setLevelFilter(e.target.value === "all" ? "all" : Number(e.target.value))}><option value="all">Todos</option>{availableLevels.map((level) => <option key={level} value={level}>{level === 0 ? "Truques" : `Nível ${level}`}</option>)}</SharedSelect></label> : null}</div>
-      <div className="mt-2 grid grid-cols-2 gap-1 rounded-lg border border-border bg-bg-subtle p-1 sm:grid-cols-4">{ACTION_FILTERS.map((option) => <button key={option.value} type="button" onClick={() => setActionFilter(option.value)} className={cn("rounded-md px-2 py-2 text-xs font-semibold", actionFilter === option.value ? "bg-accentBg text-textH" : "text-textMuted")}>{option.label}</button>)}</div>
-      <div className="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-3 xl:grid-cols-4">{visibleSpells.map((entry) => <button key={entry.key} type="button" onClick={() => openSpell(entry)} className="min-h-14 rounded-lg border border-border bg-bg-subtle px-3 py-2 text-left hover:border-accentBorder hover:bg-accentBg"><div className="truncate text-xs font-semibold text-textH">{spellName(entry.spell)}</div><div className="mt-1 text-[10px] text-textMuted">{entry.spell.slotLevel === 0 ? "Truque" : `N${entry.spell.slotLevel}`} • {sourceLabel(entry.source)}</div>{entry.sourceResourceCost ? <div className="mt-1 text-[10px] font-semibold text-accent">{entry.sourceResourceCost.amount} {spellResourceLabel(entry.sourceResourceCost.resource)}</div> : null}</button>)}</div>
-    </> : null}
+    {allSpells.length && !scrollOnlyItemId ? (
+      <SpellListBoard
+        entries={visibleSpells.map(entry => ({
+          key: entry.key,
+          name: spellName(entry.spell),
+          level: entry.spell.slotLevel,
+          source: sourceLabel(entry.source),
+          cost: entry.sourceResourceCost
+            ? `${entry.sourceResourceCost.amount} ${spellResourceLabel(entry.sourceResourceCost.resource)}`
+            : undefined,
+          original: entry,
+        }))}
+        filters={ACTION_FILTERS}
+        selectedFilter={actionFilter}
+        onFilterChange={value => setActionFilter(value as ActionFilter)}
+        availableLevels={availableLevels}
+        levelFilter={levelFilter}
+        onLevelChange={setLevelFilter}
+        onSelect={entry => openSpell(entry.original)}
+      />
+    ) : null}
 
     {hasMagicResources && !scrollOnlyItemId ? <div className="mt-4 border-t border-border pt-3"><div className="text-[10px] font-semibold uppercase tracking-wide text-textMuted">Recursos mágicos</div><div className="mt-2 flex flex-wrap gap-2">
       {Object.entries(slots).map(([level, slot]) => slot && slot.max > 0 ? <ResourcePill key={level} label={`N${level}`} current={slot.current} max={slot.max} onDecrease={() => updateCharacter(character.get("id"), (current) => spendSpellSlot(current, Number(level) as MagicCircleLevel))} onIncrease={() => updateCharacter(character.get("id"), (current) => restoreSpellSlot(current, Number(level) as MagicCircleLevel))} /> : null)}
