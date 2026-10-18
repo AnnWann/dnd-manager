@@ -108,5 +108,7 @@
       "qa": true,
       "master": true
     }
-  }
+  },
+  "buildCommand": "npm run build",
+  "outputDirectory": "dist"
 }
