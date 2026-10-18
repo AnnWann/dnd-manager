@@ -21,7 +21,10 @@
     "./character-sheet-layout": "./src/CharacterSheetLayout.tsx",
     "./spellcasting-hands-notice": "./src/SpellcastingHandsNotice.tsx",
     "./character-sheet-fields": "./src/CharacterSheetFields.tsx",
-    "./character-sheet-skill-spell": "./src/CharacterSheetSkillAndSpell.tsx"
+    "./character-sheet-skill-spell": "./src/CharacterSheetSkillAndSpell.tsx",
+    "./action-group": "./src/ActionGroup.tsx",
+    "./resource-pill": "./src/ResourcePill.tsx",
+    "./weapon-ammunition-bar": "./src/WeaponAmmunitionBar.tsx"
   },
   "peerDependencies": {
     "react": "^19.0.0",
