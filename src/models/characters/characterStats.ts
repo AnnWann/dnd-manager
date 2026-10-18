@@ -1,3 +1,4 @@
+import { abilityModifier, proficiencyBonus } from "../../../packages/game-core/src/characterMath"
 import type { Ability } from "../abilities/Ability"
 import { isAbilityBenefitsActive } from "../abilities/abilityActivation"
 import type { Bonus, NormalBonusKey, ScopedBonusKey } from "../bonuses/Bonus"
@@ -47,16 +48,14 @@ export function getProficiencyBonus(character: CharacterTemplate): number {
       0,
     ) ?? 1
 
-  return Math.ceil(totalLevel / 4) + 1
+  return proficiencyBonus(totalLevel)
 }
 
 export function getAttributeModifier(
   character: CharacterTemplate,
   attribute: Attribute,
 ): number {
-  return Math.floor(
-    (character.get("sheet").attributes[attribute] - 10) / 2,
-  )
+  return abilityModifier(character.get("sheet").attributes[attribute])
 }
 
 export function getEquippedItems(character: CharacterTemplate): Equipment[] {
