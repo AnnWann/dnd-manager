@@ -1,10 +1,11 @@
-import {existsSync,mkdirSync,readdirSync,readFileSync,writeFileSync,renameSync,rmSync} from "node:fs"
+import {existsSync,mkdirSync,readdirSync,readFileSync,writeFileSync,renameSync,rmSync,cpSync} from "node:fs"
 import {dirname,join,relative,resolve,sep} from "node:path"
 const toMove=["src","api","api-handlers","server","public","prisma","index.html","vite.config.ts","tsconfig.json","tsconfig.app.json","tsconfig.node.json","prisma.config.ts","postcss.config.cjs","tailwind.config.js"]
 if(!existsSync("src")||existsSync("apps/web/src"))throw Error("unexpected website migration state")
-const pathMap=new Map(toMove.map(p=>[resolve(p),resolve("apps/web",p)]))
+const pathMap=new Map([...toMove,"generated"].map(p=>[resolve(p),resolve("apps/web",p)]))
 function relocate(p){for(const [a,b] of pathMap)if(p===a||p.startsWith(a+sep))return b+p.slice(a.length);return p}
 function walk(dir,out){if(!existsSync(dir))return;for(const e of readdirSync(dir,{withFileTypes:true})){if(["node_modules","dist",".git"].includes(e.name))continue;const p=join(dir,e.name);if(e.isDirectory())walk(p,out);else if(e.isFile())out.push(p)}}
+for(const p of ["src","api","api-handlers","server"])cpSync(p,"apps/web/"+p,{recursive:true,force:true})
 const files=[];for(const d of ["src","api","api-handlers","server","apps/session-server/src","packages","scripts"])walk(d,files)
 const imp=/(\b(?:from\s*|import\s*\(|import\s*|require\s*\()\s*["'])(\.{1,2}\/[^"']+)(["'])/g
 for(const file of files){if(!/\.(?:ts|tsx|js|jsx|mjs|mts|cts)$/.test(file))continue;const abs=resolve(file),target=relocate(abs),original=readFileSync(abs,"utf8")
