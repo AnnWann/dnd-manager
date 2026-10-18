@@ -4,9 +4,14 @@
   "version": "0.1.0",
   "type": "module",
   "scripts": {
-    "dev": "npm --prefix ../../session-server run dev",
-    "typecheck": "npm --prefix ../../session-server run typecheck",
-    "deploy": "npm --prefix ../../session-server run deploy",
-    "deploy:qa": "npm --prefix ../../session-server run deploy:qa"
+    "dev": "wrangler dev --var SESSION_AUTH_MODE:development",
+    "deploy": "wrangler deploy --secrets-file ../../.env.session",
+    "deploy:qa": "wrangler deploy --env qa --secrets-file ../../.env.session.qa",
+    "generate-types": "wrangler types",
+    "typecheck": "npm run generate-types && tsc --noEmit"
+  },
+  "devDependencies": {
+    "typescript": "~6.0.2",
+    "wrangler": "^4.0.0"
   }
 }

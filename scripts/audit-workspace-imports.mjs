@@ -4,10 +4,10 @@ import { join, relative, resolve, sep } from "node:path"
 const root = process.cwd()
 const workspacePaths = [
   "packages/game-core", "packages/game-ui", "packages/session-client",
-  "packages/session-protocol", "apps/web", "apps/session-server", "session-server",
+  "packages/session-protocol", "apps/web", "apps/session-server",
 ]
 const workspaces = workspacePaths.map((path) => ({ path, absolute: resolve(root, path), pkg: JSON.parse(readFileSync(join(path, "package.json"), "utf8")) }))
-const projectDirs = ["src", "api", "api-handlers", "server", "session-server/src", "packages"]
+const projectDirs = ["src", "api", "api-handlers", "server", "apps/session-server/src", "packages"]
 const extensions = /\.(?:ts|tsx|js|jsx|mjs|mts|cts)$/
 const importPattern = /\b(?:from\s*|import\s*\(|import\s*|require\s*\()\s*["']([^"']+)["']/g
 const violations = []

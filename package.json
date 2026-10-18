@@ -10,10 +10,10 @@
     "dev:full": "node scripts/dev-full.mjs",
     "dev:full:prod-env": "node scripts/dev-full.mjs --production",
     "dev:link": "vercel link",
-    "dev:session-server": "npm --prefix session-server run dev",
-    "deploy:session-server": "npm --prefix session-server run deploy",
-    "deploy:session-server-qa": "npm --prefix session-server run deploy:qa",
-    "typecheck:session-server": "npm --prefix session-server run typecheck",
+    "dev:session-server": "npm --workspace @dnd-manager/session-server-app run dev",
+    "deploy:session-server": "npm --workspace @dnd-manager/session-server-app run deploy",
+    "deploy:session-server-qa": "npm --workspace @dnd-manager/session-server-app run deploy:qa",
+    "typecheck:session-server": "npm --workspace @dnd-manager/session-server-app run typecheck",
     "check:user-workspace-boundaries": "node scripts/check-user-workspace-boundaries.mjs",
     "check:vercel-functions": "node scripts/check-vercel-functions.mjs",
     "check:native-selects": "node scripts/check-native-selects.mjs",
@@ -74,7 +74,6 @@
   },
   "workspaces": [
     "packages/*",
-    "apps/*",
-    "session-server"
+    "apps/*"
   ]
 }

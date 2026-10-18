@@ -4,11 +4,11 @@ import { join } from "node:path"
 
 const read = (file) => JSON.parse(readFileSync(file, "utf8"))
 const root = read("package.json")
-assert.deepEqual(root.workspaces, ["packages/*", "apps/*", "session-server"])
+assert.deepEqual(root.workspaces, ["packages/*", "apps/*"])
 assert.equal(root.private, true, "workspace root must be private")
 
 const names = new Set()
-for (const folder of ["packages/game-core", "packages/game-ui", "packages/session-client", "packages/session-protocol", "session-server", "apps/web", "apps/session-server"]) {
+for (const folder of ["packages/game-core", "packages/game-ui", "packages/session-client", "packages/session-protocol", "apps/web", "apps/session-server"]) {
   const pkg = read(join(folder, "package.json"))
   assert.equal(pkg.private, true, `${folder} must not be published`)
   assert.ok(pkg.name && !names.has(pkg.name), `duplicate or missing workspace name: ${folder}`)
@@ -24,13 +24,13 @@ console.log("Validated 7 local workspace manifests, independent exports and root
 const web = read("apps/web/package.json")
 const workerApp = read("apps/session-server/package.json")
 assert.equal(web.scripts.build, "npm --prefix ../.. run build")
-assert.equal(workerApp.scripts.typecheck, "npm --prefix ../../session-server run typecheck")
+assert.equal(workerApp.scripts.typecheck, "npm run generate-types && tsc --noEmit")
 console.log("App workspace entry points preserve active deployment roots")
 
 const lock = read("package-lock.json")
 assert.equal(lock.lockfileVersion, 3, "npm workspace lockfile must use v3")
 assert.deepEqual(lock.packages[""].workspaces, root.workspaces, "lockfile root workspace configuration must match package.json")
-for (const folder of ["packages/game-core", "packages/game-ui", "packages/session-client", "packages/session-protocol", "session-server", "apps/web", "apps/session-server"]) {
+for (const folder of ["packages/game-core", "packages/game-ui", "packages/session-client", "packages/session-protocol", "apps/web", "apps/session-server"]) {
   const pkg = read(join(folder, "package.json"))
   assert.equal(lock.packages[folder]?.name, pkg.name, `lockfile missing workspace package: ${folder}`)
   assert.equal(lock.packages[`node_modules/${pkg.name}`]?.link, true, `lockfile missing workspace symlink: ${pkg.name}`)
