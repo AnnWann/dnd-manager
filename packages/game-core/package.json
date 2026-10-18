@@ -19,6 +19,7 @@
     "./attack-riders": "./src/attackRiders.ts",
     "./long-rest-settings": "./src/longRestSupplySettings.ts",
     "./campaign-progression": "./src/campaignProgression.ts",
-    "./standard-volumes": "./src/standardItemVolumes.ts"
+    "./standard-volumes": "./src/standardItemVolumes.ts",
+    "./asi": "./src/asi.ts"
   }
 }
