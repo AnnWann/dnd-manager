@@ -4,11 +4,11 @@ import { join } from "node:path"
 
 const read = (file) => JSON.parse(readFileSync(file, "utf8"))
 const root = read("package.json")
-assert.deepEqual(root.workspaces, ["packages/*", "apps/*", "session-server", "apps/web", "apps/session-server"])
+assert.deepEqual(root.workspaces, ["packages/*", "apps/*", "session-server"])
 assert.equal(root.private, true, "workspace root must be private")
 
 const names = new Set()
-for (const folder of ["packages/game-core", "packages/game-ui", "packages/session-client", "packages/session-protocol", "session-server"]) {
+for (const folder of ["packages/game-core", "packages/game-ui", "packages/session-client", "packages/session-protocol", "session-server", "apps/web", "apps/session-server"]) {
   const pkg = read(join(folder, "package.json"))
   assert.equal(pkg.private, true, `${folder} must not be published`)
   assert.ok(pkg.name && !names.has(pkg.name), `duplicate or missing workspace name: ${folder}`)
