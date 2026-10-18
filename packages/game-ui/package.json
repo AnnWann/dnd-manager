@@ -30,7 +30,8 @@
     "./ammunition-selection-list": "./src/AmmunitionSelectionList.tsx",
     "./spell-list-board": "./src/SpellListBoard.tsx",
     "./character-action-tabs": "./src/CharacterActionTabs.tsx",
-    "./action-roll-feedback": "./src/ActionRollFeedback.tsx"
+    "./action-roll-feedback": "./src/ActionRollFeedback.tsx",
+    "./weapon-swap-dialog": "./src/WeaponSwapDialog.tsx"
   },
   "peerDependencies": {
     "react": "^19.0.0",
