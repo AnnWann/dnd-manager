@@ -1,3 +1,4 @@
+import type { InventorySettingsOperation } from "../../../../../packages/session-protocol/src/inventorySettings"
 export type SessionInventoryOperation =
   | { type: "character.inventory.item.add"; characterId: string; item: Record<string, unknown> }
   | { type: "character.inventory.item.update"; characterId: string; itemId: string; item: Record<string, unknown> }
@@ -12,9 +13,7 @@ export type SessionInventoryOperation =
   | { type: "party.item.add"; characterId: string; item: Record<string, unknown> }
   | { type: "party.item.update"; characterId: string; itemId: string; item: Record<string, unknown> }
   | { type: "party.item.remove"; characterId: string; itemId: string }
-  | { type: "party.settings.carryCapacity.set"; characterId: "session"; value: number }
-  | { type: "party.settings.additionalSupplyConsumption.set"; characterId: "session"; value: number }
-  | { type: "party.settings.accessible.set"; characterId: "session"; value: boolean }
+  | InventorySettingsOperation
   | { type: "ground.item.add"; characterId: string; item: Record<string, unknown> }
   | { type: "ground.item.update"; characterId: string; itemId: string; item: Record<string, unknown> }
   | { type: "ground.item.remove"; characterId: string; itemId: string }
