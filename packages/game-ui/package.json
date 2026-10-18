@@ -14,7 +14,10 @@
     "./initiative-roster-table": "./src/InitiativeRosterTable.tsx",
     "./inventory-tile-grid": "./src/InventoryTileGrid.tsx",
     "./mission-card": "./src/MissionCard.tsx",
-    "./initiative-card-rail": "./src/InitiativeCardRail.tsx"
+    "./initiative-card-rail": "./src/InitiativeCardRail.tsx",
+    "./character-hp-panel": "./src/CharacterHpPanel.tsx",
+    "./stat-shell": "./src/StatShell.tsx",
+    "./hit-dice-row": "./src/HitDiceRow.tsx"
   },
   "peerDependencies": {
     "react": "^19.0.0",
