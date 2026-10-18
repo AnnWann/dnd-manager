@@ -1,3 +1,4 @@
+import { InitiativeCardRail } from "../../../packages/game-ui/src/InitiativeCardRail"
 import { HeartPulse, Pencil, Skull, Trash2, Zap } from "lucide-react"
 
 import { Button } from "../../components/ui/Button"
@@ -26,8 +27,7 @@ export function InitiativeCards({
   ...props
 }: InitiativeCardsProps) {
   return (
-    <div className="overflow-x-auto scroll-smooth p-5">
-      <div className="flex min-w-max items-stretch gap-4 pb-2">
+    <InitiativeCardRail>
         {props.entries.map((entry) => {
           const active = entry.id === props.activeEntryId
           const anchor = props.started && entry.id === props.roundAnchorEntryId
@@ -251,7 +251,6 @@ export function InitiativeCards({
             </div>
           )
         })}
-      </div>
-    </div>
+    </InitiativeCardRail>
   )
 }
