@@ -1,1 +1,1 @@
-export * from "../../../../../packages/game-core/src/longRestSupplySettings"
+export * from "@dnd-manager/game-core/long-rest-settings"
