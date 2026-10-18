@@ -1,3 +1,4 @@
+import { ClassConfigurationSelector } from "../../../../../packages/game-ui/src/ClassConfigurationSelector"
 import { useEffect, useMemo, useState } from "react"
 
 import { Button } from "../../../../components/ui/Button"
@@ -94,36 +95,15 @@ export function CustomClassConfigurationTab({
 
   return (
     <div className="grid gap-4">
-      {customClasses.length > 1 ? (
-        <section className="rounded-xl border border-border bg-bg p-4 shadow-theme-sm">
-          <div className="text-sm font-semibold text-textH">Classes personalizadas</div>
-          <p className="mt-1 text-xs leading-5 text-textMuted">
-            Selecione qual classe do multiclass você deseja configurar.
-          </p>
-          <div className="mt-3 flex flex-wrap gap-2">
-            {customClasses.map((entry) => {
-              const selected = entry.className === selectedClass.className
-              return (
-                <button
-                  key={String(entry.className)}
-                  type="button"
-                  aria-pressed={selected}
-                  onClick={() => setSelectedClassName(entry.className)}
-                  className={[
-                    "rounded-lg border px-3 py-2 text-left text-xs font-semibold transition-colors",
-                    selected
-                      ? "border-accentBorder bg-accentBg text-textH"
-                      : "border-border bg-bg-subtle text-text hover:bg-accentBg",
-                  ].join(" ")}
-                >
-                  <span>{entry.config.name}</span>
-                  <span className="ml-2 font-normal text-textMuted">Nível {entry.level}</span>
-                </button>
-              )
-            })}
-          </div>
-        </section>
-      ) : null}
+      <ClassConfigurationSelector
+        choices={customClasses.map(entry => ({
+          id: entry.className,
+          name: entry.config.name,
+          level: entry.level,
+        }))}
+        selectedId={selectedClass.className}
+        onSelect={setSelectedClassName}
+      />
 
       <CustomClassConfigurationEditor
         key={`${character.get("id")}:${String(selectedClass.className)}:${JSON.stringify(selectedClass.config)}`}
