@@ -1,6 +1,6 @@
 import type { ComponentType } from "react"
 import { ArchiveRestore, Check, CheckCircle2, Circle, Clock3, Coins, MapPin, Pencil, Tag, Trash2, UserRound } from "lucide-react"
-import type { Mission, MissionStatus, MissionPriority } from "../../session-protocol/src/mission"
+import type { Mission, MissionStatus, MissionPriority } from "@dnd-manager/session-protocol/mission"
 
 const PRIORITY_LABELS: Record<MissionPriority, string> = {
   low: "Baixa", normal: "Normal", high: "Alta", urgent: "Urgente",
