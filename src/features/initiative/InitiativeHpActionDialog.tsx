@@ -1,7 +1,7 @@
 import { CombatHpModeTabs } from "../../../packages/game-ui/src/CombatHpModeTabs"
 import { Select as SharedSelect } from "../../components/ui/Select"
 import { useMemo, useState } from "react"
-import { HeartPulse, Plus, ShieldPlus, Trash2, Zap } from "lucide-react"
+import { Plus, Trash2 } from "lucide-react"
 
 import { Button } from "../../components/ui/Button"
 import { Input } from "../../components/ui/Input"
