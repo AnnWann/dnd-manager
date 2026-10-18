@@ -4,7 +4,7 @@ React presentation components that accept data, callbacks and optional host cont
 
 ## Current extracted features
 
-- Character sheet primitives: `ExperienceProgress`, `HpValue`, `HpActionButtons`, `HpMaximumButton`, `HpSummaryGrid`
+- Character sheet: `CharacterSheetLayout` (host-controlled play/config views), `CharacterHpPanel`, `StatShell`, `HitDiceRow`, plus `ExperienceProgress`, `HpValue`, `HpActionButtons`, `HpMaximumButton`, `HpSummaryGrid`
 - Missions: `MissionBoard` (status columns and render-item callback), `MissionBoardToolbar` (counts and controlled search), `MissionCard` (mission details, objectives and host-supplied action buttons)
 - Initiative: `InitiativeRosterTable` (table headings and host-rendered rows), `InitiativeCardRail` (horizontal combat-card layout)
 - Inventory: `InventoryTileGrid` (responsive slots and empty state)
@@ -18,7 +18,7 @@ The website continues to own the hooks, session providers, editable dialogs, rol
 - Extract complete initiative row/inspector and HP action dialogs without importing website-specific controls/models.
 - Extract a reusable inventory container navigator, compartment operations UI, item editor and drag/drop layer with injected domain handlers.
 - Extract mission edit dialogs with host-supplied draft creation and persistence, rather than importing the website's mission context.
-- Refactor larger character sheet tabs/panels for a reusable `CharacterSheetView` boundary.
+- The high-level `CharacterSheetLayout` now accepts host-rendered play/configuration views; the inner feature tabs, roll controls, ability/spell panels and edit dialogs still need decoupling to become a complete reusable character sheet.
 - Add interaction/component tests for the shared feature views (currently guarded by frontend build and CI dependency boundaries).
 
 These are still outstanding; do not treat the current package as a complete standalone VTT user interface.
