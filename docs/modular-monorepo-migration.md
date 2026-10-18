@@ -33,3 +33,24 @@ Prepare the D&D Manager for a second frontend (Owlbear Rodeo) without duplicatin
 - Do not relocate the website, Prisma configuration, or Worker as part of the first phase.
 - Keep the existing npm installation and deployment workflows unchanged until an isolated workspace migration can regenerate and verify lockfiles.
 - Validate both `npm run build` and `npm run typecheck:session-server` in CI before merge, plus an authenticated multi-client session smoke test.
+
+
+## Remaining work and exit criteria (reviewed 2026-10-18)
+
+1. **Protocol contracts:** identify and consolidate the remaining session message types (including abilities, character lifecycle, configuration, magic and equipment). Test parser compatibility for existing wire payloads and enforce import boundaries.
+2. **Game core:** continue isolating pure calculations, selectors and item rules. Keep server-authoritative mutations in the Durable Object. Add tests for game rules and session invariants.
+3. **Session client:** establish reusable typed session APIs above the raw WebSocket transport, with injectable token acquisition and browser-free tests for reconnect, ready, heartbeat, stale sockets and kicked sessions. Do not move authority or identity to consumers.
+4. **Shared UI:** finish decoupling HP dialogs and character panels; create provider-free mission, inventory and initiative views with prop-driven adapters. Avoid migrating whole pages with imports pointing back to website internals.
+5. **Workspace migration:** introduce npm workspace boundaries and package-scoped TypeScript builds, reconcile package-lock files, then move web and Worker roots to apps/ while preserving Vercel, Prisma, Cloudflare Wrangler, runtime paths and secrets.
+6. **Owlbear integration:** implement extension manifest, session identity and authorization handshake, embed UI panels, subscribe to session snapshots and dispatch authorized actions through the existing Cloudflare session authority.
+7. **Release verification:** validate production deployment outputs, permission isolation, two authenticated clients with different roles, reconnect/resync, race handling, inventory transfers and damage operations; keep the PR draft until tests and deployment checks are green.
+
+### Delivered foundation
+- Shared initiative, mission, and inventory operation types (remaining protocol families not yet extracted).
+- Framework-independent damage, HP, death saves, XP and mission-board selectors.
+- Shared WebSocket lifecycle transport (higher-level typed sync client remains outstanding).
+- Shared XP and HP presentation primitives (full feature panels remain outstanding).
+- Build and type-check CI (stale lockfile currently bypassed rather than repaired).
+
+### Migration rule
+Every extracted component must have a clear owner for state and authorization. UI can request operations but cannot become the source of truth for Cloudflare-managed session state.
