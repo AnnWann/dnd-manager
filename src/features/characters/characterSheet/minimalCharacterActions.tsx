@@ -1,3 +1,4 @@
+import { ManualActionRollFields } from "../../../../packages/game-ui/src/ManualActionRollFields"
 import { AbilityActivationLevelField } from "../../../../packages/game-ui/src/CastActivationFields"
 import { ActionRollFeedback } from "../../../../packages/game-ui/src/ActionRollFeedback"
 import { CharacterActionTabs } from "../../../../packages/game-ui/src/CharacterActionTabs"
@@ -756,75 +757,30 @@ export function MinimalCharacterActions({
                 selected.customAbilityRoll,
                 physicalDiceMode,
               ) ? (
-              <div className="grid gap-2">
-                {customRollRequiresManualPrimary(
-                  selected.customAbilityRoll,
-                ) ? (
-                  <label className="grid gap-1 rounded-xl border border-accentBorder bg-accentBg/30 p-3">
-                    <span className="text-xs font-semibold text-textH">
-                      {selected.customAbilityRoll.label?.trim()
-                        || customRollPrimaryLabel(
-                          selected.customAbilityRoll,
-                        )}
-                    </span>
-                    <span className="text-[11px] leading-4 text-textMuted">
-                      {customRollPrimaryInstruction(
-                        selected.customAbilityRoll,
-                        physicalDiceMode,
-                      )}
-                    </span>
-                    <Input
-                      type="number"
-                      inputMode="decimal"
-                      value={manualRollValue}
-                      placeholder="Resultado"
-                      onChange={(event) =>
-                        setManualRollValue(event.target.value)
-                      }
-                    />
-                  </label>
-                ) : null}
-
-                {(selected.customAbilityRoll.damage ?? []).map(
-                  (damage, damageIndex) => (
-                    <label
-                      key={damage.id}
-                      className="grid gap-1 rounded-xl border border-border bg-bg-subtle p-3"
-                    >
-                      <span className="text-xs font-semibold text-textH">
-                        {damage.label?.trim()
-                          || damage.damageType?.trim()
-                          || `Dano ${damageIndex + 1}`}
-                      </span>
-                      <span className="text-[11px] leading-4 text-textMuted">
-                        Role {damage.dice}
-                        {physicalDiceMode
-                          ? " com seus dados físicos"
-                          : ""}
-                        {" "}e informe o resultado somente dos dados.
-                        {(selected.customAbilityRoll?.kind ?? "generic")
-                          === "attack"
-                          && damage.critical !== false
-                          ? " Em um 20 natural, dobre os dados deste componente."
-                          : ""}
-                      </span>
-                      <Input
-                        type="number"
-                        inputMode="decimal"
-                        value={manualDamageValues[damageIndex] ?? ""}
-                        placeholder="Dano rolado"
-                        onChange={(event) =>
-                          setManualDamageValues((current) => {
-                            const next = [...current]
-                            next[damageIndex] = event.target.value
-                            return next
-                          })
-                        }
-                      />
-                    </label>
-                  ),
-                )}
-              </div>
+              <ManualActionRollFields
+                primary={customRollRequiresManualPrimary(selected.customAbilityRoll)
+                  ? {
+                      label: selected.customAbilityRoll.label?.trim() || customRollPrimaryLabel(selected.customAbilityRoll),
+                      instructions: customRollPrimaryInstruction(selected.customAbilityRoll, physicalDiceMode),
+                      value: manualRollValue,
+                    }
+                  : undefined}
+                damages={(selected.customAbilityRoll.damage ?? []).map((damage, index) => ({
+                  id: damage.id,
+                  label: damage.label?.trim() || damage.damageType?.trim() || `Dano ${index + 1}`,
+                  dice: damage.dice,
+                  critical: damage.critical,
+                }))}
+                attack={(selected.customAbilityRoll.kind ?? "generic") === "attack"}
+                physicalDice={physicalDiceMode}
+                values={manualDamageValues}
+                onPrimaryChange={setManualRollValue}
+                onDamageChange={(index, value) => setManualDamageValues(current => {
+                  const next = [...current]
+                  next[index] = value
+                  return next
+                })}
+              />
             ) : selected.customAbilityRoll?.mode === "automatic"
                 && digitalDiceEnabled ? (
               <div className="rounded-xl border border-accentBorder bg-accentBg/30 p-3 text-xs leading-5 text-textMuted">
