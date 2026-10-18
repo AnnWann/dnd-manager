@@ -6,6 +6,7 @@
   "exports": {
     "./damage": "./src/damage.ts",
     "./hit-points": "./src/hitPoints.ts",
-    "./death-saves": "./src/deathSaves.ts"
+    "./death-saves": "./src/deathSaves.ts",
+    "./experience": "./src/experience.ts"
   }
 }
