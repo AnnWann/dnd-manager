@@ -4,7 +4,8 @@
   "version": "0.1.0",
   "type": "module",
   "exports": {
-    "./experience-progress": "./src/ExperienceProgress.tsx"
+    "./experience-progress": "./src/ExperienceProgress.tsx",
+    "./hp-value": "./src/HpValue.tsx"
   },
   "peerDependencies": {
     "react": "^19.0.0"
