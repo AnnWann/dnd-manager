@@ -1,3 +1,4 @@
+import type { SessionCharacterLifecycleState as SharedSessionCharacterLifecycleState, SessionCharacterLifecycleServerMessage as SharedSessionCharacterLifecycleServerMessage } from "../../../../packages/session-protocol/src/characterLifecycle"
 export type SessionCharacterOwner = {
   id: string;
   name: string;
@@ -30,27 +31,8 @@ export type SessionCharacterLifecycleClientMessage = {
   operation: SessionCharacterLifecycleOperation;
 };
 
-export type SessionCharacterLifecycleState = {
-  characterId: string;
-  character: Record<string, unknown>;
-  ownerUserId?: string;
-  active: boolean;
-  revision: number;
-};
-
-export type SessionCharacterLifecycleServerMessage =
-  | {
-      type: "session.characters.snapshot";
-      characters: SessionCharacterLifecycleState[];
-    }
-  | {
-      type: "session.character.updated";
-      character: SessionCharacterLifecycleState;
-    }
-  | {
-      type: "session.character.removed";
-      characterId: string;
-    };
+export type SessionCharacterLifecycleState = SharedSessionCharacterLifecycleState
+export type SessionCharacterLifecycleServerMessage = SharedSessionCharacterLifecycleServerMessage
 
 export function parseCharacterLifecycleClientMessage(
   raw: string,
