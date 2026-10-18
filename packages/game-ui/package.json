@@ -42,7 +42,8 @@
     "./level-selection-grid": "./src/LevelSelectionGrid.tsx",
     "./custom-class-basic-fields": "./src/CustomClassBasicFields.tsx",
     "./combat-hp-editor": "./src/CombatHpEditor.tsx",
-    "./manual-action-roll-fields": "./src/ManualActionRollFields.tsx"
+    "./manual-action-roll-fields": "./src/ManualActionRollFields.tsx",
+    "./configuration-toggle-grid": "./src/ConfigurationToggleGrid.tsx"
   },
   "peerDependencies": {
     "react": "^19.0.0",
