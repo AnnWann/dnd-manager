@@ -568,25 +568,7 @@ function isConditionActive(
   return true
 }
 
-export function applyBonus(baseValue: number, bonus: Bonus): number {
-  if (bonus.type === "add") return baseValue + bonus.value
-  if (bonus.type === "sub") return baseValue - bonus.value
-  return bonus.value
-}
-
-export function applyBonuses(
-  baseValue: number,
-  bonuses: Bonus[],
-): number {
-  const flatBonus = bonuses.find((bonus) => bonus.type === "flat")
-
-  if (flatBonus) return flatBonus.value
-
-  return bonuses.reduce(
-    (total, bonus) => applyBonus(total, bonus),
-    baseValue,
-  )
-}
+export { applyBonus, applyBonuses } from "../../../packages/game-core/src/numericBonuses"
 
 function statToBonusKey(
   stat: keyof Sheet["stats"],
