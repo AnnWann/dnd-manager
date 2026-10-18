@@ -18,6 +18,7 @@
     "./character-lifecycle": "./src/characterLifecycle.ts",
     "./magic-operations": "./src/magicOperations.ts",
     "./abilities": "./src/abilities.ts",
-    "./runtime-config": "./src/runtimeConfig.ts"
+    "./runtime-config": "./src/runtimeConfig.ts",
+    "./session-core": "./src/sessionCore.ts"
   }
 }
