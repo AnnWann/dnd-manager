@@ -25,3 +25,12 @@ The website continues to own the hooks, session providers, editable dialogs, rol
 - Add interaction/component tests for the shared feature views (currently guarded by frontend build and CI dependency boundaries).
 
 These are still outstanding; do not treat the current package as a complete standalone VTT user interface.
+
+
+## Feature view completion checkpoint
+
+The major character-sheet presentation components are now hosted in `game-ui`: spell list and casting selectors, abilities and activation levels, roll-result feedback, weapon and unarmed attacks, weapon swapping, ammunition configuration, hit-dice and HP controls, basic custom-class configuration, ASI level grids, and core numeric/attribute/skill fields.
+
+Inventory transfer and the combatant inspector have shared prop-driven views. Dedicated website adapters own destinations, visibility, permissions, authoritative HP mutations, casting and action resolution, and edit persistence. Full domain-specific editors that depend on website models remain host-level orchestrators until dedicated, serializable form-state contracts can replace them; they are not direct dependencies of `game-ui`.
+
+CI checks package import boundaries and compiles the existing website with those shared components. Browser-based interaction testing is intentionally deferred.
