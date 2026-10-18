@@ -9,8 +9,7 @@ import {
   CharacterSheetSaveCard,
 } from "../../../../packages/game-ui/src/CharacterSheetFields"
 import { getInitiativeRollSelection } from "../../initiative/initiativeRollSelection"
-import { X } from "lucide-react"
-import { useEffect, useState } from "react"
+import { useState } from "react"
 
 import { Input } from "../../../components/ui/Input"
 import { Select } from "../../../components/ui/Select"
@@ -27,8 +26,6 @@ import {
 } from "../../../models/characters/unarmedAttack"
 import {
   getWeaponDamageDie,
-  isTwoHandedWeapon,
-  isVersatileWeapon,
   isWeaponImprovisedGrip,
   type Weapon,
 } from "../../../models/items/equipment/Weapon"
