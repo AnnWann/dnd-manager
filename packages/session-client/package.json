@@ -4,6 +4,7 @@
   "version": "0.1.0",
   "type": "module",
   "exports": {
-    "./transport": "./src/sessionTransport.ts"
+    "./transport": "./src/sessionTransport.ts",
+    "./messages": "./src/sessionMessageClient.ts"
   }
 }
