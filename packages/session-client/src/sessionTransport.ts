@@ -15,6 +15,8 @@ export type SessionTransportOptions = {
   onMessage: (raw: string) => void
   onKicked: () => void
   onDisconnected?: () => void
+  /** Optional host-provided token supplier; default uses the existing endpoint. */
+  getConnectionToken?: () => Promise<string>
 }
 const HEARTBEAT_MIN_MS = 27_000
 const HEARTBEAT_MAX_MS = 33_000
@@ -40,7 +42,12 @@ export class SessionTransport {
 
   connect(): void {
     this.stopped = false
+    this.connectionAttempt++
+    this.clearHeartbeatTimer()
     this.clearReconnectTimer()
+    const previousSocket = this.socket
+    this.socket = null
+    if (previousSocket && previousSocket.readyState < WebSocket.CLOSING) previousSocket.close(1000, "Session connection replaced")
     void this.openSocket()
   }
 
@@ -80,6 +87,7 @@ export class SessionTransport {
     try {
       socket = new WebSocket(socketUrl)
     } catch (error) {
+      if (this.stopped || attempt !== this.connectionAttempt) return
       console.error("[session-runtime] failed to open websocket connection", error)
       this.options.onStatusChange("error")
       this.scheduleReconnect()
@@ -117,6 +125,7 @@ export class SessionTransport {
       if (!this.stopped) this.scheduleReconnect()
     }
     socket.onerror = () => {
+      if (this.socket !== socket || this.stopped) return
       if (!this.stopped) this.options.onStatusChange("error")
     }
   }
@@ -127,7 +136,7 @@ export class SessionTransport {
     url.pathname = `/session/${encodeURIComponent(this.options.sessionId)}/connect`
     url.search = ""
     if (this.options.useTokenAuth) {
-      url.searchParams.set("token", await this.requestConnectionToken())
+      url.searchParams.set("token", await (this.options.getConnectionToken?.() ?? this.requestConnectionToken()))
     } else {
       url.searchParams.set("userId", this.options.userId)
       url.searchParams.set("role", this.options.role)
