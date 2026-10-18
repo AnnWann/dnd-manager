@@ -4,9 +4,9 @@ import type {
   CustomResourceState,
 } from "../../../../../src/models/customSystems/CustomSystemDefinition";
 
-import type { SessionCustomSystemOperation as SharedSessionCustomSystemOperation, SessionCustomSystemClientMessage as SharedSessionCustomSystemClientMessage } from "../../../../../packages/session-protocol/src/customSystemOperations"
+import type { SessionCustomSystemOperation as SharedSessionCustomSystemOperation } from "../../../../../packages/session-protocol/src/customSystemOperations"
 export type SessionCustomSystemOperation = SharedSessionCustomSystemOperation<JsonValue, CustomResourceState, CustomAbilityInstance>
-export type SessionCustomSystemClientMessage = SharedSessionCustomSystemClientMessage<JsonValue, CustomResourceState, CustomAbilityInstance>
+export type SessionCustomSystemClientMessage = { type: "session.customSystem.operation" | "session.abilities.operation"; operation: SessionCustomSystemOperation }
 
 export function parseCustomSystemClientMessage(raw: string): SessionCustomSystemClientMessage | null {
   let value: unknown;
