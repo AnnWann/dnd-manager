@@ -11,3 +11,7 @@ for (const file of files) {
   assert.ok(!forbidden.test(content), `game-ui must not import host app dependencies: ${file}`)
 }
 console.log(`Validated independence of ${files.length} shared UI modules`)
+
+const tailwind = readFileSync("tailwind.config.js", "utf8")
+assert.ok(tailwind.includes("./packages/game-ui/src/**/*.{ts,tsx}"), "Tailwind must scan shared UI source for utility classes")
+console.log("Tailwind includes game-ui source")
