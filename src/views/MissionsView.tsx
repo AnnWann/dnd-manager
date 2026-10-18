@@ -8,8 +8,6 @@ import {
   CheckCircle2,
   ClipboardCheck,
   Flag,
-  Plus,
-  Trash2,
 } from "lucide-react"
 
 import { Button } from "../components/ui/Button"
@@ -21,8 +19,6 @@ import { useMissions } from "../contexts/missionContext"
 import {
   createEmptyMission,
   type Mission,
-  type MissionObjective,
-  type MissionPriority,
   type MissionStatus,
 } from "../models/missions/Mission"
 
@@ -192,15 +188,3 @@ function compareMissions(left: Mission, right: Mission): number {
   return left.title.localeCompare(right.title, "pt-BR")
 }
 
-function toDateTimeLocalValue(value?: string): string {
-  if (!value) return ""
-  if (!value.includes("Z") && !/[+-]\d\d:\d\d$/.test(value)) {
-    return value.slice(0, 16)
-  }
-
-  const date = new Date(value)
-  if (Number.isNaN(date.getTime())) return ""
-
-  const local = new Date(date.getTime() - date.getTimezoneOffset() * 60_000)
-  return local.toISOString().slice(0, 16)
-}
