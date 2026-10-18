@@ -6,7 +6,8 @@
   "exports": {
     "./experience-progress": "./src/ExperienceProgress.tsx",
     "./hp-value": "./src/HpValue.tsx",
-    "./hp-action-buttons": "./src/HpActionButtons.tsx"
+    "./hp-action-buttons": "./src/HpActionButtons.tsx",
+    "./hp-maximum-button": "./src/HpMaximumButton.tsx"
   },
   "peerDependencies": {
     "react": "^19.0.0"
