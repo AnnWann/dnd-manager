@@ -1,3 +1,4 @@
+import { WeaponAttackTile } from "../../../../packages/game-ui/src/WeaponAttackTile"
 import { WeaponSwapDialog } from "../../../../packages/game-ui/src/WeaponSwapDialog"
 import { CharacterSheetSkillSearch, CharacterSheetSpellAttackTile } from "../../../../packages/game-ui/src/CharacterSheetSkillAndSpell"
 import {
@@ -508,14 +509,7 @@ export function MinimalCharacterSheet({
   )
 }
 
-function CompactWeaponTile({
-  character,
-  weapon,
-  attack,
-  damageBonus,
-  updateCharacter,
-  onClick,
-}: {
+function CompactWeaponTile({ character, weapon, attack, damageBonus, updateCharacter, onClick }: {
   character: CharacterTemplate
   weapon: Weapon
   attack: number
@@ -525,55 +519,27 @@ function CompactWeaponTile({
 }) {
   const die = getWeaponDamageDie(weapon) ?? weapon.damage
   const damage = `${die.quantity}${die.sides}${damageBonus !== 0 ? ` ${formatSigned(damageBonus)}` : ""}`
-  const hands = weapon.wieldedTwoHanded ? 2 : 1
-  return (
-    <div className="min-w-0 rounded-lg border border-border bg-bg-subtle px-2 py-2 text-center transition-colors hover:border-accentBorder">
-      <button
-        type="button"
-        title="Abrir opções de empunhadura, guardar ou largar"
-        onClick={onClick}
-        className="flex w-full min-w-0 items-center justify-center gap-1 rounded-md text-[10px] uppercase tracking-wide text-textMuted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
-      >
-        <span className="truncate">{weapon.name || "Arma"}{isWeaponImprovisedGrip(weapon) ? " · imp." : ""}</span>
-        <span className="shrink-0 rounded-full border border-accentBorder bg-accentBg px-1 py-0.5 text-[9px] font-semibold text-accent">{hands}M</span>
-      </button>
-      <button
-        type="button"
-        className="mt-1 rounded px-1 text-lg font-bold text-textH hover:bg-accentBg hover:text-accent"
-        title={rollModifierHint()}
-        onClick={(event) =>
-          requestActionRoll({
-            characterId: character.get("id"),
-            source: { type: "weapon", weaponId: weapon.id },
-            targetEntryId: getInitiativeRollSelection()?.entryId,
-            mode: rollModeFromEvent(event.nativeEvent),
-          })
-        }
-      >
-        {formatSigned(attack)}
-      </button>
-      <button
-        type="button"
-        className="block w-full rounded text-[10px] font-medium text-textMuted hover:bg-accentBg hover:text-accent"
-        title="Clique para rolar o dano no servidor."
-        onClick={() =>
-          requestDamageRoll({
-            characterId: character.get("id"),
-            label: `${weapon.name || "Arma"} — dano`,
-            source: { type: "weapon-damage", weaponId: weapon.id },
-            targetEntryId: getInitiativeRollSelection()?.entryId,
-          })
-        }
-      >
-        {damage}
-      </button>
-      <WeaponAmmunitionQuickControl
-        character={character}
-        weapon={weapon}
-        updateCharacter={updateCharacter}
-      />
-    </div>
-  )
+  return <WeaponAttackTile
+    name={weapon.name || "Arma"}
+    hands={weapon.wieldedTwoHanded ? 2 : 1}
+    improvised={isWeaponImprovisedGrip(weapon)}
+    attackBonus={formatSigned(attack)}
+    damage={damage}
+    onOpen={onClick}
+    onRollAttack={event => requestActionRoll({
+      characterId: character.get("id"),
+      source: { type: "weapon", weaponId: weapon.id },
+      targetEntryId: getInitiativeRollSelection()?.entryId,
+      mode: rollModeFromEvent(event.nativeEvent),
+    })}
+    onRollDamage={() => requestDamageRoll({
+      characterId: character.get("id"),
+      label: `${weapon.name || "Arma"} — dano`,
+      source: { type: "weapon-damage", weaponId: weapon.id },
+      targetEntryId: getInitiativeRollSelection()?.entryId,
+    })}
+    ammunition={<WeaponAmmunitionQuickControl character={character} weapon={weapon} updateCharacter={updateCharacter} />}
+  />
 }
 
 function CompactUnarmedTile({ character }: { character: CharacterTemplate }) {
