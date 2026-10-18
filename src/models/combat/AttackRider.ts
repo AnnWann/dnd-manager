@@ -7,7 +7,7 @@ import { getCharacterConditions } from "../characters/characterConditionStorage"
 import { getActiveAbilities, getEquippedItems } from "../characters/characterStats"
 import { isAbilityBenefitsActive } from "../abilities/abilityActivation"
 
-import type { AttackRider, AttackRiderContext, ParsedRiderDice } from "../../../packages/game-core/src/attackRiders"
+import { getAttackRiderDamageChoices, type AttackRider, type AttackRiderContext } from "../../../packages/game-core/src/attackRiders"
 export type { AttackRider, AttackRiderContext, ParsedRiderDice } from "../../../packages/game-core/src/attackRiders"
 export { parseAttackRiderDice, getWeaponRiderTransformation, resolveAttackRiderAttributeSelection, getAttackRiderDamageChoices, resolveAttackRiderDamageChoice } from "../../../packages/game-core/src/attackRiders"
 
