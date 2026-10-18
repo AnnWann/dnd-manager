@@ -24,7 +24,8 @@
     "./character-sheet-skill-spell": "./src/CharacterSheetSkillAndSpell.tsx",
     "./action-group": "./src/ActionGroup.tsx",
     "./resource-pill": "./src/ResourcePill.tsx",
-    "./weapon-ammunition-bar": "./src/WeaponAmmunitionBar.tsx"
+    "./weapon-ammunition-bar": "./src/WeaponAmmunitionBar.tsx",
+    "./character-config-stats": "./src/CharacterConfigStats.tsx"
   },
   "peerDependencies": {
     "react": "^19.0.0",
