@@ -15,6 +15,8 @@ else if(code!==original)writeFileSync(abs,code)
 }
 for(const p of toMove){const origin=resolve(p),target=resolve("apps/web",p);if(!existsSync(origin))continue;mkdirSync(dirname(target),{recursive:true});if(existsSync(target)){if(["src","api","api-handlers","server"].includes(p)){rmSync(origin,{recursive:true,force:true});continue}throw Error("destination conflict: "+p)}renameSync(origin,target)}
 const ts="apps/web/tsconfig.app.json";let t=readFileSync(ts,"utf8");t=t.replace('"include": ["./"]','"include": ["src/**/*"]');writeFileSync(ts,t)
+const fallbackTs=t.replace('"include": ["src/**/*"]', '"include": ["apps/web/src/**/*", "packages/**/*"]').replace('"./node_modules/.tmp/tsconfig.app.tsbuildinfo"', '"./node_modules/.tmp/root-tsconfig.app.tsbuildinfo"')
+writeFileSync("tsconfig.app.json",fallbackTs)
 for(const file of ["scripts/check-compendium-volumes.mjs","scripts/check-native-selects.mjs","scripts/check-user-workspace-boundaries.mjs","scripts/check-vercel-functions.mjs","scripts/audit-workspace-imports.mjs"]){let s=readFileSync(file,"utf8");s=s.replaceAll('"src/','"apps/web/src/').replaceAll('"api/','"apps/web/api/').replaceAll('path.resolve("src")','path.resolve("apps/web/src")').replaceAll('path.resolve("api")','path.resolve("apps/web/api")')
 if(file.includes("audit-workspace-imports"))s=s.replace('"src", "api", "api-handlers", "server",','"apps/web/src", "apps/web/api", "apps/web/api-handlers", "apps/web/server",')
 writeFileSync(file,s)}
