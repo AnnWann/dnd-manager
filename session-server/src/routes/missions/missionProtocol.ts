@@ -1,33 +1,5 @@
-export type SessionMissionStatus = "available" | "accepted" | "completed";
-export type SessionMissionPriority = "low" | "normal" | "high" | "urgent";
-
-export type SessionMissionObjective = {
-  id: string;
-  text: string;
-  completed: boolean;
-};
-
-export type SessionMission = {
-  id: string;
-  title: string;
-  summary: string;
-  description: string;
-  status: SessionMissionStatus;
-  priority: SessionMissionPriority;
-  giver: string;
-  location: string;
-  reward: string;
-  notes: string;
-  tags: string[];
-  objectives: SessionMissionObjective[];
-  recommendedLevel?: number;
-  deadline?: string;
-  acceptedBy?: string;
-  acceptedAt?: string;
-  completedAt?: string;
-  createdAt: string;
-  updatedAt: string;
-};
+import type { Mission as SessionMission, MissionStatus as SessionMissionStatus, MissionPriority as SessionMissionPriority, MissionObjective as SessionMissionObjective } from "../../../../packages/session-protocol/src/mission";
+export type { SessionMission, SessionMissionStatus, SessionMissionPriority, SessionMissionObjective };
 
 export type SessionMissionState = {
   initialized: boolean;
