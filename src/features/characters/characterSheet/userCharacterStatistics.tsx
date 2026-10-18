@@ -1,4 +1,5 @@
-import { Check, Sparkles } from "lucide-react"
+import { CharacterConfigStatCell as StatCell, CharacterConfigStatValue as StatValue, CharacterConfigSaveToggle } from "../../../../packages/game-ui/src/CharacterConfigStats"
+import { Sparkles } from "lucide-react"
 
 import { Input } from "../../../components/ui/Input"
 import { attributeShort } from "../../../lib/attributeShorts"
@@ -323,70 +324,19 @@ export function UserCharacterStatistics({
             const bonus = character.getSavingThrowBonus(attribute)
 
             return (
-              <button
+              <CharacterConfigSaveToggle
                 key={attribute}
-                type="button"
+                label={label}
+                bonus={formatSigned(bonus)}
+                proficient={proficient}
                 disabled={!canEdit}
-                aria-pressed={proficient}
-                onClick={() => toggleSavingThrow(attribute)}
-                className={cn(
-                  "flex min-h-12 items-center justify-between gap-2 rounded-lg border px-2.5 py-2 text-left",
-                  proficient
-                    ? "border-accentBorder bg-accentBg"
-                    : "border-border bg-bg-subtle",
-                  canEdit && "hover:border-accentBorder",
-                )}
-              >
-                <span className="flex min-w-0 items-center gap-1.5">
-                  <span
-                    className={cn(
-                      "flex h-4 w-4 shrink-0 items-center justify-center rounded-full border",
-                      proficient
-                        ? "border-accent bg-accent text-white"
-                        : "border-textMuted",
-                    )}
-                  >
-                    {proficient ? (
-                      <Check className="h-3 w-3" strokeWidth={3} />
-                    ) : null}
-                  </span>
-                  <span className="text-xs font-bold text-textH">{label}</span>
-                </span>
-
-                <span className="text-sm font-bold text-textH">
-                  {formatSigned(bonus)}
-                </span>
-              </button>
+                onToggle={() => toggleSavingThrow(attribute)}
+              />
             )
           })}
         </div>
       </div>
     </section>
-  )
-}
-
-function StatCell({
-  label,
-  children,
-}: {
-  label: string
-  children: React.ReactNode
-}) {
-  return (
-    <div className="rounded-lg border border-border bg-bg-subtle p-2 text-center">
-      <div className="mb-1 text-[10px] font-medium uppercase tracking-wide text-textMuted">
-        {label}
-      </div>
-      {children}
-    </div>
-  )
-}
-
-function StatValue({ value }: { value: string }) {
-  return (
-    <div className="flex h-10 items-center justify-center text-xl font-bold text-textH">
-      {value}
-    </div>
   )
 }
 
