@@ -5,70 +5,16 @@ import {
   type DamageAffinity,
 } from "../../../../../src/models/combat/Damage";
 
-export type SessionAbilitySource =
-  | { type: "character"; abilityId: string }
-  | { type: "race"; abilityId: string }
-  | { type: "equipment"; itemId: string; abilityId: string }
-  | { type: "condition"; conditionId: string; abilityId: string };
-
-export type SessionAbilitySeed = {
-  characterId: string;
-  character: Record<string, unknown>;
-};
-
+import type { SessionAbilitySource as SharedSource, SessionAbilitySeed as SharedSeed, SessionAbilityOperation as SharedOperation } from "../../../../../packages/session-protocol/src/abilities"
+export type SessionAbilitySource = SharedSource
+export type SessionAbilitySeed = SharedSeed<Record<string, unknown>>
 export type SessionAbilityState = {
-  characterId: string;
-  character: Record<string, unknown>;
-  initialized: true;
-  revision: number;
-};
-
-export type SessionAbilityOperation =
-  | {
-      type: "character.ability.use";
-      characterId: string;
-      source: SessionAbilitySource;
-      abilityName?: string;
-      activationOptionId?: string;
-      selectedWeaponId?: string;
-      resourceSelection?: AbilityResourceSelection;
-      bonusRollValues?: Record<string, number>;
-      bonusRollResults?: BonusRollResolution[];
-    }
-  | {
-      type: "character.ability.usage.spend";
-      characterId: string;
-      source: SessionAbilitySource;
-      abilityName?: string;
-    }
-  | {
-      type: "character.ability.restore";
-      characterId: string;
-      source: SessionAbilitySource;
-      abilityName?: string;
-    }
-  | {
-      type: "character.ability.deactivate";
-      characterId: string;
-      source: SessionAbilitySource;
-      abilityName?: string;
-    }
-  | {
-      type: "character.ability.save";
-      characterId: string;
-      ability: Record<string, unknown>;
-    }
-  | {
-      type: "character.ability.remove";
-      characterId: string;
-      abilityId: string;
-      abilityName?: string;
-    }
-  | {
-      type: "character.damageAffinities.set";
-      characterId: string;
-      damageAffinities: DamageAffinity[];
-    };
+  characterId: string
+  character: Record<string, unknown>
+  initialized: true
+  revision: number
+}
+export type SessionAbilityOperation = SharedOperation<AbilityResourceSelection, BonusRollResolution, DamageAffinity, Record<string, unknown>, never>
 
 export type SessionAbilityClientMessage =
   | { type: "session.abilities.initialize"; characters: SessionAbilitySeed[] }
