@@ -1,7 +1,24 @@
 # Shared game UI
 
-Presentation-only React components shared by the website and future VTT adapters.
+React presentation components that accept data, callbacks and optional host controls. These components must never read website contexts, routing, authentication, session transport, Prisma or Cloudflare state.
 
-`ExperienceProgress` accepts a computed experience snapshot and formatting callback; it does not import character context, session provider, router or authentication services. The current website uses the component via a compatibility integration in `characterExperience.tsx`.
+## Current extracted features
 
-Future extracts should follow the same controlled-props pattern rather than importing website providers.
+- Character sheet primitives: `ExperienceProgress`, `HpValue`, `HpActionButtons`, `HpMaximumButton`, `HpSummaryGrid`
+- Missions: `MissionBoard` (status columns and render-item callback), `MissionBoardToolbar` (counts and controlled search), `MissionCard` (mission details, objectives and host-supplied action buttons)
+- Initiative: `InitiativeRosterTable` (table headings and host-rendered rows), `InitiativeCardRail` (horizontal combat-card layout)
+- Inventory: `InventoryTileGrid` (responsive slots and empty state)
+
+## Integration contract
+
+The website continues to own the hooks, session providers, editable dialogs, role checks, authoritative operation dispatch, inventory compartment rules and data normalization. The shared UI accepts plain props or callback render slots, preserving the current behavior and allowing an Owlbear-hosted application to supply its own adapters.
+
+### Remaining work
+
+- Extract complete initiative row/inspector and HP action dialogs without importing website-specific controls/models.
+- Extract a reusable inventory container navigator, compartment operations UI, item editor and drag/drop layer with injected domain handlers.
+- Extract mission edit dialogs with host-supplied draft creation and persistence, rather than importing the website's mission context.
+- Refactor larger character sheet tabs/panels for a reusable `CharacterSheetView` boundary.
+- Add interaction/component tests for the shared feature views (currently guarded by frontend build and CI dependency boundaries).
+
+These are still outstanding; do not treat the current package as a complete standalone VTT user interface.
