@@ -1,3 +1,4 @@
+import { applyBonus, applyBonuses } from "../../../packages/game-core/src/numericBonuses"
 import { abilityModifier, proficiencyBonus } from "../../../packages/game-core/src/characterMath"
 import type { Ability } from "../abilities/Ability"
 import { isAbilityBenefitsActive } from "../abilities/abilityActivation"
