@@ -8,6 +8,7 @@ import {
   CheckCircle2,
   ClipboardCheck,
   Flag,
+  Plus,
 } from "lucide-react"
 
 import { Button } from "../components/ui/Button"
@@ -20,6 +21,7 @@ import {
   createEmptyMission,
   type Mission,
   type MissionStatus,
+  type MissionPriority,
 } from "../models/missions/Mission"
 
 const STATUS_CONFIG: Record<
