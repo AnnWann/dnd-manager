@@ -9,7 +9,10 @@
     "./death-saves": "./src/deathSaves.ts",
     "./experience": "./src/experience.ts",
     "./mission-board": "./src/missionBoard.ts",
-    "./manual-dice": "./src/manualDiceExpression.ts",
+    "./manual-dice": {
+      "types": "./src/manualDiceExpression.ts",
+      "default": "./dist/manualDiceExpression.js"
+    },
     "./pocketability": "./src/pocketability.ts",
     "./encumbrance": "./src/encumbrance.ts",
     "./item-consumption": "./src/itemConsumption.ts",
@@ -17,8 +20,14 @@
     "./weapon-rules": "./src/weaponRules.ts",
     "./character-math": "./src/characterMath.ts",
     "./attack-riders": "./src/attackRiders.ts",
-    "./long-rest-settings": "./src/longRestSupplySettings.ts",
-    "./campaign-progression": "./src/campaignProgression.ts",
+    "./long-rest-settings": {
+      "types": "./src/longRestSupplySettings.ts",
+      "default": "./dist/longRestSupplySettings.js"
+    },
+    "./campaign-progression": {
+      "types": "./src/campaignProgression.ts",
+      "default": "./dist/campaignProgression.js"
+    },
     "./standard-volumes": "./src/standardItemVolumes.ts",
     "./asi": "./src/asi.ts",
     "./item-weight": "./src/itemWeight.ts",
