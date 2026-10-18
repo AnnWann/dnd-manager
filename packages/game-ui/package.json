@@ -13,7 +13,8 @@
     "./mission-toolbar": "./src/MissionBoardToolbar.tsx",
     "./initiative-roster-table": "./src/InitiativeRosterTable.tsx",
     "./inventory-tile-grid": "./src/InventoryTileGrid.tsx",
-    "./mission-card": "./src/MissionCard.tsx"
+    "./mission-card": "./src/MissionCard.tsx",
+    "./initiative-card-rail": "./src/InitiativeCardRail.tsx"
   },
   "peerDependencies": {
     "react": "^19.0.0",
