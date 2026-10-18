@@ -26,7 +26,8 @@
     "./resource-pill": "./src/ResourcePill.tsx",
     "./weapon-ammunition-bar": "./src/WeaponAmmunitionBar.tsx",
     "./character-config-stats": "./src/CharacterConfigStats.tsx",
-    "./hand-grip-panel": "./src/HandGripPanel.tsx"
+    "./hand-grip-panel": "./src/HandGripPanel.tsx",
+    "./ammunition-selection-list": "./src/AmmunitionSelectionList.tsx"
   },
   "peerDependencies": {
     "react": "^19.0.0",
