@@ -1,3 +1,4 @@
+import { UnarmedAttackTile } from "../../../../packages/game-ui/src/UnarmedAttackTile"
 import { WeaponAttackTile } from "../../../../packages/game-ui/src/WeaponAttackTile"
 import { WeaponSwapDialog } from "../../../../packages/game-ui/src/WeaponSwapDialog"
 import { CharacterSheetSkillSearch, CharacterSheetSpellAttackTile } from "../../../../packages/game-ui/src/CharacterSheetSkillAndSpell"
@@ -544,43 +545,23 @@ function CompactWeaponTile({ character, weapon, attack, damageBonus, updateChara
 
 function CompactUnarmedTile({ character }: { character: CharacterTemplate }) {
   const profile = getUnarmedAttackProfile(character)
-  return (
-    <div className="min-w-0 rounded-lg border border-border bg-bg-subtle px-2 py-2 text-center">
-      <div className="truncate text-[10px] uppercase tracking-wide text-textMuted">
-        Ataque desarmado{profile.monkLevel > 0 ? ` · M${profile.monkLevel}` : ""}
-      </div>
-      <button
-        type="button"
-        className="mt-1 rounded px-1 text-lg font-bold text-textH hover:bg-accentBg hover:text-accent"
-        title={rollModifierHint()}
-        onClick={(event) =>
-          requestActionRoll({
-            characterId: character.get("id"),
-            source: { type: "unarmed" },
-            targetEntryId: getInitiativeRollSelection()?.entryId,
-            mode: rollModeFromEvent(event.nativeEvent),
-          })
-        }
-      >
-        {formatSigned(profile.attack)}
-      </button>
-      <button
-        type="button"
-        className="block w-full rounded text-[10px] font-medium text-textMuted hover:bg-accentBg hover:text-accent"
-        title="Clique para rolar o dano no servidor."
-        onClick={() =>
-          requestDamageRoll({
-            characterId: character.get("id"),
-            label: "Ataque desarmado — dano",
-            source: { type: "unarmed-damage" },
-            targetEntryId: getInitiativeRollSelection()?.entryId,
-          })
-        }
-      >
-        {formatUnarmedDamage(profile)}
-      </button>
-    </div>
-  )
+  return <UnarmedAttackTile
+    monkLevel={profile.monkLevel}
+    attackBonus={formatSigned(profile.attack)}
+    damage={formatUnarmedDamage(profile)}
+    onRollAttack={event => requestActionRoll({
+      characterId: character.get("id"),
+      source: { type: "unarmed" },
+      targetEntryId: getInitiativeRollSelection()?.entryId,
+      mode: rollModeFromEvent(event.nativeEvent),
+    })}
+    onRollDamage={() => requestDamageRoll({
+      characterId: character.get("id"),
+      label: "Ataque desarmado — dano",
+      source: { type: "unarmed-damage" },
+      targetEntryId: getInitiativeRollSelection()?.entryId,
+    })}
+  />
 }
 
 function normalizeSearchText(value: string): string {
