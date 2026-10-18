@@ -1,7 +1,7 @@
-import type { DamageType } from "../../../../../../src/models/combat/Damage";
-import type { CharacterGrantedEquipmentSpellUsageSource, CharacterGrantedSpellUsageSource } from "../../../../../../src/models/characters/characterGrantedSpells";
-import type { SpellResourceType } from "../../../../../../src/models/magic/spells/Spell";
-import type { SessionDiceRollMode, SessionRollVisibility } from "../../../../../../src/shared/session-runtime/diceRollProtocol";
+import type { DamageType } from "../../../../../web/src/models/combat/Damage";
+import type { CharacterGrantedEquipmentSpellUsageSource, CharacterGrantedSpellUsageSource } from "../../../../../web/src/models/characters/characterGrantedSpells";
+import type { SpellResourceType } from "../../../../../web/src/models/magic/spells/Spell";
+import type { SessionDiceRollMode, SessionRollVisibility } from "../../../../../web/src/shared/session-runtime/diceRollProtocol";
 
 import type { SessionSpellCastPayment as SharedSessionSpellCastPayment, SessionMagicOperation as SharedSessionMagicOperation } from "../../../../../../packages/session-protocol/src/magicOperations"
 export type SessionSpellCastPayment = SharedSessionSpellCastPayment<SpellResourceType, CharacterGrantedSpellUsageSource, CharacterGrantedEquipmentSpellUsageSource>

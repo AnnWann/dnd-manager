@@ -1,7 +1,7 @@
 import type {
   SessionRuntimeCharacterConfig,
   SessionRuntimeConfigSnapshot,
-} from "../../../../../src/shared/session-runtime/sessionRuntimeConfig";
+} from "../../../../web/src/shared/session-runtime/sessionRuntimeConfig";
 import type { SessionConnection } from "./protocol";
 
 export const RUNTIME_CONFIG_STATE_KEY = "runtime-config-state";

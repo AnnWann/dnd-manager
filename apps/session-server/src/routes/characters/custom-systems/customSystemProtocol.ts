@@ -1,8 +1,8 @@
-import type { JsonValue } from "../../../../../../src/models/customSystems/CustomGenerals";
+import type { JsonValue } from "../../../../../web/src/models/customSystems/CustomGenerals";
 import type {
   CustomAbilityInstance,
   CustomResourceState,
-} from "../../../../../../src/models/customSystems/CustomSystemDefinition";
+} from "../../../../../web/src/models/customSystems/CustomSystemDefinition";
 
 import type { SessionCustomSystemOperation as SharedSessionCustomSystemOperation } from "../../../../../../packages/session-protocol/src/customSystemOperations"
 export type SessionCustomSystemOperation = SharedSessionCustomSystemOperation<JsonValue, CustomResourceState, CustomAbilityInstance>

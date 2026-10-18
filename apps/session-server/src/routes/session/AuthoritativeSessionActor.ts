@@ -3,7 +3,7 @@ import { SessionActor as MissionSessionActor, MISSIONS_SHARED_SCOPE, MISSIONS_ST
 import { parseMissionClientMessage, type SessionMissionState } from "../missions/missionProtocol";
 import { SessionActor as InitiativeSessionActor, INITIATIVE_SHARED_SCOPE, INITIATIVE_STATE_KEY, readInitiativeState } from "../initiative/InitiativeSessionActor";
 import { parseInitiativeClientMessage, type SessionInitiativeState } from "../initiative/initiativeProtocol";
-import { normalizeInitiativeSession } from "../../../../../src/models/initiative/Initiative";
+import { normalizeInitiativeSession } from "../../../../web/src/models/initiative/Initiative";
 import { projectInitiativeSessionFromCharacterState } from "../initiative/initiativeCharacterProjection";
 import { projectInitiativeSessionFromCreatureState } from "../initiative/initiativeCreatureProjection";
 import { SessionActor as CustomSystemSessionActor } from "../characters/custom-systems/CustomSystemSessionActor";
@@ -15,9 +15,9 @@ import { parseRuntimeConfigPublishMessage } from "./runtimeConfigProtocol";
 import {
   CharacterTemplate,
   type CharacterTemplateProps,
-} from "../../../../../src/models/characters/CharacterTemplate";
-import { reconcileConfiguredCustomSystemStates } from "../../../../../src/lib/customSystems/CustomSystemConfigurationReconciliation";
-import type { SessionRuntimeConfigSnapshot } from "../../../../../src/shared/session-runtime/sessionRuntimeConfig";
+} from "../../../../web/src/models/characters/CharacterTemplate";
+import { reconcileConfiguredCustomSystemStates } from "../../../../web/src/lib/customSystems/CustomSystemConfigurationReconciliation";
+import type { SessionRuntimeConfigSnapshot } from "../../../../web/src/shared/session-runtime/sessionRuntimeConfig";
 import {
   RUNTIME_CONFIG_STATE_KEY,
   authorizeCharacterMutation,
@@ -170,7 +170,7 @@ export class SessionActor extends ComposedSessionActor {
       readRuntimeConfig(this.ctx.storage),
     ]);
     if (!initiative.initialized) return;
-    const current = normalizeInitiativeSession(initiative.session as Partial<import("../../../../../src/models/initiative/Initiative").InitiativeSession>);
+    const current = normalizeInitiativeSession(initiative.session as Partial<import("../../../../web/src/models/initiative/Initiative").InitiativeSession>);
     const characterProjection = projectInitiativeSessionFromCharacterState(current, { abilities, hp, conditions });
     const creatureProjection = projectInitiativeSessionFromCreatureState(characterProjection.session, runtimeConfig);
     if (!characterProjection.changed && !creatureProjection.changed) return;

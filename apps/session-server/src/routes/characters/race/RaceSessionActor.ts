@@ -1,5 +1,5 @@
-import { CharacterTemplate, type CharacterTemplateProps } from "../../../../../../src/models/characters/CharacterTemplate";
-import type { CharacterRace } from "../../../../../../src/models/races/CharacterRace";
+import { CharacterTemplate, type CharacterTemplateProps } from "../../../../../web/src/models/characters/CharacterTemplate";
+import type { CharacterRace } from "../../../../../web/src/models/races/CharacterRace";
 import { SessionActor as ProficiencySessionActor } from "../proficiencies/ProficiencySessionActor";
 import { parseRaceClientMessage, type SessionRaceOperation } from "./raceProtocol";
 import { MAX_CHARACTER_STATE_LOG_RECORDS } from "../sheet/characterState";

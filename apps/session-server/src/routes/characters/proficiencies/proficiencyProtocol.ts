@@ -1,4 +1,4 @@
-import type { Proficiency, ProficiencyCategory } from "../../../../../../src/models/sheet/Proficiency";
+import type { Proficiency, ProficiencyCategory } from "../../../../../web/src/models/sheet/Proficiency";
 
 import type { SessionProficiencyOperation as SharedSessionProficiencyOperation, SessionProficiencyClientMessage as SharedSessionProficiencyClientMessage } from "../../../../../../packages/session-protocol/src/proficiencyOperations"
 export type SessionProficiencyOperation = SharedSessionProficiencyOperation<Proficiency>;

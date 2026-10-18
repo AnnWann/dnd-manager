@@ -1,13 +1,13 @@
 import {
   CharacterTemplate,
   type CharacterTemplateProps,
-} from "../../../../../../src/models/characters/CharacterTemplate";
+} from "../../../../../web/src/models/characters/CharacterTemplate";
 import {
   getCustomClassConfig,
   normalizeCustomClassConfig,
   updateCustomClassConfig,
   type CustomClassRuntimeConfig,
-} from "../../../../../../src/models/characters/customClassConfig";
+} from "../../../../../web/src/models/characters/customClassConfig";
 import { SessionActor as ProfileSessionActor } from "../profile/ProfileSessionActor";
 import type { SessionAbilityState } from "../abilities/abilityProtocol";
 import { MAX_CHARACTER_STATE_LOG_RECORDS } from "../sheet/characterState";

@@ -23,7 +23,7 @@ console.log("Validated 7 local workspace manifests, independent exports and root
 
 const web = read("apps/web/package.json")
 const workerApp = read("apps/session-server/package.json")
-assert.equal(web.scripts.build, "npm --prefix ../.. run build")
+assert.ok(web.scripts.build.includes("vite build"))
 assert.equal(workerApp.scripts.typecheck, "npm run generate-types && tsc --noEmit")
 console.log("App workspace entry points preserve active deployment roots")
 

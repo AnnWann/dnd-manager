@@ -1,6 +1,6 @@
-import type { AttackRider } from "../../../../../src/models/combat/AttackRider"
-import { parseAttackRiderDice } from "../../../../../src/models/combat/AttackRider"
-import type { SessionResolvedDamageRoll } from "../../../../../src/shared/session-runtime/diceRollProtocol"
+import type { AttackRider } from "../../../../web/src/models/combat/AttackRider"
+import { parseAttackRiderDice } from "../../../../web/src/models/combat/AttackRider"
+import type { SessionResolvedDamageRoll } from "../../../../web/src/shared/session-runtime/diceRollProtocol"
 
 export function rollAttackRiderDamages(
   riders: readonly AttackRider[],

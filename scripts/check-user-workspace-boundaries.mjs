@@ -5,20 +5,20 @@ import { fileURLToPath } from "node:url"
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..")
 
 const scanRoots = [
-  "src/features/characters",
+  "apps/web/src/features/characters",
 ]
 
 const explicitSharedFiles = [
-  "src/views/CharacterView.tsx",
+  "apps/web/src/views/CharacterView.tsx",
 ]
 
 // These files are deliberately session-only. They may depend on CharacterContext
 // because they are mounted only below CharacterProvider/SessionCharacterWorkspace.
 const campaignOnlyAllowlist = new Set([
-  "src/features/characters/characterSelector.tsx",
-  "src/features/characters/characterSheet/masterConcentrationAlerts.tsx",
-  "src/features/characters/customSystems/MasterAbilityAcquisitionExceptions.tsx",
-  "src/features/characters/workspace/SessionCharacterWorkspace.tsx",
+  "apps/web/src/features/characters/characterSelector.tsx",
+  "apps/web/src/features/characters/characterSheet/masterConcentrationAlerts.tsx",
+  "apps/web/src/features/characters/customSystems/MasterAbilityAcquisitionExceptions.tsx",
+  "apps/web/src/features/characters/workspace/SessionCharacterWorkspace.tsx",
 ])
 
 const candidates = new Set(explicitSharedFiles)

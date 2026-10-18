@@ -1,4 +1,4 @@
-import { DAMAGE_TYPES, type DamageType } from "../../../../../src/models/combat/Damage";
+import { DAMAGE_TYPES, type DamageType } from "../../../../web/src/models/combat/Damage";
 
 import type { InitiativeDamagePart as SharedDamagePart, SessionInitiativeOperation as SharedInitiativeOperation } from "../../../../../packages/session-protocol/src/initiativeOperations"
 import type { InitiativeHpApplicationResult } from "../../../../../packages/session-protocol/src/initiativeHp"

@@ -1,5 +1,5 @@
-import type { CustomClassRuntimeConfig } from "../../../../../../src/models/characters/customClassConfig";
-import type { ClassName } from "../../../../../../src/models/sheet/Class";
+import type { CustomClassRuntimeConfig } from "../../../../../web/src/models/characters/customClassConfig";
+import type { ClassName } from "../../../../../web/src/models/sheet/Class";
 
 import type { SessionCustomClassOperation as SharedSessionCustomClassOperation, SessionCustomClassClientMessage as SharedSessionCustomClassClientMessage } from "../../../../../../packages/session-protocol/src/customClassOperations"
 export type SessionCustomClassOperation = SharedSessionCustomClassOperation<CustomClassRuntimeConfig, ClassName>;

@@ -1,12 +1,12 @@
 import { getBackgroundPresetStartingEquipment } from "./backgroundPresetEquipment";
-import type { CharacterBackground } from "../../../../../../src/models/characters/CharacterBackground";
-import { CharacterTemplate, type CharacterTemplateProps } from "../../../../../../src/models/characters/CharacterTemplate";
+import type { CharacterBackground } from "../../../../../web/src/models/characters/CharacterBackground";
+import { CharacterTemplate, type CharacterTemplateProps } from "../../../../../web/src/models/characters/CharacterTemplate";
 import {
   withCharacterBackground,
   withoutCharacterBackground,
-} from "../../../../../../src/models/characters/characterBackgroundStorage";
-import type { CharacterProfile } from "../../../../../../src/models/characters/characterProfile";
-import type { Proficiency } from "../../../../../../src/models/sheet/Proficiency";
+} from "../../../../../web/src/models/characters/characterBackgroundStorage";
+import type { CharacterProfile } from "../../../../../web/src/models/characters/characterProfile";
+import type { Proficiency } from "../../../../../web/src/models/sheet/Proficiency";
 import { SessionActor as RaceSessionActor } from "../race/RaceSessionActor";
 import { parseProfileClientMessage, type SessionProfileOperation } from "./profileProtocol";
 import { MAX_CHARACTER_STATE_LOG_RECORDS } from "../sheet/characterState";

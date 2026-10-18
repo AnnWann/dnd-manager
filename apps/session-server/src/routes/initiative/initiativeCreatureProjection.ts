@@ -1,6 +1,6 @@
-import type { SessionRuntimeConfigSnapshot } from "../../../../../src/shared/session-runtime/sessionRuntimeConfig";
-import { getCreatureEffectiveArmorClass } from "../../../../../src/models/creatures/CreatureCombatRuntime";
-import type { InitiativeSession } from "../../../../../src/models/initiative/Initiative";
+import type { SessionRuntimeConfigSnapshot } from "../../../../web/src/shared/session-runtime/sessionRuntimeConfig";
+import { getCreatureEffectiveArmorClass } from "../../../../web/src/models/creatures/CreatureCombatRuntime";
+import type { InitiativeSession } from "../../../../web/src/models/initiative/Initiative";
 
 export const COMPENDIUM_SOURCE_PREFIX = "compendium:";
 

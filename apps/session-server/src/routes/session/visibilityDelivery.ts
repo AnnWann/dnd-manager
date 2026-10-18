@@ -1,4 +1,4 @@
-import type { SessionRuntimeConfigSnapshot } from "../../../../../src/shared/session-runtime/sessionRuntimeConfig";
+import type { SessionRuntimeConfigSnapshot } from "../../../../web/src/shared/session-runtime/sessionRuntimeConfig";
 import type { SessionCharacterLifecycleState } from "./characterLifecycleProtocol";
 import type { SessionConnection } from "./protocol";
 import { reconcileSessionSupplyProjection } from "./supplyProjection";

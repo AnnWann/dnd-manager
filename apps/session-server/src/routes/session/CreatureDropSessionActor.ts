@@ -1,13 +1,13 @@
-import type { Itemmable } from "../../../../../src/models/items/item";
+import type { Itemmable } from "../../../../web/src/models/items/item";
 import {
   cloneCreatureDropItemForGround,
   normalizeCreatureDrops,
-} from "../../../../../src/models/creatures/CreatureDrops";
+} from "../../../../web/src/models/creatures/CreatureDrops";
 import {
   normalizeInitiativeSession,
   type InitiativeEntry,
   type InitiativeSession,
-} from "../../../../../src/models/initiative/Initiative";
+} from "../../../../web/src/models/initiative/Initiative";
 import { MAX_CHARACTER_STATE_LOG_RECORDS } from "../characters/sheet/characterState";
 import {
   creatureIdFromSourceId,

@@ -1,7 +1,7 @@
 import {
   isValidSessionConnectionSecret,
   verifySessionConnectionToken,
-} from "../../../../../src/shared/session-runtime/sessionConnectionToken";
+} from "../../../../web/src/shared/session-runtime/sessionConnectionToken";
 import type { SessionRole } from "./protocol";
 
 export interface SessionConnectionClaims {

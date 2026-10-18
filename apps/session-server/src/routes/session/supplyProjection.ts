@@ -1,12 +1,12 @@
 import {
   CharacterTemplate,
   type CharacterTemplateProps,
-} from "../../../../../src/models/characters/CharacterTemplate";
-import { getEffectiveRaceSupplyConsumption } from "../../../../../src/models/supplies/partySupply";
+} from "../../../../web/src/models/characters/CharacterTemplate";
+import { getEffectiveRaceSupplyConsumption } from "../../../../web/src/models/supplies/partySupply";
 import type {
   SessionSharedInventoryState,
   SessionSupplyConsumerSummary,
-} from "../../../../../src/features/session-runtime/inventorySessionProtocol";
+} from "../../../../web/src/features/session-runtime/inventorySessionProtocol";
 import type { SessionAbilityState } from "../characters/abilities/abilityProtocol";
 import type { SessionCharacterLifecycleState } from "./characterLifecycleProtocol";
 

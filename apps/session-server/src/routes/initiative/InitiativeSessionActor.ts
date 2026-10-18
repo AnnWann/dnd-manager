@@ -9,18 +9,18 @@ import {
 } from "../session/sessionLog";
 import { readRuntimeConfig } from "../session/runtimeConfigAccess";
 import { broadcastVisibilityFiltered } from "../session/visibilityDelivery";
-import { runCustomSystemAutomations } from "../../../../../src/lib/customSystems/CustomAutomationRuntime";
-import type { CustomSystemEventType } from "../../../../../src/models/customSystems/CustomAutomationDefinition";
-import type { CustomSystemDefinition } from "../../../../../src/models/customSystems/CustomSystemDefinition";
+import { runCustomSystemAutomations } from "../../../../web/src/lib/customSystems/CustomAutomationRuntime";
+import type { CustomSystemEventType } from "../../../../web/src/models/customSystems/CustomAutomationDefinition";
+import type { CustomSystemDefinition } from "../../../../web/src/models/customSystems/CustomSystemDefinition";
 import {
   CharacterTemplate,
   type CharacterTemplateProps,
-} from "../../../../../src/models/characters/CharacterTemplate";
-import { getEffectiveDamageAffinities } from "../../../../../src/models/characters/characterDamageAffinities";
-import type { CharacterCondition } from "../../../../../src/models/characters/CharacterCondition";
-import type { SessionRuntimeConfigSnapshot } from "../../../../../src/shared/session-runtime/sessionRuntimeConfig";
-import { resolveDamage, normalizeDamageAffinities, type DamageAffinity } from "../../../../../src/models/combat/Damage";
-import { getCreatureEffectiveArmorClass } from "../../../../../src/models/creatures/CreatureCombatRuntime";
+} from "../../../../web/src/models/characters/CharacterTemplate";
+import { getEffectiveDamageAffinities } from "../../../../web/src/models/characters/characterDamageAffinities";
+import type { CharacterCondition } from "../../../../web/src/models/characters/CharacterCondition";
+import type { SessionRuntimeConfigSnapshot } from "../../../../web/src/shared/session-runtime/sessionRuntimeConfig";
+import { resolveDamage, normalizeDamageAffinities, type DamageAffinity } from "../../../../web/src/models/combat/Damage";
+import { getCreatureEffectiveArmorClass } from "../../../../web/src/models/creatures/CreatureCombatRuntime";
 import {
   addInitiativeEntries,
   advanceInitiativeTurn,
@@ -41,7 +41,7 @@ import {
   type InitiativeEntry,
   type InitiativeSession,
   type NewInitiativeEntry,
-} from "../../../../../src/models/initiative/Initiative";
+} from "../../../../web/src/models/initiative/Initiative";
 import {
   parseInitiativeClientMessage,
   type SessionInitiativeOperation,
@@ -501,7 +501,7 @@ function enrichCustomInitiativeActionConditions(
 }
 
 function richCustomConditionDuration(
-  duration: import("../../../../../src/models/characters/CharacterCondition").CharacterConditionDuration & { amount?: number } | undefined,
+  duration: import("../../../../web/src/models/characters/CharacterCondition").CharacterConditionDuration & { amount?: number } | undefined,
   fallback: SessionCondition["duration"],
 ): SessionCondition["duration"] {
   if (!duration) return fallback;
@@ -1060,7 +1060,7 @@ function normalizeInitiativeDuration(value: unknown): InitiativeEntry["condition
 }
 
 function customConditionDuration(
-  duration: import("../../../../../src/models/characters/CharacterCondition").CharacterConditionDuration & { amount?: number } | undefined,
+  duration: import("../../../../web/src/models/characters/CharacterCondition").CharacterConditionDuration & { amount?: number } | undefined,
   targetEntryId: string,
 ): InitiativeEntry["conditions"][number]["duration"] {
   if (!duration) return { type: "manual" };

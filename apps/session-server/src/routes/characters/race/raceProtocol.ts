@@ -1,6 +1,6 @@
-import type { CharacterRace } from "../../../../../../src/models/races/CharacterRace";
-import type { CharacterSkills } from "../../../../../../src/models/sheet/CharacterSkills";
-import type { SavingThrowProficiencies } from "../../../../../../src/models/sheet/SavingThrows";
+import type { CharacterRace } from "../../../../../web/src/models/races/CharacterRace";
+import type { CharacterSkills } from "../../../../../web/src/models/sheet/CharacterSkills";
+import type { SavingThrowProficiencies } from "../../../../../web/src/models/sheet/SavingThrows";
 
 import type { SessionRaceOperation as SharedSessionRaceOperation, SessionRaceClientMessage as SharedSessionRaceClientMessage } from "../../../../../../packages/session-protocol/src/raceOperations"
 export type SessionRaceOperation = SharedSessionRaceOperation<CharacterRace, CharacterSkills, SavingThrowProficiencies>;

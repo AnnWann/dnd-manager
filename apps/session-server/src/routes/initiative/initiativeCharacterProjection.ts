@@ -7,19 +7,19 @@ import type {
 import {
   CharacterTemplate,
   type CharacterTemplateProps,
-} from "../../../../../src/models/characters/CharacterTemplate";
-import type { CharacterCondition } from "../../../../../src/models/characters/CharacterCondition";
-import { withCharacterConditions } from "../../../../../src/models/characters/characterConditionStorage";
+} from "../../../../web/src/models/characters/CharacterTemplate";
+import type { CharacterCondition } from "../../../../web/src/models/characters/CharacterCondition";
+import { withCharacterConditions } from "../../../../web/src/models/characters/characterConditionStorage";
 import {
   getCalculatedArmorClassWithShield,
   getEffectiveArmorClassWithShield,
-} from "../../../../../src/models/items/equipment/Shield";
+} from "../../../../web/src/models/items/equipment/Shield";
 import type {
   InitiativeCondition,
   InitiativeConditionDuration,
   InitiativeEntry,
   InitiativeSession,
-} from "../../../../../src/models/initiative/Initiative";
+} from "../../../../web/src/models/initiative/Initiative";
 
 export type InitiativeCharacterStateMaps = {
   abilities: Record<string, SessionAbilityState>;

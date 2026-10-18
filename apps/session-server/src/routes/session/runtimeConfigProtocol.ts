@@ -1,7 +1,7 @@
 import type { SessionRuntimeConfigPublishMessage as SharedSessionRuntimeConfigPublishMessage, SessionRuntimeConfigSnapshotMessage as SharedSessionRuntimeConfigSnapshotMessage } from "../../../../../packages/session-protocol/src/runtimeConfig"
-import type { SessionRuntimeConfigSnapshot } from "../../../../../src/shared/session-runtime/sessionRuntimeConfig";
-import { isCampaignProgressionSettings } from "../../../../../src/shared/progression/campaignProgression";
-import { isLongRestSupplySettings } from "../../../../../src/shared/rest/longRestSupplySettings";
+import type { SessionRuntimeConfigSnapshot } from "../../../../web/src/shared/session-runtime/sessionRuntimeConfig";
+import { isCampaignProgressionSettings } from "../../../../web/src/shared/progression/campaignProgression";
+import { isLongRestSupplySettings } from "../../../../web/src/shared/rest/longRestSupplySettings";
 
 export type SessionRuntimeConfigPublishMessage = SharedSessionRuntimeConfigPublishMessage<SessionRuntimeConfigSnapshot>
 export type SessionRuntimeConfigSnapshotMessage = SharedSessionRuntimeConfigSnapshotMessage<SessionRuntimeConfigSnapshot>

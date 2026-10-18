@@ -7,7 +7,7 @@ const workspacePaths = [
   "packages/session-protocol", "apps/web", "apps/session-server",
 ]
 const workspaces = workspacePaths.map((path) => ({ path, absolute: resolve(root, path), pkg: JSON.parse(readFileSync(join(path, "package.json"), "utf8")) }))
-const projectDirs = ["src", "api", "api-handlers", "server", "apps/session-server/src", "packages"]
+const projectDirs = ["apps/web/src", "apps/web/api", "apps/web/api-handlers", "apps/web/server", "apps/session-server/src", "packages"]
 const extensions = /\.(?:ts|tsx|js|jsx|mjs|mts|cts)$/
 const importPattern = /\b(?:from\s*|import\s*\(|import\s*|require\s*\()\s*["']([^"']+)["']/g
 const violations = []

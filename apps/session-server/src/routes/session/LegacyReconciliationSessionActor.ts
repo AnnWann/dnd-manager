@@ -12,12 +12,12 @@ import { MISSIONS_STATE_KEY } from "../missions/MissionSessionActor";
 import {
   normalizeInitiativeSession,
   type InitiativeSession,
-} from "../../../../../src/models/initiative/Initiative";
+} from "../../../../web/src/models/initiative/Initiative";
 import { projectInitiativeSessionFromCharacterState } from "../initiative/initiativeCharacterProjection";
 import { projectInitiativeSessionFromCreatureState } from "../initiative/initiativeCreatureProjection";
 import {
   haveSameLegacyCharacterIdentity,
-} from "../../../../../src/shared/legacy/legacyCharacterIdentity";
+} from "../../../../web/src/shared/legacy/legacyCharacterIdentity";
 import { readRuntimeConfig } from "./runtimeConfigAccess";
 import {
   broadcastAllVisibleCharacterSnapshots,

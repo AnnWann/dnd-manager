@@ -4,9 +4,13 @@
   "version": "0.1.0",
   "type": "module",
   "scripts": {
-    "dev": "npm --prefix ../.. run dev",
-    "build": "npm --prefix ../.. run build",
-    "lint": "npm --prefix ../.. run lint",
-    "preview": "npm --prefix ../.. run preview"
+    "dev": "vite",
+    "build": "npm --prefix ../.. run check:compendium-volumes && npm --prefix ../.. run check:user-workspace-boundaries && npm --prefix ../.. run check:vercel-functions && npm --prefix ../.. run check:native-selects && tsc -b && vite build",
+    "lint": "eslint .",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "@dnd-manager/game-ui": "0.1.0",
+    "@dnd-manager/game-core": "0.1.0"
   }
 }

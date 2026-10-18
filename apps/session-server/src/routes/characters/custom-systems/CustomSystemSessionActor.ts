@@ -13,12 +13,12 @@ import {
   setCustomResourceState,
   updateCustomAbilityField,
   type CustomSystemActor,
-} from "../../../../../../src/lib/customSystems/CustomSystemState";
+} from "../../../../../web/src/lib/customSystems/CustomSystemState";
 import {
   initializeCustomAbilityProgress,
   setCustomAbilityLearned,
   setCustomAbilityPrepared,
-} from "../../../../../../src/lib/customSystems/CustomAbilityManagement";
+} from "../../../../../web/src/lib/customSystems/CustomAbilityManagement";
 import {
   activateCustomAbilityWithRoll,
   activateCustomSystemActionWithRoll,
@@ -27,26 +27,26 @@ import {
   formatCustomRollResolutionSummary,
   getCustomAbilityRollDefinition,
   type CustomAbilityRollResolution,
-} from "../../../../../../src/lib/customSystems/CustomAbilityRoll";
+} from "../../../../../web/src/lib/customSystems/CustomAbilityRoll";
 import type {
   SessionActionRollResult,
   SessionResolvedDamageRoll,
   SessionResolvedPrimaryRoll,
-} from "../../../../../../src/shared/session-runtime/diceRollProtocol";
+} from "../../../../../web/src/shared/session-runtime/diceRollProtocol";
 import {
   runCustomSystemAutomation,
   runCustomSystemAutomations,
-} from "../../../../../../src/lib/customSystems/CustomAutomationRuntime";
+} from "../../../../../web/src/lib/customSystems/CustomAutomationRuntime";
 import {
   CharacterTemplate,
   type CharacterTemplateProps,
-} from "../../../../../../src/models/characters/CharacterTemplate";
-import { getCharacterConditions } from "../../../../../../src/models/characters/characterConditionStorage";
+} from "../../../../../web/src/models/characters/CharacterTemplate";
+import { getCharacterConditions } from "../../../../../web/src/models/characters/characterConditionStorage";
 import type {
   CharacterCustomSystemState,
   CustomAbilityInstance,
   CustomSystemDefinition,
-} from "../../../../../../src/models/customSystems/CustomSystemDefinition";
+} from "../../../../../web/src/models/customSystems/CustomSystemDefinition";
 import { SessionActor as BaseSessionActor } from "../../session/SessionActor";
 import type { SessionAbilityState } from "../abilities/abilityProtocol";
 import type {

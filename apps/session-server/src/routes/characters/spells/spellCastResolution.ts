@@ -1,15 +1,15 @@
-import type { CharacterTemplate } from "../../../../../../src/models/characters/CharacterTemplate";
-import type { DamageType } from "../../../../../../src/models/combat/Damage";
-import { getActiveAttackRiders } from "../../../../../../src/models/combat/AttackRider";
+import type { CharacterTemplate } from "../../../../../web/src/models/characters/CharacterTemplate";
+import type { DamageType } from "../../../../../web/src/models/combat/Damage";
+import { getActiveAttackRiders } from "../../../../../web/src/models/combat/AttackRider";
 import { rollAttackRiderDamages } from "../../session/attackRiderDice";
-import { abilityShortPtBr } from "../../../../../../src/i18n/ptBR";
-import type { Spell } from "../../../../../../src/models/magic/spells/Spell";
-import type { SpellSource } from "../../../../../../src/models/magic/spells/SpellSource";
+import { abilityShortPtBr } from "../../../../../web/src/i18n/ptBR";
+import type { Spell } from "../../../../../web/src/models/magic/spells/Spell";
+import type { SpellSource } from "../../../../../web/src/models/magic/spells/SpellSource";
 import {
   evaluateSpellDamageDiceQuantity,
   evaluateSpellScaledNumber,
   getEffectiveSpellResolution,
-} from "../../../../../../src/models/magic/spells/spellResolution";
+} from "../../../../../web/src/models/magic/spells/spellResolution";
 import type {
   SessionActionInstanceResult,
   SessionActionRollResult,
@@ -17,7 +17,7 @@ import type {
   SessionRollVisibility,
   SessionResolvedD20Roll,
   SessionResolvedDamageRoll,
-} from "../../../../../../src/shared/session-runtime/diceRollProtocol";
+} from "../../../../../web/src/shared/session-runtime/diceRollProtocol";
 
 const MAX_SPELL_INSTANCES = 100;
 const MAX_SPELL_DAMAGE_COMPONENTS = 20;

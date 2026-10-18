@@ -1,18 +1,18 @@
-import { abilityShortPtBr } from "../../../../../src/i18n/ptBR"
+import { abilityShortPtBr } from "../../../../web/src/i18n/ptBR"
 import {
   getCreatureEffectiveAbilityModifier,
   getCreatureEffectiveSpellAttackBonus,
   getCreatureEffectiveSpellDamageBonus,
   getCreatureEffectiveSpellSaveDc,
-} from "../../../../../src/models/creatures/CreatureCombatRuntime"
-import type { CompendiumCreature } from "../../../../../src/models/creatures/CompendiumCreature"
-import type { InitiativeEntry } from "../../../../../src/models/initiative/Initiative"
-import type { Spell } from "../../../../../src/models/magic/spells/Spell"
+} from "../../../../web/src/models/creatures/CreatureCombatRuntime"
+import type { CompendiumCreature } from "../../../../web/src/models/creatures/CompendiumCreature"
+import type { InitiativeEntry } from "../../../../web/src/models/initiative/Initiative"
+import type { Spell } from "../../../../web/src/models/magic/spells/Spell"
 import {
   evaluateSpellDamageDiceQuantity,
   evaluateSpellScaledNumber,
   getEffectiveSpellResolution,
-} from "../../../../../src/models/magic/spells/spellResolution"
+} from "../../../../web/src/models/magic/spells/spellResolution"
 import type {
   SessionActionInstanceResult,
   SessionActionRollResult,
@@ -20,7 +20,7 @@ import type {
   SessionResolvedD20Roll,
   SessionResolvedDamageRoll,
   SessionRollVisibility,
-} from "../../../../../src/shared/session-runtime/diceRollProtocol"
+} from "../../../../web/src/shared/session-runtime/diceRollProtocol"
 
 const MAX_SPELL_INSTANCES = 100
 const MAX_SPELL_DAMAGE_COMPONENTS = 20

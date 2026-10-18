@@ -1,6 +1,6 @@
-import type { CharacterBackground } from "../../../../../../src/models/characters/CharacterBackground";
-import type { CharacterProfile, CharacterRelationship } from "../../../../../../src/models/characters/characterProfile";
-import type { ProficiencyCategory } from "../../../../../../src/models/sheet/Proficiency";
+import type { CharacterBackground } from "../../../../../web/src/models/characters/CharacterBackground";
+import type { CharacterProfile, CharacterRelationship } from "../../../../../web/src/models/characters/characterProfile";
+import type { ProficiencyCategory } from "../../../../../web/src/models/sheet/Proficiency";
 
 import type { SessionProfileOperation as SharedSessionProfileOperation, SessionProfileClientMessage as SharedSessionProfileClientMessage } from "../../../../../../packages/session-protocol/src/profileOperations"
 export type SessionProfileOperation = SharedSessionProfileOperation<CharacterProfile, CharacterBackground>;

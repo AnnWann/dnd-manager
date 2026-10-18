@@ -1,18 +1,18 @@
-import type { CharacterTemplateProps } from "../../../../../../src/models/characters/CharacterTemplate";
-import { CharacterTemplate } from "../../../../../../src/models/characters/CharacterTemplate";
+import type { CharacterTemplateProps } from "../../../../../web/src/models/characters/CharacterTemplate";
+import { CharacterTemplate } from "../../../../../web/src/models/characters/CharacterTemplate";
 import {
   getEquippedItem,
   moveEquippedItemToCharacterStorage,
   type EquippedItemReference,
-} from "../../../../../../src/models/characters/characterEquippedItemMovement";
-import { swapPocketWeaponWithRules, wieldPocketWeaponWithRules } from "../../../../../../src/models/characters/characterEquipmentInteractions";
-import { unequipPocketStack } from "../../../../../../src/models/characters/characterInventoryStacks";
-import { toggleInventoryItemAttunement } from "../../../../../../src/models/characters/characterInventory";
-import { applyConsumableEffect } from "../../../../../../src/models/characters/characterConsumables";
-import { consumeItemQuantity, isConsumableItemKind } from "../../../../../../src/models/items/itemConsumption";
-import type { Itemmable } from "../../../../../../src/models/items/item";
-import { getCharacterConditions, withCharacterConditions } from "../../../../../../src/models/characters/characterConditionStorage";
-import { getCurrentMaxHp } from "../../../../../../src/models/characters/characterHp";
+} from "../../../../../web/src/models/characters/characterEquippedItemMovement";
+import { swapPocketWeaponWithRules, wieldPocketWeaponWithRules } from "../../../../../web/src/models/characters/characterEquipmentInteractions";
+import { unequipPocketStack } from "../../../../../web/src/models/characters/characterInventoryStacks";
+import { toggleInventoryItemAttunement } from "../../../../../web/src/models/characters/characterInventory";
+import { applyConsumableEffect } from "../../../../../web/src/models/characters/characterConsumables";
+import { consumeItemQuantity, isConsumableItemKind } from "../../../../../web/src/models/items/itemConsumption";
+import type { Itemmable } from "../../../../../web/src/models/items/item";
+import { getCharacterConditions, withCharacterConditions } from "../../../../../web/src/models/characters/characterConditionStorage";
+import { getCurrentMaxHp } from "../../../../../web/src/models/characters/characterHp";
 import { SessionActor as MagicSessionActor } from "../spells/MagicSessionActor";
 import { parseEquipmentClientMessage, type SessionEquipmentOperation } from "./equipmentProtocol";
 import { MAX_CHARACTER_STATE_LOG_RECORDS } from "../sheet/characterState";

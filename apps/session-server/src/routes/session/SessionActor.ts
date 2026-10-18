@@ -1,4 +1,4 @@
-import type { SessionRuntimeConfigSnapshot } from "../../../../../src/shared/session-runtime/sessionRuntimeConfig";
+import type { SessionRuntimeConfigSnapshot } from "../../../../web/src/shared/session-runtime/sessionRuntimeConfig";
 import { DurableObject } from "cloudflare:workers";
 import {
   applyConditionOperation,
@@ -25,24 +25,24 @@ import type { SessionAbilityState } from "../characters/abilities/abilityProtoco
 import {
   CharacterTemplate,
   type CharacterTemplateProps,
-} from "../../../../../src/models/characters/CharacterTemplate";
-import { getCurrentMaxHp } from "../../../../../src/models/characters/characterHp";
-import { hasProficiency } from "../../../../../src/models/characters/characterProficiencies";
-import { getUnarmedAttackProfile } from "../../../../../src/models/characters/unarmedAttack";
-import type { Ability } from "../../../../../src/models/abilities/Ability";
-import type { AbilityRollDefinition } from "../../../../../src/models/abilities/AbilityRoll";
-import { validateAbilityRoll } from "../../../../../src/models/abilities/AbilityRoll";
-import { applyBonuses, getEquippedItems, getScopedCharacterBonuses } from "../../../../../src/models/characters/characterStats";
-import { getActiveAttackRiders, getCharacterWeaponAttackAttribute, getWeaponRiderTransformation, parseAttackRiderDice } from "../../../../../src/models/combat/AttackRider";
+} from "../../../../web/src/models/characters/CharacterTemplate";
+import { getCurrentMaxHp } from "../../../../web/src/models/characters/characterHp";
+import { hasProficiency } from "../../../../web/src/models/characters/characterProficiencies";
+import { getUnarmedAttackProfile } from "../../../../web/src/models/characters/unarmedAttack";
+import type { Ability } from "../../../../web/src/models/abilities/Ability";
+import type { AbilityRollDefinition } from "../../../../web/src/models/abilities/AbilityRoll";
+import { validateAbilityRoll } from "../../../../web/src/models/abilities/AbilityRoll";
+import { applyBonuses, getEquippedItems, getScopedCharacterBonuses } from "../../../../web/src/models/characters/characterStats";
+import { getActiveAttackRiders, getCharacterWeaponAttackAttribute, getWeaponRiderTransformation, parseAttackRiderDice } from "../../../../web/src/models/combat/AttackRider";
 import { rollAttackRiderDamages } from "./attackRiderDice";
 import {
   getWeaponDamageDie,
   isWeaponImprovisedGrip,
   type Weapon,
-} from "../../../../../src/models/items/equipment/Weapon";
-import type { Attribute } from "../../../../../src/models/sheet/Attribute";
-import { abilityShortPtBr } from "../../../../../src/i18n/ptBR";
-import type { Skill } from "../../../../../src/models/sheet/Skills";
+} from "../../../../web/src/models/items/equipment/Weapon";
+import type { Attribute } from "../../../../web/src/models/sheet/Attribute";
+import { abilityShortPtBr } from "../../../../web/src/i18n/ptBR";
+import type { Skill } from "../../../../web/src/models/sheet/Skills";
 import {
   initiativeEntryDisplayName,
   normalizeInitiativeSession,
@@ -50,30 +50,30 @@ import {
   updateInitiativeEntry,
   type InitiativeEntry,
   type InitiativeSession,
-} from "../../../../../src/models/initiative/Initiative";
-import { CREATURE_ATTRIBUTE_LABELS, CREATURE_SKILL_OPTIONS, findCreatureSave, findCreatureSkill, parseCreatureDamageFormula } from "../../../../../src/models/creatures/CreatureRolls";
-import { createCreatureCombatCharacter, getCreatureEffectiveAbilityCheckBonus, getCreatureEffectiveAbilityModifier, getCreatureEffectiveInitiative, getCreatureEffectiveSaveBonus, getCreatureEffectiveSkillBonus, getCreatureFeatureEffectiveAttackBonus, getCreatureFeatureEffectiveContestBonus, getCreatureFeatureEffectiveDamageBonus } from "../../../../../src/models/creatures/CreatureCombatRuntime";
-import type { CompendiumCreature, CreatureFeature } from "../../../../../src/models/creatures/CompendiumCreature";
+} from "../../../../web/src/models/initiative/Initiative";
+import { CREATURE_ATTRIBUTE_LABELS, CREATURE_SKILL_OPTIONS, findCreatureSave, findCreatureSkill, parseCreatureDamageFormula } from "../../../../web/src/models/creatures/CreatureRolls";
+import { createCreatureCombatCharacter, getCreatureEffectiveAbilityCheckBonus, getCreatureEffectiveAbilityModifier, getCreatureEffectiveInitiative, getCreatureEffectiveSaveBonus, getCreatureEffectiveSkillBonus, getCreatureFeatureEffectiveAttackBonus, getCreatureFeatureEffectiveContestBonus, getCreatureFeatureEffectiveDamageBonus } from "../../../../web/src/models/creatures/CreatureCombatRuntime";
+import type { CompendiumCreature, CreatureFeature } from "../../../../web/src/models/creatures/CompendiumCreature";
 import {
   getCharacterConditions,
   withCharacterConditions,
-} from "../../../../../src/models/characters/characterConditionStorage";
-import { takeShortRest } from "../../../../../src/models/characters/characterRest";
+} from "../../../../web/src/models/characters/characterConditionStorage";
+import { takeShortRest } from "../../../../web/src/models/characters/characterRest";
 import {
   takeLongRest,
   takePartialLongRest,
-} from "../../../../../src/models/characters/characterRestWithSorcery";
-import { runCustomSystemAutomations } from "../../../../../src/lib/customSystems/CustomAutomationRuntime";
-import type { CustomSystemDefinition } from "../../../../../src/models/customSystems/CustomSystemDefinition";
-import type { Itemmable } from "../../../../../src/models/items/item";
+} from "../../../../web/src/models/characters/characterRestWithSorcery";
+import { runCustomSystemAutomations } from "../../../../web/src/lib/customSystems/CustomAutomationRuntime";
+import type { CustomSystemDefinition } from "../../../../web/src/models/customSystems/CustomSystemDefinition";
+import type { Itemmable } from "../../../../web/src/models/items/item";
 import {
   consumeSelectedSupplies,
   getLongRestSupplyRequirements,
   getSupplySelectionTotals,
   hasEnoughLongRestSupplies,
   type LongRestSupplySelection,
-} from "../../../../../src/models/supplies/partySupply";
-import { normalizeLongRestSupplySettings } from "../../../../../src/shared/rest/longRestSupplySettings";
+} from "../../../../web/src/models/supplies/partySupply";
+import { normalizeLongRestSupplySettings } from "../../../../web/src/shared/rest/longRestSupplySettings";
 import {
   encodeServerSessionMessage,
   parseClientSessionMessage,
@@ -103,15 +103,15 @@ import {
   isDigitalDiceRollingEnabled,
   readRuntimeConfig,
 } from "./runtimeConfigAccess";
-import type { SessionActionRollRequest, SessionActionRollResult, SessionCreatureRollRequest, SessionDiceRollRequest, SessionDiceRollResult, SessionResolvedD20Roll, SessionResolvedDamageRoll } from "../../../../../src/shared/session-runtime/diceRollProtocol";
-import { parseManualDiceExpression } from "../../../../../src/shared/session-runtime/manualDiceExpression";
+import type { SessionActionRollRequest, SessionActionRollResult, SessionCreatureRollRequest, SessionDiceRollRequest, SessionDiceRollResult, SessionResolvedD20Roll, SessionResolvedDamageRoll } from "../../../../web/src/shared/session-runtime/diceRollProtocol";
+import { parseManualDiceExpression } from "../../../../web/src/shared/session-runtime/manualDiceExpression";
 import {
   broadcastVisibilityFiltered,
   refreshConnectionVisibility,
   sendVisibilityFiltered,
 } from "./visibilityDelivery";
 import { resolveCreatureSpellCastAction } from "./creatureSpellCastResolution";
-import type { SessionInitiativeState } from "../../../../../src/features/session-runtime/initiativeSessionProtocol";
+import type { SessionInitiativeState } from "../../../../web/src/features/session-runtime/initiativeSessionProtocol";
 
 const CONNECTION_TIMEOUT_MS = 90_000;
 const CLOSE_CODE_TIMEOUT = 4000;

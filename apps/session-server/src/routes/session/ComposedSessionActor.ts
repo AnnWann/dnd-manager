@@ -43,9 +43,9 @@ import {
 import {
   CharacterTemplate,
   type CharacterTemplateProps,
-} from "../../../../../src/models/characters/CharacterTemplate";
-import { getCurrentMaxHp } from "../../../../../src/models/characters/characterHp";
-import { getCharacterConditions } from "../../../../../src/models/characters/characterConditionStorage";
+} from "../../../../web/src/models/characters/CharacterTemplate";
+import { getCurrentMaxHp } from "../../../../web/src/models/characters/characterHp";
+import { getCharacterConditions } from "../../../../web/src/models/characters/characterConditionStorage";
 import {
   broadcastVisibilityFiltered,
   createVisibilityFilteredContext,

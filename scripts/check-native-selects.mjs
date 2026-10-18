@@ -1,9 +1,9 @@
 import { readdir, readFile } from "node:fs/promises"
 import path from "node:path"
 
-const ROOT = path.resolve("src")
+const ROOT = path.resolve("apps/web/src")
 const ALLOWED_NATIVE_SELECT_FILES = new Set([
-  path.normalize("src/components/ui/Select.tsx"),
+  path.normalize("apps/web/src/components/ui/Select.tsx"),
 ])
 
 const offenders = []

@@ -1,38 +1,38 @@
-import type { CharacterTemplateProps } from "../../../../../../src/models/characters/CharacterTemplate";
-import { getSpellCastDamageChoices, getSpellOnCastAttackRiders } from "../../../../../../src/models/magic/spells/spellAttackRiders";
-import { resolveAttackRiderDamageChoice } from "../../../../../../src/models/combat/AttackRider";
-import { getAbilityUsageMax } from "../../../../../../src/models/abilities/abilityActivation";
-import { getCharacterGrantedSpells, spendGrantedEquipmentSpellUse, spendGrantedSpellAbilityUse, type CharacterGrantedSpell } from "../../../../../../src/models/characters/characterGrantedSpells";
-import { CharacterTemplate } from "../../../../../../src/models/characters/CharacterTemplate";
+import type { CharacterTemplateProps } from "../../../../../web/src/models/characters/CharacterTemplate";
+import { getSpellCastDamageChoices, getSpellOnCastAttackRiders } from "../../../../../web/src/models/magic/spells/spellAttackRiders";
+import { resolveAttackRiderDamageChoice } from "../../../../../web/src/models/combat/AttackRider";
+import { getAbilityUsageMax } from "../../../../../web/src/models/abilities/abilityActivation";
+import { getCharacterGrantedSpells, spendGrantedEquipmentSpellUse, spendGrantedSpellAbilityUse, type CharacterGrantedSpell } from "../../../../../web/src/models/characters/characterGrantedSpells";
+import { CharacterTemplate } from "../../../../../web/src/models/characters/CharacterTemplate";
 import {
   addSpellCastingDescription,
   removeSpellCastingDescription,
   updateSpellCastingDescription,
-} from "../../../../../../src/models/characters/characterMagic";
+} from "../../../../../web/src/models/characters/characterMagic";
 import {
   restoreCustomSpellSlot,
   spendCustomSpellSlot,
-} from "../../../../../../src/models/characters/customClassConfig";
+} from "../../../../../web/src/models/characters/customClassConfig";
 import {
   restoreSorceryPointDerived,
   spendSorceryPointDerived,
   synchronizeSorceryPointPool,
-} from "../../../../../../src/models/characters/characterSorceryPoints";
-import { restoreKi, spendKi } from "../../../../../../src/models/characters/characterKi";
+} from "../../../../../web/src/models/characters/characterSorceryPoints";
+import { restoreKi, spendKi } from "../../../../../web/src/models/characters/characterKi";
 import {
   restoreChannelDivinity,
   spendChannelDivinity,
-} from "../../../../../../src/models/characters/characterChannelDivinity";
-import { withCharacterConditions } from "../../../../../../src/models/characters/characterConditionStorage";
-import type { CharacterSpells } from "../../../../../../src/models/magic/spells/CharacterSpells";
-import type { Spell, SpellResourceCost } from "../../../../../../src/models/magic/spells/Spell";
-import { canPaySpellResourceCost, getEffectiveSpellResourceOptions, spendSpellResourceCost } from "../../../../../../src/models/magic/spells/spellResourceCost";
-import type { MagicCircleLevel } from "../../../../../../src/models/magic/spells/spellDefinitions";
-import type { MetamagicId } from "../../../../../../src/models/magic/metamagic/Metamagic";
+} from "../../../../../web/src/models/characters/characterChannelDivinity";
+import { withCharacterConditions } from "../../../../../web/src/models/characters/characterConditionStorage";
+import type { CharacterSpells } from "../../../../../web/src/models/magic/spells/CharacterSpells";
+import type { Spell, SpellResourceCost } from "../../../../../web/src/models/magic/spells/Spell";
+import { canPaySpellResourceCost, getEffectiveSpellResourceOptions, spendSpellResourceCost } from "../../../../../web/src/models/magic/spells/spellResourceCost";
+import type { MagicCircleLevel } from "../../../../../web/src/models/magic/spells/spellDefinitions";
+import type { MetamagicId } from "../../../../../web/src/models/magic/metamagic/Metamagic";
 import { SessionActor as AbilitySessionActor } from "../abilities/AbilitySessionActor";
 import { parseMagicClientMessage, type SessionMagicOperation, type SessionSpellCastPayment } from "./magicProtocol";
 import { resolveSpellCastAction } from "./spellCastResolution";
-import { consumeCharacterScroll, getUsableScroll } from "../../../../../../src/models/characters/characterScrolls";
+import { consumeCharacterScroll, getUsableScroll } from "../../../../../web/src/models/characters/characterScrolls";
 import { MAX_CHARACTER_STATE_LOG_RECORDS } from "../sheet/characterState";
 import type { SessionConditionsState, SessionConnection, SessionHpState } from "../../session/protocol";
 import { applyConcentrationOperation } from "../sheet/concentrationState";

@@ -1,7 +1,7 @@
-import { CharacterTemplate, type CharacterTemplateProps } from "../../../../../src/models/characters/CharacterTemplate";
-import { getAmmunitionKey } from "../../../../../src/models/items/Ammunition";
-import { hasWeaponProperty, type Weapon } from "../../../../../src/models/items/equipment/Weapon";
-import type { Itemmable } from "../../../../../src/models/items/item";
+import { CharacterTemplate, type CharacterTemplateProps } from "../../../../web/src/models/characters/CharacterTemplate";
+import { getAmmunitionKey } from "../../../../web/src/models/items/Ammunition";
+import { hasWeaponProperty, type Weapon } from "../../../../web/src/models/items/equipment/Weapon";
+import type { Itemmable } from "../../../../web/src/models/items/item";
 import type { SessionAbilityState } from "../characters/abilities/abilityProtocol";
 import { MAX_CHARACTER_STATE_LOG_RECORDS } from "../characters/sheet/characterState";
 import { parseInventoryClientMessage } from "../characters/inventory/inventoryProtocol";

@@ -1,6 +1,6 @@
-import type { CustomSystemDefinition } from "../../../../../../src/models/customSystems/CustomSystemDefinition";
-import type { CreationCharacterCustomSystemConfiguration } from "../../../../../../src/shared/creation/creation.types";
-import type { SessionRuntimeConfigSnapshot } from "../../../../../../src/shared/session-runtime/sessionRuntimeConfig";
+import type { CustomSystemDefinition } from "../../../../../web/src/models/customSystems/CustomSystemDefinition";
+import type { CreationCharacterCustomSystemConfiguration } from "../../../../../web/src/shared/creation/creation.types";
+import type { SessionRuntimeConfigSnapshot } from "../../../../../web/src/shared/session-runtime/sessionRuntimeConfig";
 import {
   findRuntimeCustomSystem,
   getRuntimeCharacterConfig,

@@ -1,9 +1,9 @@
-import type { AbilityResourceSelection } from "../../../../../../src/models/abilities/Ability";
-import type { BonusRollResolution } from "../../../../../../src/models/bonuses/Bonus";
+import type { AbilityResourceSelection } from "../../../../../web/src/models/abilities/Ability";
+import type { BonusRollResolution } from "../../../../../web/src/models/bonuses/Bonus";
 import {
   DAMAGE_TYPES,
   type DamageAffinity,
-} from "../../../../../../src/models/combat/Damage";
+} from "../../../../../web/src/models/combat/Damage";
 
 import type { SessionAbilitySource as SharedSource, SessionAbilitySeed as SharedSeed, SessionAbilityOperation as SharedOperation } from "../../../../../../packages/session-protocol/src/abilities"
 export type SessionAbilitySource = SharedSource

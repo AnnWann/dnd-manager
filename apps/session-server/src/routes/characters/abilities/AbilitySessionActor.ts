@@ -1,26 +1,26 @@
-import type { Ability } from "../../../../../../src/models/abilities/Ability";
+import type { Ability } from "../../../../../web/src/models/abilities/Ability";
 import {
   canActivateAbility,
   endAbilityEffect,
   restoreAbilityUse,
   useAbilityEffect,
-} from "../../../../../../src/models/abilities/abilityActivation";
-import { abilityRequiresWeaponAttributeSelection, getAbilityAttackRiderDamageChoices, optionRequiresWeaponSelection } from "../../../../../../src/models/combat/AttackRider";
-import { hasAbilityResourceCosts, spendAbilityResourceCosts } from "../../../../../../src/models/abilities/abilityResourceCosts";
-import { getChannelDivinityPool } from "../../../../../../src/models/characters/characterChannelDivinity";
-import { getKiPool } from "../../../../../../src/models/characters/characterKi";
+} from "../../../../../web/src/models/abilities/abilityActivation";
+import { abilityRequiresWeaponAttributeSelection, getAbilityAttackRiderDamageChoices, optionRequiresWeaponSelection } from "../../../../../web/src/models/combat/AttackRider";
+import { hasAbilityResourceCosts, spendAbilityResourceCosts } from "../../../../../web/src/models/abilities/abilityResourceCosts";
+import { getChannelDivinityPool } from "../../../../../web/src/models/characters/characterChannelDivinity";
+import { getKiPool } from "../../../../../web/src/models/characters/characterKi";
 import {
   getCharacterConditions,
   withCharacterConditions,
-} from "../../../../../../src/models/characters/characterConditionStorage";
-import { spendGrantedSpellAbilityUse } from "../../../../../../src/models/characters/characterGrantedSpells";
-import { getCurrentMaxHp } from "../../../../../../src/models/characters/characterHp";
+} from "../../../../../web/src/models/characters/characterConditionStorage";
+import { spendGrantedSpellAbilityUse } from "../../../../../web/src/models/characters/characterGrantedSpells";
+import { getCurrentMaxHp } from "../../../../../web/src/models/characters/characterHp";
 import {
   CharacterTemplate,
   type CharacterTemplateProps,
-} from "../../../../../../src/models/characters/CharacterTemplate";
-import { normalizeDamageAffinities } from "../../../../../../src/models/combat/Damage";
-import { listBonusRollRequirements, listResolvedBonusRolls } from "../../../../../../src/models/bonuses/BonusRoll";
+} from "../../../../../web/src/models/characters/CharacterTemplate";
+import { normalizeDamageAffinities } from "../../../../../web/src/models/combat/Damage";
+import { listBonusRollRequirements, listResolvedBonusRolls } from "../../../../../web/src/models/bonuses/BonusRoll";
 import { SessionActor as BaseSessionActor } from "../../session/SessionActor";
 import {
   parseAbilityClientMessage,
@@ -517,8 +517,8 @@ function updateRaceAbilityState(
   optionId?: string,
   bonusRollValues?: Record<string, number>,
   selectedWeaponId?: string,
-  selectedDamageType?: import("../../../../../../src/models/combat/Damage").DamageType,
-  selectedWeaponAttribute?: import("../../../../../../src/models/sheet/Attribute").Attribute,
+  selectedDamageType?: import("../../../../../web/src/models/combat/Damage").DamageType,
+  selectedWeaponAttribute?: import("../../../../../web/src/models/sheet/Attribute").Attribute,
 ): CharacterTemplate {
   const race = character.get("sheet").race;
   const ability = (race.naturalAbilities ?? []).find(
