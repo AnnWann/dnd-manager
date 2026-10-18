@@ -6,6 +6,12 @@ export type { InitiativeHpApplicationResult } from "../../../../packages/session
 export type InitiativeDamagePart = SharedDamagePart<DamageType>
 export type SessionInitiativeOperation = SharedInitiativeOperation<DamageType>
 
+export type SessionInitiativeState = {
+  initialized: boolean;
+  revision: number;
+  session: Record<string, unknown>;
+};
+
 export type SessionInitiativeClientMessage =
   | { type: "session.initiative.initialize"; session: Record<string, unknown> }
   | { type: "session.initiative.operation"; operation: SessionInitiativeOperation };
