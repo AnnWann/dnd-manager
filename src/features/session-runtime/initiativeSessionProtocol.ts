@@ -13,16 +13,8 @@ export type InitiativeDamagePart = {
   magical?: boolean
 }
 
-export type InitiativeHpApplicationResult = {
-  entryId: string
-  requested: number
-  applied: number
-  absorbedTemporary: number
-  hpDelta: number
-  concentrationCharacterId?: string
-  concentrationDc?: number
-  concentrationSource?: string
-}
+import type { InitiativeHpApplicationResult } from "../../../packages/session-protocol/src/initiativeHp"
+export type { InitiativeHpApplicationResult } from "../../../packages/session-protocol/src/initiativeHp"
 
 export type SessionInitiativeOperation =
   | { type: "initiative.entries.add"; characterId: "session"; entries: Record<string, unknown>[] }
