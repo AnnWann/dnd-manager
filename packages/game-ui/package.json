@@ -44,7 +44,9 @@
     "./combat-hp-editor": "./src/CombatHpEditor.tsx",
     "./manual-action-roll-fields": "./src/ManualActionRollFields.tsx",
     "./configuration-toggle-grid": "./src/ConfigurationToggleGrid.tsx",
-    "./mission-dialog": "./src/MissionDialog.tsx"
+    "./mission-dialog": "./src/MissionDialog.tsx",
+    "./inventory-floating-menu": "./src/InventoryFloatingMenu.tsx",
+    "./inventory-item-tile": "./src/InventoryItemTile.tsx"
   },
   "peerDependencies": {
     "react": "^19.0.0",
