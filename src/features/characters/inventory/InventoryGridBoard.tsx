@@ -1,3 +1,4 @@
+import { InventoryTileGrid } from "../../../../packages/game-ui/src/InventoryTileGrid"
 import { useState, type DragEvent, type ReactNode } from "react"
 import { ArrowLeft, Check, Folder, FolderOpen, GripVertical, MoveRight, Package, X } from "lucide-react"
 import { Button } from "../../../components/ui/Button"
@@ -348,22 +349,25 @@ export function InventoryGridBoard({
           </div>
         </div> : null}
 
-        {displayedItems.length || displayedFilteredFolders.length || displayedPocketItems.length ? (
-          <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4 2xl:grid-cols-5">
-            {displayedFilteredFolders.map(folder)}
-            {displayedItems.map(tile)}
-            {displayedPocketItems.map(item => <div key={`pocket:${item.id}`} className="min-w-0">
-              {renderPocketItem?.(item)}
-              {filtered ? <div className="mt-1 px-1 text-[11px] text-textMuted">Em: Bolsos</div> : null}
-            </div>)}
-          </div>
-        ) : (
-          <div className="flex flex-col items-center justify-center gap-2 rounded-lg border border-dashed border-border px-4 py-8 text-center">
-            <Package className="h-6 w-6 text-textMuted" />
-            <p className="text-xs text-textMuted">{filtered ? emptyMessage : "Nenhum item aqui. Selecione outro compartimento ou mova itens para este local."}</p>
-            {draggedId ? <span className="text-xs text-accent">Solte aqui para retirar do compartimento</span> : null}
-          </div>
-        )}
+        <InventoryTileGrid
+          isEmpty={!(displayedItems.length || displayedFilteredFolders.length || displayedPocketItems.length)}
+          empty={
+            <>
+              <Package className="h-6 w-6 text-textMuted" />
+              <p className="text-xs text-textMuted">
+                {filtered ? emptyMessage : "Nenhum item aqui. Selecione outro compartimento ou mova itens para este local."}
+              </p>
+              {draggedId ? <span className="text-xs text-accent">Solte aqui para retirar do compartimento</span> : null}
+            </>
+          }
+        >
+          {displayedFilteredFolders.map(folder)}
+          {displayedItems.map(tile)}
+          {displayedPocketItems.map(item => <div key={`pocket:${item.id}`} className="min-w-0">
+            {renderPocketItem?.(item)}
+            {filtered ? <div className="mt-1 px-1 text-[11px] text-textMuted">Em: Bolsos</div> : null}
+          </div>)}
+        </InventoryTileGrid>
       </section>
 
       {movingIds.length ? <Modal
