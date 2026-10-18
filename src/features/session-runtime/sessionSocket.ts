@@ -168,12 +168,6 @@ export class SessionSocket {
           runtimeConfigMessage.snapshot?.config.customSystems ?? null,
         )
       }
-      if (message.type === "session.ready") {
-        this.hasConnectedOnce = true
-        this.reconnectAttempt = 0
-        this.options.onStatusChange("connected")
-        this.scheduleHeartbeat()
-      }
       this.options.onMessage(message)
 
       // A Creation configuration change can alter formula fields, resource
