@@ -30,7 +30,8 @@
     "check:workspace-boundaries": "node scripts/check-workspace-layout.mjs",
     "test:shared": "node --test packages/game-core/tests/*.test.mjs packages/session-protocol/tests/*.test.mjs packages/session-client/tests/*.test.mjs",
     "build:app-web": "npm run --workspace @dnd-manager/web build",
-    "typecheck:app-session-server": "npm run --workspace @dnd-manager/session-server-app typecheck"
+    "typecheck:app-session-server": "npm run --workspace @dnd-manager/session-server-app typecheck",
+    "audit:workspace-imports": "node scripts/audit-workspace-imports.mjs"
   },
   "dependencies": {
     "@better-auth/prisma-adapter": "^1.6.25",
