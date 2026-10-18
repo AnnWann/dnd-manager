@@ -1,4 +1,4 @@
-import { useEffect, useState, type ComponentType } from "react"
+import { useEffect, useState, type ChangeEvent, type ComponentType } from "react"
 import { Plus, Trash2 } from "lucide-react"
 import type { Mission, MissionObjective, MissionPriority, MissionStatus } from "../../session-protocol/src/mission"
 
@@ -83,7 +83,7 @@ export function MissionDialog({
             <Input
               value={draft.title}
               placeholder="Ex.: Encontrar a entrada da Ecocaverna"
-              onChange={(event) => patch({ title: event.target.value })}
+              onChange={(event: ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => patch({ title: event.target.value })}
             />
           </label>
 
@@ -93,7 +93,7 @@ export function MissionDialog({
               rows={2}
               value={draft.summary}
               placeholder="Uma descrição curta para o cartão da missão."
-              onChange={(event) => patch({ summary: event.target.value })}
+              onChange={(event: ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => patch({ summary: event.target.value })}
             />
           </label>
 
@@ -103,7 +103,7 @@ export function MissionDialog({
               rows={4}
               value={draft.description}
               placeholder="Contexto, informações conhecidas e detalhes importantes."
-              onChange={(event) => patch({ description: event.target.value })}
+              onChange={(event: ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => patch({ description: event.target.value })}
             />
           </label>
 
@@ -112,7 +112,7 @@ export function MissionDialog({
             <Input
               value={draft.giver}
               placeholder="NPC, facção ou organização"
-              onChange={(event) => patch({ giver: event.target.value })}
+              onChange={(event: ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => patch({ giver: event.target.value })}
             />
           </label>
 
@@ -121,7 +121,7 @@ export function MissionDialog({
             <Input
               value={draft.location}
               placeholder="Região ou destino"
-              onChange={(event) => patch({ location: event.target.value })}
+              onChange={(event: ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => patch({ location: event.target.value })}
             />
           </label>
 
@@ -131,7 +131,7 @@ export function MissionDialog({
               rows={2}
               value={draft.reward}
               placeholder="Ouro, itens, favores, informação ou outros benefícios."
-              onChange={(event) => patch({ reward: event.target.value })}
+              onChange={(event: ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => patch({ reward: event.target.value })}
             />
           </label>
 
@@ -139,7 +139,7 @@ export function MissionDialog({
             <span className="text-xs text-text">Estado inicial</span>
             <Select
               value={draft.status}
-              onChange={(event) =>
+              onChange={(event: ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) =>
                 patch({ status: event.target.value as MissionStatus })
               }
             >
@@ -153,7 +153,7 @@ export function MissionDialog({
             <span className="text-xs text-text">Prioridade</span>
             <Select
               value={draft.priority}
-              onChange={(event) =>
+              onChange={(event: ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) =>
                 patch({ priority: event.target.value as MissionPriority })
               }
             >
@@ -172,7 +172,7 @@ export function MissionDialog({
               max={20}
               value={draft.recommendedLevel ?? ""}
               placeholder="Opcional"
-              onChange={(event) => {
+              onChange={(event: ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
                 const value = Number(event.target.value)
                 patch({
                   recommendedLevel: Number.isFinite(value) && value > 0
@@ -188,7 +188,7 @@ export function MissionDialog({
             <Input
               type="datetime-local"
               value={toDateTimeLocalValue(draft.deadline)}
-              onChange={(event) =>
+              onChange={(event: ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) =>
                 patch({ deadline: event.target.value || undefined })
               }
             />
@@ -199,7 +199,7 @@ export function MissionDialog({
             <Input
               value={draft.tags.join(", ")}
               placeholder="Ex.: Phandalin, urgente, investigação"
-              onChange={(event) =>
+              onChange={(event: ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) =>
                 patch({
                   tags: Array.from(
                     new Set(
@@ -243,7 +243,7 @@ export function MissionDialog({
                       type="checkbox"
                       checked={objective.completed}
                       title="Objetivo concluído"
-                      onChange={(event) =>
+                      onChange={(event: ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) =>
                         updateObjective(objective.id, (current) => ({
                           ...current,
                           completed: event.target.checked,
@@ -253,7 +253,7 @@ export function MissionDialog({
                     <Input
                       value={objective.text}
                       placeholder={`Objetivo ${index + 1}`}
-                      onChange={(event) =>
+                      onChange={(event: ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) =>
                         updateObjective(objective.id, (current) => ({
                           ...current,
                           text: event.target.value,
@@ -287,7 +287,7 @@ export function MissionDialog({
               rows={3}
               value={draft.notes}
               placeholder="Pistas, decisões, contatos e outras anotações."
-              onChange={(event) => patch({ notes: event.target.value })}
+              onChange={(event: ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => patch({ notes: event.target.value })}
             />
           </label>
         </div>
