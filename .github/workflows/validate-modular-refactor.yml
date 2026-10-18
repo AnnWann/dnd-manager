@@ -38,6 +38,8 @@ jobs:
         run: npx prisma generate
       - name: Test game-core HP transitions
         run: node --test packages/game-core/tests/*.test.mjs
+      - name: Test shared session protocol routing
+        run: node --test packages/session-protocol/tests/*.test.mjs
       - name: Test session client transport
         run: node --test packages/session-client/tests/*.test.mjs
       - name: Build website
