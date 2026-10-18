@@ -7,6 +7,39 @@ import type { SessionSpellCastPayment as SharedSessionSpellCastPayment, SessionM
 export type SessionSpellCastPayment = SharedSessionSpellCastPayment<SpellResourceType, CharacterGrantedSpellUsageSource, CharacterGrantedEquipmentSpellUsageSource>
 export type SessionMagicOperation = SharedSessionMagicOperation<SpellResourceType, CharacterGrantedSpellUsageSource, CharacterGrantedEquipmentSpellUsageSource, DamageType, SessionDiceRollMode, SessionRollVisibility>
 
+export type SessionMagicClientMessage =
+  | {
+      type: "session.magic.operation";
+      operation: SessionMagicOperation;
+    }
+  | {
+      type: "session.magic.operations";
+      operations: SessionMagicOperation[];
+    };
+
+const MAX_MAGIC_BATCH_OPERATIONS = 200;
+const SPELL_SOURCE_TYPES = new Set(["class", "feat", "ability", "race", "equipment"]);
+const ATTRIBUTES = new Set(["str", "dex", "con", "int", "wis", "cha"]);
+const ACQUISITION_SOURCE_TYPES = new Set([
+  "characterCreation",
+  "class",
+  "race",
+  "background",
+  "feat",
+  "ability",
+  "equipment",
+  "campaign",
+  "manual",
+  "import",
+]);
+const ACQUISITION_REASONS = new Set([
+  "character-creation",
+  "level-up",
+  "manual",
+  "import",
+  "campaign-grant",
+]);
+
 export function parseMagicClientMessage(raw: string): SessionMagicClientMessage | null {
   let parsed: unknown;
   try { parsed = JSON.parse(raw); } catch { return null; }
