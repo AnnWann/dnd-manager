@@ -20,6 +20,7 @@
     "./abilities": "./src/abilities.ts",
     "./runtime-config": "./src/runtimeConfig.ts",
     "./session-core": "./src/sessionCore.ts",
-    "./session-messages": "./src/sessionMessages.ts"
+    "./session-messages": "./src/sessionMessages.ts",
+    "./sheet-routes": "./src/sheetRoutes.ts"
   }
 }
