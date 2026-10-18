@@ -29,7 +29,8 @@
     "./hand-grip-panel": "./src/HandGripPanel.tsx",
     "./ammunition-selection-list": "./src/AmmunitionSelectionList.tsx",
     "./spell-list-board": "./src/SpellListBoard.tsx",
-    "./character-action-tabs": "./src/CharacterActionTabs.tsx"
+    "./character-action-tabs": "./src/CharacterActionTabs.tsx",
+    "./action-roll-feedback": "./src/ActionRollFeedback.tsx"
   },
   "peerDependencies": {
     "react": "^19.0.0",
