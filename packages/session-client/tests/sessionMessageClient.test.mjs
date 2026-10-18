@@ -138,6 +138,9 @@ test("reconnects after an unexpected close and ignores a stale socket", async ()
     assert.equal(statuses.at(-1), "reconnecting")
     const retry = [...scheduled.values()].find((timer) => timer.delay === 1000)
     assert.ok(retry, "first reconnect uses one-second backoff")
+    for (const [id, timer] of scheduled) {
+      if (timer === retry) { scheduled.delete(id); break }
+    }
     retry.callback()
     await tick()
     const second = FakeWebSocket.instances.at(-1)
