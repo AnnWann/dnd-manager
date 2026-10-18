@@ -1,3 +1,4 @@
+import { CharacterSheetLayout } from "../../../../packages/game-ui/src/CharacterSheetLayout"
 import { useEffect, useState } from "react"
 
 import { Input } from "../../../components/ui/Input"
@@ -90,47 +91,12 @@ export function CharacterSheetTab({
   }
 
   return (
-    <div className="grid gap-4">
-      <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-border bg-bg p-2 shadow-theme-sm">
-        <div className="min-w-0 px-1">
-          <div className="text-xs font-semibold text-textH">Visualização da ficha</div>
-          <div className="text-[10px] text-textMuted">
-            {viewMode === "play"
-              ? "Use a visão de jogo para consultar e alterar o que importa durante a partida."
-              : "Use a configuração para ajustar os dados estruturais da ficha."}
-          </div>
-        </div>
-
-        <div className="flex shrink-0 rounded-lg border border-border bg-bg-subtle p-1">
-          <button
-            type="button"
-            aria-pressed={viewMode === "play"}
-            onClick={() => setViewMode("play")}
-            className={
-              viewMode === "play"
-                ? "rounded-md bg-accent px-3 py-1.5 text-xs font-semibold text-accentText"
-                : "rounded-md px-3 py-1.5 text-xs font-medium text-text hover:bg-bg"
-            }
-          >
-            Em jogo
-          </button>
-          <button
-            type="button"
-            aria-pressed={viewMode === "configuration"}
-            onClick={() => setViewMode("configuration")}
-            className={
-              viewMode === "configuration"
-                ? "rounded-md bg-accent px-3 py-1.5 text-xs font-semibold text-accentText"
-                : "rounded-md px-3 py-1.5 text-xs font-medium text-text hover:bg-bg"
-            }
-          >
-            Configuração
-          </button>
-        </div>
-      </div>
-
-      {viewMode === "play" ? (
+    <CharacterSheetLayout
+      mode={viewMode}
+      onModeChange={setViewMode}
+      play={
         <>
+
           <MinimalCharacterSheet
             character={character}
             updateCharacter={updateCharacter}
@@ -144,7 +110,8 @@ export function CharacterSheetTab({
             updateCharacter={updateConditions}
           />
         </>
-      ) : (
+      }
+      configuration={
         <>
           {mode === "campaign" ? (
             <SessionConfigurationHeader
@@ -180,8 +147,8 @@ export function CharacterSheetTab({
             updateCharacter={updateCharacter}
           />
         </>
-      )}
-    </div>
+      }
+    />
   )
 }
 
