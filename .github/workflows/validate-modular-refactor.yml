@@ -11,6 +11,8 @@ on:
       - "server/**"
       - "prisma/**"
       - "package.json"
+      - "apps/**"
+      - "scripts/check-workspace-layout.mjs"
       - "package-lock.json"
       - "tsconfig*.json"
       - "vite.config.ts"
@@ -34,6 +36,8 @@ jobs:
           cache: npm
       - name: Install website dependencies
         run: npm install --ignore-scripts --package-lock=false --no-audit --no-fund
+      - name: Check npm workspace registration
+        run: npm run check:workspace-boundaries && npm ls --workspaces --depth=0
       - name: Generate Prisma client
         run: npx prisma generate
       - name: Check shared UI boundaries
@@ -50,7 +54,5 @@ jobs:
         run: node --test packages/session-client/tests/*.test.mjs
       - name: Build website
         run: npm run build
-      - name: Install session server dependencies
-        run: npm install --prefix session-server --ignore-scripts --package-lock=false --no-audit --no-fund
       - name: Typecheck session server
         run: npm run typecheck:session-server
