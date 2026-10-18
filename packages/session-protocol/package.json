@@ -4,6 +4,7 @@
   "private": true,
   "type": "module",
   "exports": {
-    "./initiative-hp": "./src/initiativeHp.ts"
+    "./initiative-hp": "./src/initiativeHp.ts",
+    "./mission": "./src/mission.ts"
   }
 }
