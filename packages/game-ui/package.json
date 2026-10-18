@@ -20,7 +20,8 @@
     "./hit-dice-row": "./src/HitDiceRow.tsx",
     "./character-sheet-layout": "./src/CharacterSheetLayout.tsx",
     "./spellcasting-hands-notice": "./src/SpellcastingHandsNotice.tsx",
-    "./character-sheet-fields": "./src/CharacterSheetFields.tsx"
+    "./character-sheet-fields": "./src/CharacterSheetFields.tsx",
+    "./character-sheet-skill-spell": "./src/CharacterSheetSkillAndSpell.tsx"
   },
   "peerDependencies": {
     "react": "^19.0.0",
