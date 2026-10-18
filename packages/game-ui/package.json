@@ -43,7 +43,8 @@
     "./custom-class-basic-fields": "./src/CustomClassBasicFields.tsx",
     "./combat-hp-editor": "./src/CombatHpEditor.tsx",
     "./manual-action-roll-fields": "./src/ManualActionRollFields.tsx",
-    "./configuration-toggle-grid": "./src/ConfigurationToggleGrid.tsx"
+    "./configuration-toggle-grid": "./src/ConfigurationToggleGrid.tsx",
+    "./mission-dialog": "./src/MissionDialog.tsx"
   },
   "peerDependencies": {
     "react": "^19.0.0",
