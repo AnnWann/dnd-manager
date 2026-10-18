@@ -1,0 +1,9 @@
+{
+  "name": "@dnd-manager/session-protocol",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    "./initiative-hp": "./src/initiativeHp.ts"
+  }
+}
