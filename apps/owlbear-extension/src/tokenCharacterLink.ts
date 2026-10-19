@@ -22,3 +22,21 @@ export async function readSelectedToken() {
   const items = await OBR.scene.items.getItems(ids)
   return items.find(item => item.layer === "CHARACTER" || isImage(item)) ?? null
 }
+
+export const TOKEN_CREATURE_METADATA = "com.dnd-manager.owlbear/creature-link"
+export type TokenCreatureLink = {sessionId: string; entryId: string}
+export function readTokenCreatureLink(metadata: Record<string, unknown>): TokenCreatureLink | null {
+ const link = metadata[TOKEN_CREATURE_METADATA]
+ if (!link || typeof link !== "object" || Array.isArray(link)) return null
+ const data = link as Record<string,unknown>
+ return typeof data.sessionId === "string" && typeof data.entryId === "string"
+   ? {sessionId:data.sessionId,entryId:data.entryId}:null
+}
+export async function setTokenCreatureLink(tokenId:string,link:TokenCreatureLink|null){
+ await OBR.scene.items.updateItems([tokenId], items=>{
+   for(const item of items){
+     item.metadata[TOKEN_CREATURE_METADATA]=link
+     if(link)item.metadata[TOKEN_CHARACTER_METADATA]=null
+   }
+ })
+}
