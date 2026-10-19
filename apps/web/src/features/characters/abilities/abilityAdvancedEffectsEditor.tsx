@@ -18,7 +18,7 @@ import type {
 } from "../../../models/abilities/Ability"
 import { getActivationOptionAbilities } from "../../../models/abilities/abilityActivation"
 import { DAMAGE_TYPE_OPTIONS } from "../../../models/combat/Damage"
-import type { CharacterConditionGrant } from "../../../models/characters/CharacterCondition"
+import type { CharacterConditionDuration, CharacterConditionGrant } from "../../../models/characters/CharacterCondition"
 import type { CharacterTemplate } from "../../../models/characters/CharacterTemplate"
 import { AbilityResourceCostsEditor } from "./abilityResourceCostsEditor"
 import { BonusesFields } from "../inventory/equipmentBonusFields"
@@ -114,7 +114,7 @@ export function AbilityAdvancedEffectsEditor({ ability, character, onChange }: {
             </label>
             {options.map((option) => {
               const abilities = optionAbilities(option)
-              const optionDuration = option.duration ?? option.condition?.duration ?? createOptionDuration(ability.effectDurationText)
+              const optionDuration: CharacterConditionDuration = option.duration ?? option.condition?.duration ?? createOptionDuration(ability.effectDurationText)
               return (
                 <details key={option.id} className="rounded-xl border border-border bg-bg" open={options.length === 1}>
                   <summary className="flex cursor-pointer list-none items-center justify-between gap-3 p-3">
