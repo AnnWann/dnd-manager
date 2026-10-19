@@ -71,7 +71,7 @@ function synchronizeSharedAbilityUsage(character: CharacterTemplate, ability: Ab
   const id = usage?.sharedResourceId?.trim()
   if (!usage || !id) return character
   const abilities = character.get("abilities") ?? []
-  return character.set("abilities", abilities.map((candidate) =>
+  return character.with("abilities", abilities.map((candidate) =>
     candidate.usage?.sharedResourceId?.trim() === id
       ? { ...candidate, usage: { ...candidate.usage!, used: usage.used } }
       : candidate,
