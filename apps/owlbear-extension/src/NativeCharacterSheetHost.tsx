@@ -125,6 +125,20 @@ export function NativeCharacterSheetHost({ characterId, raw, hp, conditions, run
     let next: CharacterTemplate
     try { next = updater(character) } catch (error) { reject(String(error)); return }
     if (same(character.toJSON(),next.toJSON())) return
+    // Resource buttons can update magic through CharacterTemplate.with("magic"),
+    // whose serialized sheet can also be recalculated. Before treating this as
+    // a multi-domain edit, recognize an exact magic-only mutation and forward
+    // its single authoritative operation.
+    const nextMagic = next.get("magic")
+    if (!same(character.get("magic"), nextMagic) &&
+        same(character.with("magic", nextMagic).toJSON(), next.toJSON())) {
+      const magicOps = deriveMagicOperations(character, next)
+      if (magicOps.length === 1) {
+        dispatch("session.magic.operation", magicOps[0])
+        return
+      }
+      if (magicOps.length > 1) return reject("alteração composta de recursos mágicos")
+    }
     const beforeJson = character.toJSON() as Record<string,unknown>
     const afterJson = next.toJSON() as Record<string,unknown>
     const changedTopLevel = Object.keys(afterJson).filter(key => !same(beforeJson[key],afterJson[key]))
