@@ -1,3 +1,5 @@
+import { CreatureTokenInspector } from "./CreatureTokenInspector"
+import type { InitiativeEntry } from "../../web/src/models/initiative/Initiative"
 import { readSelectedToken, readTokenCharacterLink, setTokenCharacterLink, readTokenCreatureLink, setTokenCreatureLink } from "./tokenCharacterLink"
 import { SessionDicePanel, type DiceHistoryEntry } from "./SessionDicePanel"
 import { SessionTransport } from "@dnd-manager/session-client/transport"
@@ -51,7 +53,7 @@ function App() {
  const assocChannel = useRef<BroadcastChannel|null>(null)
  const associationSnapshot = useRef({sessionId:"",connected:false,characters:[] as {id:string;name:string}[],role:"",creatures:[] as {id:string;name:string;hp?:number;maxHp?:number;armorClass?:number}[]})
  const [initiativeState,setInitiativeState] = useState<Record<string,unknown>|null>(null)
- const [selectedToken, setSelectedToken] = useState<{id:string;name:string;link:{sessionId:string;characterId:string}|null}|null>(null)
+ const [selectedToken, setSelectedToken] = useState<{id:string;name:string;link:{sessionId:string;characterId:string}|null;creatureLink:{sessionId:string;entryId:string}|null}|null>(null)
  const [tokenLinkError, setTokenLinkError] = useState("")
  const [activeArea, setActiveArea] = useState<"sheet" | "dice">(isDicePopover ? "dice" : "sheet")
  const [rollHistory, setRollHistory] = useState<DiceHistoryEntry[]>([])
@@ -121,7 +123,7 @@ function App() {
        if (!token) return
        setSelectedToken({
          id: token.id, name: token.name,
-         link: readTokenCharacterLink(token.metadata),
+         link: readTokenCharacterLink(token.metadata),creatureLink:readTokenCreatureLink(token.metadata),
        })
        void OBR.popover.open({
          id: ASSOC_POPOVER_ID,
@@ -142,7 +144,7 @@ function App() {
      try {
        const token = await readSelectedToken()
        if (!active) return
-       setSelectedToken(token ? {id:token.id,name:token.name,link:readTokenCharacterLink(token.metadata)} : null)
+       setSelectedToken(token ? {id:token.id,name:token.name,link:readTokenCharacterLink(token.metadata),creatureLink:readTokenCreatureLink(token.metadata)} : null)
      } catch (e) { if (active) setTokenLinkError(String(e)) }
    }
    void update()
@@ -162,7 +164,7 @@ function App() {
    try {
      setTokenLinkError("")
      await setTokenCharacterLink(selectedToken.id, remove ? null : {sessionId,characterId:selectedId})
-     setSelectedToken(prev => prev?.id===selectedToken.id ? {...prev,link: remove ? null : {sessionId,characterId:selectedId}} : prev)
+     setSelectedToken(prev => prev?.id===selectedToken.id ? {...prev,link: remove ? null : {sessionId,characterId:selectedId},creatureLink:null} : prev)
    } catch (e) {setTokenLinkError("Não foi possível alterar o vínculo: " + String(e))}
  },[selectedToken,sessionId,selectedId])
  useEffect(()=>{
@@ -320,6 +322,10 @@ function App() {
      ws.connect()
    } catch (e) { setStatus("Desconectado"); setError(String(e instanceof Error ? e.message : e)) }
  }, [api, disconnect, openDicePopover])
+ const initiativeEntries=(Array.isArray(asRecord(initiativeState?.session).entries)
+  ? asRecord(initiativeState?.session).entries : []) as InitiativeEntry[]
+ const boundCreature=role==="MASTER" && selectedToken?.creatureLink?.sessionId===sessionId
+  ? initiativeEntries.find(entry=>entry.id===selectedToken.creatureLink?.entryId) : undefined
  const list = Object.values(characters).filter(c => c.active !== false && (c.character || abilities[c.characterId]))
  const chosen = characters[selectedId]
  const raw = asRecord(abilities[selectedId]?.character ?? chosen?.character)
@@ -390,7 +396,7 @@ function App() {
  </div>}
  <div role="tabpanel" hidden={activeArea!=="dice"}><SessionDicePanel connected={status==="Conectado à sessão"} selectedCharacterId={selectedId || undefined} history={rollHistory} onRoll={request=>socket.current?.sendRaw(JSON.stringify({type:"session.dice.roll",request}))??false}/></div>
  {!isDicePopover && <div role="tabpanel" hidden={activeArea!=="sheet"}>
- {selectedId && chosen && <article className="character-panel">
+ {boundCreature ? <CreatureTokenInspector key={boundCreature.id} entry={boundCreature} connected={status==="Conectado à sessão"} onOperation={operation=>socket.current?.sendRaw(JSON.stringify({type:"session.initiative.operation",operation}))??false}/> : selectedId && chosen && <article className="character-panel">
  <CharacterSheetHeader name={String(raw.name ?? selectedId)} id={selectedId} />
  <NativeCharacterSheetHost
    characterId={selectedId} raw={raw} hp={health as unknown as Record<string, unknown>} conditions={conditions[selectedId]} runtimeConfig={runtimeConfig} inventoryState={inventoryState} spells={spellLibrary} role={role === "MASTER" ? "MASTER" : "PLAYER"}
