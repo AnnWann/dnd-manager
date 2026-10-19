@@ -16,7 +16,8 @@ export function CreatureTokenInspector({ entry, onOperation, connected }: {
     else setError("")
   }
   const numericAmount=Number(amount)
-  return <article className="grid gap-3 rounded-xl border border-border bg-bg p-4 text-textH">\n    <CreatureQuickSheet data={quickSheetFromInitiativeEntry(entry)} compact />
+  return <article className="grid gap-3 rounded-xl border border-border bg-bg p-4 text-textH">
+    <CreatureQuickSheet data={quickSheetFromInitiativeEntry(entry)} compact />
     <div className="flex items-center justify-between gap-3">
       <div className="min-w-0">
         <h2 className="truncate text-base font-semibold">{entry.customName??entry.realName??entry.name}</h2>
