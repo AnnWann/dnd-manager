@@ -4,6 +4,7 @@ import OBR from "@owlbear-rodeo/sdk"
 import { CharacterSheetDerivedTile } from "@dnd-manager/game-ui/character-sheet-fields"
 import { SharedCharacterTabs } from "@dnd-manager/game-ui/shared-character-tabs"
 import { SharedSessionHp } from "@dnd-manager/game-ui/shared-session-hp"
+import { CharacterSheetLayout } from "@dnd-manager/game-ui/character-sheet-layout"
 import "./style.css"
 
 const origin = (import.meta.env.VITE_DND_MANAGER_URL || "https://dnd-magic-manager.vercel.app").replace(/\/$/, "")
@@ -24,6 +25,7 @@ function App() {
  const [abilities, setAbilities] = useState<Record<string, AbilityState>>({})
  const [hp, setHp] = useState<Record<string, RuntimeHp>>({})
  const [selectedId, setSelectedId] = useState("")
+ const [sheetMode, setSheetMode] = useState<"play" | "configuration">("play")
  const [error, setError] = useState("")
  const grant = useRef<string | null>(null)
  const socket = useRef<WebSocket | null>(null)
@@ -123,10 +125,10 @@ function App() {
  {selectedId && chosen && <article>
  <h2>{String(raw.name ?? selectedId)}</h2>
  <SharedCharacterTabs key={selectedId} sections={{
- sheet: <><SharedSessionHp current={health?.current ?? 0} max={health?.currentMax ?? health?.max ?? 0}
+ sheet: <CharacterSheetLayout mode={sheetMode} onModeChange={setSheetMode} configuration={<p>Os campos estruturais só serão editáveis depois de integrar os controles do CharacterWorkspace ao Owlbear.</p>} play={<><SharedSessionHp current={health?.current ?? 0} max={health?.currentMax ?? health?.max ?? 0}
    temporary={health?.temporary ?? 0} hitDice={health?.hitDice} canEdit={status === "Conectado à sessão"}
    onHeal={amount => sendHp("character.hp.heal", amount)} onDamage={amount => sendHp("character.hp.damage", amount)}/>
-   <h3>Atributos</h3><div className="stats">{(["str","dex","con","int","wis","cha"] as const).map(k => <CharacterSheetDerivedTile key={k} label={k.toUpperCase()} value={numeric(health?.attributes?.[k] ?? attributes[k])} />)}</div></>,
+   <h3>Atributos</h3><div className="stats">{(["str","dex","con","int","wis","cha"] as const).map(k => <CharacterSheetDerivedTile key={k} label={k.toUpperCase()} value={numeric(health?.attributes?.[k] ?? attributes[k])} />)}</div></>} />,
  abilities: <p>Os controles de habilidades requerem a adaptação do CharacterWorkspace e as operações autorizadas do Session Server.</p>,
  "spells-list": <p>Magias: integração com o estado autoritativo e o módulo de conjuração pendente.</p>,
  equipment: <p>Equipamento: integração com as operações de equipamento da sessão pendente.</p>,
