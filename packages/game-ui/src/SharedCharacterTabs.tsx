@@ -1,5 +1,5 @@
 import { CharacterTabStrip } from "./CharacterTabStrip"
-import { useState, type ReactNode } from "react"
+import { useState, type ReactNode, type ComponentType } from "react"
 
 export type SheetTabId = "sheet" | "abilities" | "spells-list" | "equipment" | "inventory" | "race" | "profile" | "proficiencies" | "custom-class"
 export const STANDARD_SHEET_TABS: ReadonlyArray<{ id: SheetTabId; label: string }> = [
@@ -16,13 +16,13 @@ export const STANDARD_SHEET_TABS: ReadonlyArray<{ id: SheetTabId; label: string 
 /** Stateless data boundary: either website or VTT can supply its own authorized tab content. */
 export function SharedCharacterTabs({ sections, tabs = STANDARD_SHEET_TABS, defaultTab = "sheet" }: {
   sections: Record<string, ReactNode>
-  tabs?: ReadonlyArray<{ id: string; label: string }>
+  tabs?: ReadonlyArray<{ id: string; label: string; icon?: ComponentType<{ className?: string }> }>
   defaultTab?: string
 }) {
   const [active, setActive] = useState(defaultTab)
   return <div className="sheet-shared-tabs">
     <CharacterTabStrip activeTab={active} onChange={setActive}
-      tabs={tabs.map(tab => ({ key: tab.id, label: tab.label }))} />
+      tabs={tabs.map(tab => ({ key: tab.id, label: tab.label, icon: tab.icon }))} />
     <section role="tabpanel" aria-label={tabs.find(tab => tab.id === active)?.label}>
       {sections[active] ?? <p>Os dados desta seção ainda não estão disponíveis no adaptador de sessão.</p>}
     </section>
