@@ -22,6 +22,7 @@ import { AbilityCard } from "./abilityCard"
 import { AbilityDialog } from "./abilityDialog"
 import { AbilityResourceActivationModal } from "./abilityResourceActivationModal"
 import { hasAbilityResourceCosts, spendAbilityResourceCosts } from "../../../models/abilities/abilityResourceCosts"
+import { abilityHasSelfDamage } from "../../../models/abilities/abilitySelfDamage"
 import { hasManualBonusRolls, listBonusRollRequirements } from "../../../models/bonuses/BonusRoll"
 import { CompactAbilityCard } from "./compactAbilityCard"
 
@@ -190,7 +191,7 @@ export function CharacterAbilitiesTab({ character, updateCharacter }: Props) {
       Boolean(sessionRuntime)
       && !digitalDiceEnabled
       && listBonusRollRequirements(ability.bonuses).length > 0
-    if (abilityRequiresWeaponAttributeSelection(ability) || getAbilityAttackRiderDamageChoices(ability).length > 0 || (ability.activationOptions ?? []).some(option => getAbilityAttackRiderDamageChoices(ability, option.id).length > 0) || (ability.activationOptions?.length ?? 0) > 0 || hasAbilityResourceCosts(ability) || ability.resourceUpcast?.enabled || hasManualBonusRolls(ability.bonuses) || requiresPhysicalRollInput) {
+    if (abilityRequiresWeaponAttributeSelection(ability) || getAbilityAttackRiderDamageChoices(ability).length > 0 || (ability.activationOptions ?? []).some(option => getAbilityAttackRiderDamageChoices(ability, option.id).length > 0) || (ability.activationOptions?.length ?? 0) > 0 || hasAbilityResourceCosts(ability) || abilityHasSelfDamage(ability) || ability.resourceUpcast?.enabled || hasManualBonusRolls(ability.bonuses) || requiresPhysicalRollInput) {
       setActivationChoice(ability)
       return
     }
