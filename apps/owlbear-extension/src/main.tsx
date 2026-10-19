@@ -14,6 +14,7 @@ import { CharacterSheetStatGrid } from "@dnd-manager/game-ui/character-sheet-sta
 import { sendCharacterSheetOperation } from "@dnd-manager/session-client/character-sheet-operations"
 import "./style.css"
 
+const DICE_CHANNEL = "dnd-manager:owlbear-dice-v1"
 const DICE_POPOVER_ID = "com.dnd-manager.owlbear/dice-popover"
 const isDicePopover = new URLSearchParams(window.location.search).get("panel") === "dice"
 const origin = (import.meta.env.VITE_DND_MANAGER_URL || "https://dnd-magic-manager.vercel.app").replace(/\/$/, "")
@@ -40,7 +41,13 @@ function App() {
  const [selectedId, setSelectedId] = useState("")
  const [activeArea, setActiveArea] = useState<"sheet" | "dice">(isDicePopover ? "dice" : "sheet")
  const [rollHistory, setRollHistory] = useState<DiceHistoryEntry[]>([])
+ const [sharedDice, setSharedDice] = useState<{connected:boolean; selectedCharacterId?:string; history:DiceHistoryEntry[]}>({connected:false,history:[]})
+ const diceChannel = useRef<BroadcastChannel | null>(null)
+ const currentDiceState = useRef({connected:false,selectedCharacterId:undefined as string|undefined,history:[] as DiceHistoryEntry[]})
+ const popoverOpening = useRef(false)
  const openDicePopover = useCallback(async () => {
+   if(isDicePopover || popoverOpening.current)return
+   popoverOpening.current=true
    try {
      await OBR.popover.open({
        id: DICE_POPOVER_ID,
@@ -54,7 +61,32 @@ function App() {
        disableClickAway: true,
      })
    } catch (error) { setError("Não foi possível abrir o rolador separado: " + String(error)) }
+   finally { popoverOpening.current=false }
  }, [])
+ useEffect(() => {
+   const channel = new BroadcastChannel(DICE_CHANNEL)
+   diceChannel.current = channel
+   if(isDicePopover) channel.postMessage({type:"request-state"})
+   channel.onmessage = event => {
+     const message=event.data as Record<string,unknown>
+     if(isDicePopover){
+       if(message.type==="state")setSharedDice(message.value as typeof sharedDice)
+       if(message.type==="result"){
+         const entry=message.entry as DiceHistoryEntry
+         if(entry?.result?.id)setSharedDice(prev=>({...prev,history:prev.history.some(v=>v.result.id===entry.result.id)?prev.history:[entry,...prev.history].slice(0,60)}))
+       }
+     }else{
+       if(message.type==="request-state")channel.postMessage({type:"state",value:currentDiceState.current})
+       if(message.type==="roll" && message.request && socket.current)socket.current.sendRaw(JSON.stringify({type:"session.dice.roll",request:message.request}))
+     }
+   }
+   return ()=>{channel.close();if(diceChannel.current===channel)diceChannel.current=null}
+ }, [])
+ useEffect(()=>{
+   if(isDicePopover)return
+   currentDiceState.current={connected:status==="Conectado à sessão",selectedCharacterId:selectedId||undefined,history:rollHistory}
+   diceChannel.current?.postMessage({type:"state",value:currentDiceState.current})
+ },[status,selectedId,rollHistory])
  const [sheetMode, setSheetMode] = useState<"play" | "configuration">("play")
  const [error, setError] = useState("")
  const grant = useRef<string | null>(null)
@@ -136,11 +168,13 @@ function App() {
        const entries = Array.isArray(message.characters) ? message.characters : []
        const character = asRecord(message.character)
        if (message.type === "session.dice.result") {
+         if(!isDicePopover){void openDicePopover();diceChannel.current?.postMessage({type:"result",entry:{kind:"dice",result:message.result}})}
          publishServerDiceRoll(message.result as Parameters<typeof publishServerDiceRoll>[0])
          const result = message.result as DiceHistoryEntry["result"]
          if (result && typeof result.id === "string") setRollHistory(previous => previous.some(entry=>entry.result.id===result.id)?previous:[{kind:"dice" as const,result:result as Extract<DiceHistoryEntry,{kind:"dice"}>["result"]},...previous].slice(0,60))
        }
        if (message.type === "session.action.result") {
+         if(!isDicePopover){void openDicePopover();diceChannel.current?.postMessage({type:"result",entry:{kind:"action",result:message.result}})}
          publishServerActionRoll(message.result as Parameters<typeof publishServerActionRoll>[0])
          const result = message.result as DiceHistoryEntry["result"]
          if (result && typeof result.id === "string") setRollHistory(previous => previous.some(entry=>entry.result.id===result.id)?previous:[{kind:"action" as const,result:result as Extract<DiceHistoryEntry,{kind:"action"}>["result"]},...previous].slice(0,60))
@@ -167,13 +201,26 @@ function App() {
      socket.current=ws
      ws.connect()
    } catch (e) { setStatus("Desconectado"); setError(String(e instanceof Error ? e.message : e)) }
- }, [api, disconnect])
+ }, [api, disconnect, openDicePopover])
  const list = Object.values(characters).filter(c => c.active !== false && (c.character || abilities[c.characterId]))
  const chosen = characters[selectedId]
  const raw = asRecord(abilities[selectedId]?.character ?? chosen?.character)
  const sheet = asRecord(raw.sheet)
  const health = hp[selectedId]
  const attributes = asRecord(sheet.attributes)
+ if(isDicePopover)return <main className="owlbear-shell">
+   <div className="flex items-center justify-between border-b border-border bg-bg px-3 py-2">
+     <strong className="text-sm text-textH">Rolador de dados</strong>
+     <button type="button" onClick={()=>void OBR.popover.close(DICE_POPOVER_ID)} aria-label="Fechar rolador"
+       className="rounded-lg border border-border px-3 py-1 text-sm text-textH">Fechar ✕</button>
+   </div>
+   <SessionDicePanel connected={sharedDice.connected} selectedCharacterId={sharedDice.selectedCharacterId}
+     history={sharedDice.history} onRoll={request=>{
+       if(!sharedDice.connected)return false
+       diceChannel.current?.postMessage({type:"roll",request})
+       return diceChannel.current!==null
+     }}/>
+ </main>
  return <main className="owlbear-shell">
  <header><strong>{isDicePopover ? "D&D Manager · Dados" : "D&D Manager"}</strong><span>{ready ? "Owlbear conectado" : "Pré-visualização"}</span></header>
  <section>{!isDicePopover && <><h1>D&D Manager · Sessão</h1><p>Ficha e rolagens sincronizadas com o Session Server.</p></>}
