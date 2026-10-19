@@ -28,6 +28,8 @@ function App() {
  const [characters, setCharacters] = useState<Record<string, RuntimeCharacter>>({})
  const [abilities, setAbilities] = useState<Record<string, AbilityState>>({})
  const [hp, setHp] = useState<Record<string, RuntimeHp>>({})
+ const [conditions, setConditions] = useState<Record<string, Record<string, unknown>>>({})
+ const [runtimeConfig, setRuntimeConfig] = useState<Record<string, unknown> | null>(null)
  const [selectedId, setSelectedId] = useState("")
  const [sheetMode, setSheetMode] = useState<"play" | "configuration">("play")
  const [error, setError] = useState("")
@@ -40,7 +42,7 @@ function App() {
    heartbeat.current = null
    socket.current?.close(1000, "Leaving session")
    socket.current = null
-   setCharacters({}); setAbilities({}); setHp({}); setSelectedId(""); setStatus("Desconectado")
+   setCharacters({}); setAbilities({}); setHp({}); setConditions({}); setRuntimeConfig(null); setSelectedId(""); setStatus("Desconectado")
  }, [])
  useEffect(() => () => { socket.current?.close(); if (heartbeat.current) clearInterval(heartbeat.current) }, [])
  const api = useCallback(async <T,>(path: string): Promise<T> => {
@@ -101,6 +103,9 @@ function App() {
        if (message.type === "session.character.removed") setCharacters(previous => { const copy = { ...previous }; delete copy[String(message.characterId)]; return copy })
        if (message.type === "session.abilities.snapshot") setAbilities(Object.fromEntries(entries.map((v: unknown) => { const c = v as AbilityState; return [c.characterId, c] })))
        if (message.type === "session.abilities.updated") setAbilities(previous => ({ ...previous, [String(character.characterId)]: character as AbilityState }))
+       if (message.type === "session.config.snapshot") setRuntimeConfig(asRecord(message.snapshot))
+       if (message.type === "session.conditions.snapshot") setConditions(Object.fromEntries(entries.map((v: unknown) => { const c = v as {characterId: string}; return [c.characterId, asRecord(c)] })))
+       if (message.type === "session.conditions.updated") setConditions(previous => ({...previous,[String(character.characterId)]:character}))
        if (message.type === "session.hp.snapshot") setHp(Object.fromEntries(entries.map((v: unknown) => { const c = v as RuntimeHp; return [c.characterId, c] })))
        if (message.type === "session.hp.updated") setHp(previous => ({ ...previous, [String(character.characterId)]: character as RuntimeHp }))
      }
@@ -129,7 +134,7 @@ function App() {
  {selectedId && chosen && <article>
  <CharacterSheetHeader name={String(raw.name ?? selectedId)} id={selectedId} />
  <NativeCharacterSheetHost
-   characterId={selectedId} raw={raw} hp={health as unknown as Record<string, unknown>} role={role === "MASTER" ? "MASTER" : "PLAYER"}
+   characterId={selectedId} raw={raw} hp={health as unknown as Record<string, unknown>} conditions={conditions[selectedId]} runtimeConfig={runtimeConfig} role={role === "MASTER" ? "MASTER" : "PLAYER"}
    sessionId={sessionId} connected={status === "Conectado à sessão"}
    send={message => { if (socket.current?.readyState !== WebSocket.OPEN) return false; socket.current.send(JSON.stringify(message)); return true }}
  />
