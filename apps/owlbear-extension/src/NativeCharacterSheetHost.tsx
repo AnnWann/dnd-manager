@@ -84,58 +84,82 @@ export function NativeCharacterSheetHost({ characterId, raw, hp, conditions, run
     setNotice("Operação não suportada pelo adaptador: " + label + ". Nenhuma alteração foi salva.")
   }, [])
 
+  const sendSheet = (operation: unknown) =>
+    safeSend(toSheetOperationMessage(operation as Parameters<typeof toSheetOperationMessage>[0]) as unknown as Raw)
+
   const updateCharacter = useCallback((_id: string, updater: (value: CharacterTemplate) => CharacterTemplate) => {
-    if (_id !== characterId) return
+    if (_id !== characterId || !connected) return
     let next: CharacterTemplate
     try { next = updater(character) } catch (error) { reject(String(error)); return }
-    const before = character.toJSON()
-    const after = next.toJSON()
-    if (same(before, after)) return
-    const left = obj(before), right = obj(after), leftSheet = obj(left.sheet), rightSheet = obj(right.sheet)
-    const actions: Raw[] = []
-    const prevInventory = Array.isArray(left.inventory) ? left.inventory as Raw[] : []
-    const nextInventory = Array.isArray(right.inventory) ? right.inventory as Raw[] : []
-    if (!same(prevInventory, nextInventory)) {
-      const prev = new Map(prevInventory.map(item => [String(item.id), item]))
-      const next = new Map(nextInventory.map(item => [String(item.id), item]))
-      for (const [id, item] of next) {
-        if (!prev.has(id)) actions.push({type:"session.inventory.operation",operation:{type:"character.inventory.item.add",characterId,item}})
-        else if (!same(prev.get(id),item)) actions.push({type:"session.inventory.operation",operation:{type:"character.inventory.item.update",characterId,itemId:id,item}})
-      }
-      for (const id of prev.keys()) if (!next.has(id)) actions.push({type:"session.inventory.operation",operation:{type:"character.inventory.item.remove",characterId,itemId:id}})
-    }
-    if (!same(left.profile, right.profile))
-      actions.push({type:"session.profile.operation",operation:{type:"character.profile.replace",characterId,profile:right.profile}})
-    if (!same(leftSheet.race,rightSheet.race))
-      actions.push({type:"session.race.operation",operation:{type:"character.race.replace",characterId,race:rightSheet.race,skills:rightSheet.skills,savingThrowProficiencies:rightSheet.savingThrowProficiencies}})
-    const oldAbilities = Array.isArray(left.abilities) ? left.abilities as Raw[] : []
-    const newAbilities = Array.isArray(right.abilities) ? right.abilities as Raw[] : []
-    if (!same(oldAbilities,newAbilities)) {
-      const prev = new Map(oldAbilities.map(a => [String(a.id),a]))
-      const next = new Map(newAbilities.map(a => [String(a.id),a]))
-      for (const [id, ability] of next) if (!same(prev.get(id),ability))
-        actions.push({type:"session.abilities.operation",operation:{type:"character.ability.save",characterId,ability}})
-      for (const id of prev.keys()) if (!next.has(id))
-        actions.push({type:"session.abilities.operation",operation:{type:"character.ability.remove",characterId,abilityId:id}})
-    }
-    // For composite equipment and spellcasting changes, only semantic server
-    // operations are safe. Do not silently persist the local CharacterTemplate.
-    const handled = new Set(["inventory","profile","abilities"])
-    for (const key of Object.keys(right)) {
-      if (handled.has(key) || same(left[key],right[key])) continue
-      if (key !== "sheet") { reject(key); return }
-    }
-    for (const key of Object.keys(rightSheet)) {
-      if (key === "race" || same(leftSheet[key],rightSheet[key])) continue
-      reject("sheet." + key)
+    if (same(character.toJSON(),next.toJSON())) return
+    const ownerChanged = !same(character.get("owner"),next.get("owner"))
+    const magicChanged = !same(character.get("magic"),next.get("magic"))
+    const equipmentChanged = !same(character.get("equipment"),next.get("equipment"))
+    const inventoryChanged = !same(character.get("inventory"),next.get("inventory"))
+    const proficiencyChanged = !same(character.get("sheet").proficiencies,next.get("sheet").proficiencies)
+    const customSystemsChanged = !same(character.get("sheet").customSystems,next.get("sheet").customSystems)
+    const concentration = deriveConcentrationOperation(character,next)
+    const grantedUsage = deriveGrantedSpellUsageOperation(character,next)
+    if (ownerChanged) {
+      if (!same(character.withPatch({owner:next.get("owner")}).toJSON(),next.toJSON())) return reject("mudança composta de proprietário")
+      dispatch("session.character.operation",{type:"character.session.owner.set",characterId,owner:next.get("owner")})
       return
     }
-    if (actions.length === 0) { reject("sem operação correspondente"); return }
-    if (actions.length > 1) { reject("alteração composta não atômica"); return }
-    safeSend(actions[0])
-  }, [character,characterId,reject,safeSend])
+    if (grantedUsage) {
+      dispatch("session.abilities.operation",grantedUsage)
+      if (concentration) sendSheet(concentration)
+      return
+    }
+    if (equipmentChanged || inventoryChanged) {
+      const ops=deriveEquipmentOperations(character,next)
+      if (ops.length) {
+        ops.forEach(op=>dispatch("session.equipment.operation",op))
+        if (concentration) sendSheet(concentration)
+        return
+      }
+      if (!equipmentChanged && inventoryChanged) {
+        const before = character.get("inventory") ?? []
+        const after = next.get("inventory") ?? []
+        const prev = new Map(before.map(item=>[item.id,item]))
+        const curr = new Map(after.map(item=>[item.id,item]))
+        const outgoing: Raw[]=[]
+        for (const [itemId,item] of curr) {
+          if (!prev.has(itemId)) outgoing.push({type:"character.inventory.item.add",characterId,item})
+          else if (!same(prev.get(itemId),item)) outgoing.push({type:"character.inventory.item.update",characterId,itemId,item})
+        }
+        for (const itemId of prev.keys()) if (!curr.has(itemId))
+          outgoing.push({type:"character.inventory.item.remove",characterId,itemId})
+        if (outgoing.length===1) {
+          dispatch("session.inventory.operation",outgoing[0])
+          return
+        }
+      }
+      return reject("mudança de equipamento/inventário sem operação semântica")
+    }
+    if (magicChanged) {
+      const ops=deriveMagicOperations(character,next)
+      if (!ops.length && !concentration) return reject("magia")
+      ops.forEach(op=>dispatch("session.magic.operation",op))
+      if (concentration) sendSheet(concentration)
+      return
+    }
+    if (proficiencyChanged) {
+      const ops=deriveProficiencyOperations(character,next)
+      if (!ops.length) return reject("proficiências")
+      ops.forEach(op=>dispatch("session.proficiency.operation",op))
+      return
+    }
+    if (customSystemsChanged) {
+      const ops=deriveCustomSystemOperations(character,next)
+      if (!ops.length) return reject("sistemas customizados")
+      ops.forEach(op=>dispatch("session.abilities.operation",op))
+      return
+    }
+    if (concentration) {sendSheet(concentration);return}
+    return reject("alteração não reconhecida pela API da sessão")
+  }, [character,characterId,connected,dispatch,reject,safeSend])
 
-  const sendSheet = (operation: unknown) => safeSend(toSheetOperationMessage(operation as Parameters<typeof toSheetOperationMessage>[0]) as Raw)
+
   useEffect(() => {
     const forward = (eventName: string, type: string) => (event: Event) => {
       const detail = (event as CustomEvent).detail
