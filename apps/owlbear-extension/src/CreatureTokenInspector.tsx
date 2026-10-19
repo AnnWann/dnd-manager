@@ -1,3 +1,4 @@
+import { MagicProvider } from "../../web/src/contexts/magicContext"
 import { CreatureQuickSheet, quickSheetFromInitiativeEntry, quickSheetFromCompendiumCreature } from "../../web/src/features/creatures/CreatureQuickSheet"
 import { useState } from "react"
 import type { CompendiumCreature } from "../../web/src/models/creatures/CompendiumCreature"
@@ -19,7 +20,7 @@ export function CreatureTokenInspector({ entry, creature, onOperation, connected
   }
   const numericAmount=Number(amount)
   return <article className="grid gap-3 rounded-xl border border-border bg-bg p-4 text-textH">
-    <CreatureQuickSheet data={creature ? quickSheetFromCompendiumCreature(creature,entry,{enableRolls:true}) : quickSheetFromInitiativeEntry(entry)} compact />
+    <MagicProvider spells={[]}><CreatureQuickSheet data={creature ? quickSheetFromCompendiumCreature(creature,entry,{enableRolls:true}) : quickSheetFromInitiativeEntry(entry)} compact /></MagicProvider>
     <div className="flex items-center justify-between gap-3">
       <div className="min-w-0">
         <h2 className="truncate text-base font-semibold">{entry.customName??entry.realName??entry.name}</h2>
