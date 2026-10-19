@@ -51,7 +51,8 @@
     "./shared-session-hp": "./src/SharedSessionHp.tsx",
     "./character-tab-strip": "./src/CharacterTabStrip.tsx",
     "./character-sheet-header": "./src/CharacterSheetHeader.tsx",
-    "./character-sheet-stat-grid": "./src/CharacterSheetStatGrid.tsx"
+    "./character-sheet-stat-grid": "./src/CharacterSheetStatGrid.tsx",
+    "./character-workspace-bridge": "./src/CharacterWorkspaceBridge.tsx"
   },
   "peerDependencies": {
     "react": "^19.0.0",
