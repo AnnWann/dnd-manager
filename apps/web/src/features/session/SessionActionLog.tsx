@@ -557,7 +557,7 @@ function DiceRollPanel({
   )
 }
 
-function ActionRollEntry({
+export function ActionRollEntry({
   roll,
   characterName,
 }: {
@@ -853,7 +853,7 @@ function formatResolvedGroups(
   }).join(" + ")
 }
 
-function DiceRollEntry({
+export function DiceRollEntry({
   roll,
   characterName,
 }: {
