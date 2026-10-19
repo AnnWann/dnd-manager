@@ -3,6 +3,7 @@ import { createRoot } from "react-dom/client"
 import OBR from "@owlbear-rodeo/sdk"
 import { CharacterSheetDerivedTile } from "@dnd-manager/game-ui/character-sheet-fields"
 import { SharedCharacterTabs } from "@dnd-manager/game-ui/shared-character-tabs"
+import { CharacterTabStrip } from "@dnd-manager/game-ui/character-tab-strip"
 import { SharedSessionHp } from "@dnd-manager/game-ui/shared-session-hp"
 import "./style.css"
 
