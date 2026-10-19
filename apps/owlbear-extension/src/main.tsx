@@ -3,12 +3,13 @@ import { createRoot } from "react-dom/client"
 import OBR from "@owlbear-rodeo/sdk"
 import { CharacterSheetDerivedTile } from "@dnd-manager/game-ui/character-sheet-fields"
 import { SharedCharacterTabs } from "@dnd-manager/game-ui/shared-character-tabs"
+import { SharedSessionHp } from "@dnd-manager/game-ui/shared-session-hp"
 import "./style.css"
 
 const origin = (import.meta.env.VITE_DND_MANAGER_URL || "https://dnd-magic-manager.vercel.app").replace(/\/$/, "")
 type Session = { id: string; name: string; role: "MASTER" | "PLAYER" }
 type RuntimeCharacter = { characterId: string; ownerUserId?: string; active?: boolean; character?: Record<string, unknown> }
-type RuntimeHp = { characterId: string; current: number; max: number; temporary: number; currentMax: number; attributes?: Record<string, number> }
+type RuntimeHp = { characterId: string; current: number; max: number; temporary: number; currentMax: number; attributes?: Record<string, number>; hitDice?: Record<string, {current: number; max: number}> }
 type AbilityState = { characterId: string; character: Record<string, unknown> }
 const asRecord = (value: unknown): Record<string, unknown> => value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {}
 const numeric = (value: unknown): string => typeof value === "number" && Number.isFinite(value) ? String(value) : "—"
@@ -106,6 +107,10 @@ function App() {
  const raw = asRecord(abilities[selectedId]?.character ?? chosen?.character)
  const sheet = asRecord(raw.sheet)
  const health = hp[selectedId]
+ const sendHp = (type: "character.hp.heal" | "character.hp.damage", amount: number) => {
+   if (!selectedId || socket.current?.readyState !== WebSocket.OPEN) { setError("Sessão desconectada."); return }
+   socket.current.send(JSON.stringify({ type: "session.hp.operation", operation: { type, characterId: selectedId, amount } }))
+ }
  const attributes = asRecord(sheet.attributes)
  return <main>
  <header><strong>D&D Manager</strong><span>{ready ? "Owlbear conectado" : "Pré-visualização"}</span></header>
@@ -118,11 +123,10 @@ function App() {
  {selectedId && chosen && <article>
  <h2>{String(raw.name ?? selectedId)}</h2>
  <SharedCharacterTabs key={selectedId} sections={{
- sheet: <><div className="stats">
-   <CharacterSheetDerivedTile label="PV atual" value={numeric(health?.current)} />
-   <CharacterSheetDerivedTile label="PV máximo" value={numeric(health?.currentMax ?? health?.max)} />
-   <CharacterSheetDerivedTile label="PV temporário" value={numeric(health?.temporary)} />
-  </div><div className="stats">{(["str","dex","con","int","wis","cha"] as const).map(k => <CharacterSheetDerivedTile key={k} label={k.toUpperCase()} value={numeric(health?.attributes?.[k] ?? attributes[k])} />)}</div></>,
+ sheet: <><SharedSessionHp current={health?.current ?? 0} max={health?.currentMax ?? health?.max ?? 0}
+   temporary={health?.temporary ?? 0} hitDice={health?.hitDice} canEdit={status === "Conectado à sessão"}
+   onHeal={amount => sendHp("character.hp.heal", amount)} onDamage={amount => sendHp("character.hp.damage", amount)}/>
+   <h3>Atributos</h3><div className="stats">{(["str","dex","con","int","wis","cha"] as const).map(k => <CharacterSheetDerivedTile key={k} label={k.toUpperCase()} value={numeric(health?.attributes?.[k] ?? attributes[k])} />)}</div></>,
  abilities: <p>Os controles de habilidades requerem a adaptação do CharacterWorkspace e as operações autorizadas do Session Server.</p>,
  "spells-list": <p>Magias: integração com o estado autoritativo e o módulo de conjuração pendente.</p>,
  equipment: <p>Equipamento: integração com as operações de equipamento da sessão pendente.</p>,
