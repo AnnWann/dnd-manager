@@ -55,6 +55,7 @@ function App() {
  const assocChannel = useRef<BroadcastChannel|null>(null)
  const associationSnapshot = useRef({sessionId:"",connected:false,characters:[] as {id:string;name:string}[],role:"",catalog:[] as {id:string;name:string}[],creatures:[] as {id:string;name:string;hp?:number;maxHp?:number;armorClass?:number}[]})
  const [compendiumCreatures,setCompendiumCreatures] = useState<CompendiumCreature[]>([])
+ const [pendingCreatureAdd,setPendingCreatureAdd] = useState<{tokenId:string;entryId:string;sessionId:string}|null>(null)
  const [initiativeState,setInitiativeState] = useState<Record<string,unknown>|null>(null)
  const [selectedToken, setSelectedToken] = useState<{id:string;name:string;link:{sessionId:string;characterId:string}|null;creatureLink:{sessionId:string;entryId:string}|null;catalogId:string|null}|null>(null)
  const [tokenLinkError, setTokenLinkError] = useState("")
@@ -334,11 +335,20 @@ function App() {
   ? initiativeEntries.find(entry=>entry.id===selectedToken.creatureLink?.entryId) : undefined
  const catalogCreature=role==="MASTER"&&selectedToken?.catalogId?compendiumCreatures.find(c=>c.id===selectedToken.catalogId):undefined
  const addCatalogToInitiative=()=>{
-   if(!catalogCreature||status!=="Conectado à sessão"||role!=="MASTER")return
+   if(!catalogCreature||status!=="Conectado à sessão"||role!=="MASTER"||!selectedToken||pendingCreatureAdd)return
    const entryId=crypto.randomUUID()
    const entry={id:entryId,sourceId:catalogCreature.id,sourceType:"monster",name:catalogCreature.name,basicName:catalogCreature.basicName,realName:catalogCreature.name,initiative:0,initiativeBonus:catalogCreature.initiativeBonus,side:catalogCreature.defaultSide,armorClass:catalogCreature.armorClass,maxHp:catalogCreature.maxHp,currentHp:catalogCreature.maxHp,temporaryHp:0,conditions:[],order:initiativeEntries.length,createdAt:Date.now(),hidden:false,defeated:false}
-   if(socket.current?.sendRaw(JSON.stringify({type:"session.initiative.operation",operation:{type:"initiative.entries.add",characterId:"session",entries:[entry]}})))setError("Criatura enviada à iniciativa; confirme a inclusão na lista.")
+   if(socket.current?.sendRaw(JSON.stringify({type:"session.initiative.operation",operation:{type:"initiative.entries.add",characterId:"session",entries:[entry]}})))setPendingCreatureAdd({tokenId:selectedToken.id,entryId,sessionId})
+   else setError("Não foi possível enviar a criatura à iniciativa.")
  }
+ useEffect(()=>{
+   if(!pendingCreatureAdd||pendingCreatureAdd.sessionId!==sessionId)return
+   const entries=Array.isArray(asRecord(initiativeState?.session).entries)?asRecord(initiativeState?.session).entries as Record<string,unknown>[]:[]
+   if(!entries.some(entry=>entry.id===pendingCreatureAdd.entryId))return
+   void setTokenCreatureLink(pendingCreatureAdd.tokenId,{sessionId,entryId:pendingCreatureAdd.entryId})
+     .then(()=>setPendingCreatureAdd(null))
+     .catch(error=>{setError("Criatura adicionada, mas token não foi vinculado: "+String(error));setPendingCreatureAdd(null)})
+ },[pendingCreatureAdd,sessionId,initiativeState])
  const list = Object.values(characters).filter(c => c.active !== false && (c.character || abilities[c.characterId]))
  const chosen = characters[selectedId]
  const raw = asRecord(abilities[selectedId]?.character ?? chosen?.character)
@@ -409,7 +419,7 @@ function App() {
  </div>}
  <div role="tabpanel" hidden={activeArea!=="dice"}><SessionDicePanel connected={status==="Conectado à sessão"} selectedCharacterId={selectedId || undefined} history={rollHistory} onRoll={request=>socket.current?.sendRaw(JSON.stringify({type:"session.dice.roll",request}))??false}/></div>
  {!isDicePopover && <div role="tabpanel" hidden={activeArea!=="sheet"}>
- {catalogCreature && !boundCreature ? <div className="grid gap-3"><CreatureQuickSheet data={quickSheetFromCompendiumCreature(catalogCreature)} compact/><button type="button" onClick={addCatalogToInitiative} className="rounded-lg border border-accentBorder bg-accentBg px-3 py-2 text-sm font-semibold">Adicionar à iniciativa</button></div> : boundCreature ? <CreatureTokenInspector key={boundCreature.id} entry={boundCreature} connected={status==="Conectado à sessão"} onOperation={operation=>socket.current?.sendRaw(JSON.stringify({type:"session.initiative.operation",operation}))??false}/> : selectedId && chosen && <article className="character-panel">
+ {catalogCreature && !boundCreature ? <div className="grid gap-3"><CreatureQuickSheet data={quickSheetFromCompendiumCreature(catalogCreature)} compact/><button type="button" disabled={Boolean(pendingCreatureAdd)} onClick={addCatalogToInitiative} className="rounded-lg border border-accentBorder bg-accentBg px-3 py-2 text-sm font-semibold disabled:opacity-40">{pendingCreatureAdd?"Aguardando confirmação...":"Adicionar à iniciativa"}</button></div> : boundCreature ? <CreatureTokenInspector key={boundCreature.id} entry={boundCreature} connected={status==="Conectado à sessão"} onOperation={operation=>socket.current?.sendRaw(JSON.stringify({type:"session.initiative.operation",operation}))??false}/> : selectedId && chosen && <article className="character-panel">
  <CharacterSheetHeader name={String(raw.name ?? selectedId)} id={selectedId} />
  <NativeCharacterSheetHost
    characterId={selectedId} raw={raw} hp={health as unknown as Record<string, unknown>} conditions={conditions[selectedId]} runtimeConfig={runtimeConfig} inventoryState={inventoryState} spells={spellLibrary} role={role === "MASTER" ? "MASTER" : "PLAYER"}
