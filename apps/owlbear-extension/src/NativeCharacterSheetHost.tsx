@@ -4,7 +4,8 @@ import { CharacterTemplate, type CharacterTemplateProps } from "../../web/src/mo
 import { withCharacterConditions } from "../../web/src/models/characters/characterConditionStorage"
 import { CharacterWorkspaceProvider, type CharacterWorkspaceValue } from "../../web/src/features/characters/workspace/CharacterWorkspaceContext"
 import { SessionRuntimeContext, type SessionRuntimeContextValue } from "../../web/src/features/session-runtime/SessionRuntimeProvider"
-import { MagicProvider } from "../../web/src/contexts/magicContext"
+import { MagicProvider, useMagicContext } from "../../web/src/contexts/magicContext"
+import { getCharacterGrantedSpells } from "../../web/src/models/characters/characterGrantedSpells"
 import type { Spell } from "../../web/src/models/magic/spells/Spell"
 import { CharacterSheetTab } from "../../web/src/features/characters/characterSheet/characterSheet"
 import { CharacterAbilitiesTab } from "../../web/src/features/characters/abilities/characterAbilities"
@@ -71,6 +72,26 @@ function ensureCharacter(raw: Raw, hp: Raw | undefined, conditions: Raw | undefi
   return conditions?.initialized && Array.isArray(conditions.conditions)
     ? withCharacterConditions(projected, conditions.conditions as Parameters<typeof withCharacterConditions>[1])
     : projected
+}
+
+/** The website loads official spell definitions in its app-level magic context.
+ * Owlbear mounts that context independently, so load the selected character's
+ * known and granted spells before rendering the spell cards. */
+function CharacterSpellDefinitionsLoader({ character }: { character: CharacterTemplate }) {
+  const { ensureOfficialSpells } = useMagicContext()
+  const indexes = useMemo(() => {
+    const known = character.get("magic")?.spells.knownSpells ?? []
+    return Array.from(new Set([
+      ...known.map(entry => entry.spells.id),
+      ...getCharacterGrantedSpells(character).map(entry => entry.index),
+    ].filter((index): index is string => typeof index === "string" && index.length > 0))).sort()
+  }, [character])
+  const key = indexes.join("\\u0000")
+  useEffect(() => {
+    if (!indexes.length) return
+    void ensureOfficialSpells(indexes)
+  }, [ensureOfficialSpells, key])
+  return null
 }
 
 /** Adapter for the original website components, not a rewritten character sheet.
@@ -304,6 +325,7 @@ export function NativeCharacterSheetHost({ characterId, raw, hp, conditions, run
   }
   return <MemoryRouter>
     <MagicProvider spells={(spells ?? []) as Spell[]}>
+      <CharacterSpellDefinitionsLoader character={character} />
       <SessionRuntimeContext.Provider value={runtime}>
         <CharacterWorkspaceProvider value={workspace}>
           {notice ? <p role="alert" className="error">{notice}</p> : null}
