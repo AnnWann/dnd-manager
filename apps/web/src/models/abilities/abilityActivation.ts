@@ -189,7 +189,9 @@ export function useAbilityEffect(
         resolvedAbility,
         source,
         optionAbilitiesGrant(selectedOption, resolvedAbility, optionAbilities, activeWeaponId, selectedDamageType, selectedWeaponAttribute),
-        `${selectedOption.id}:abilities`,
+        resolvedAbility.allowMultipleWeaponActivations && activeWeaponId
+          ? `${selectedOption.id}:abilities:${activeWeaponId}`
+          : `${selectedOption.id}:abilities`,
         selectedOption.name,
       )
     } else if (selectedOption.condition) {
