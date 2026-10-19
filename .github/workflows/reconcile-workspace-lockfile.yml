@@ -3,6 +3,7 @@ name: Reconcile workspace lockfile
 on:
   push:
     branches:
+      - master
       - refactor/modular-workspaces-foundation
       - refactor/portable-character-sheet-owlbear
     paths:
