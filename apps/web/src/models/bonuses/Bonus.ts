@@ -41,6 +41,8 @@ export type Bonus = {
 export type AttributeScopedBonus = {
   /** Ausente significa todos os atributos válidos para o escopo. */
   attribute?: Attribute
+  /** Restrict weapon attack/damage bonuses to one weapon instance. */
+  weaponId?: string
   bonus: Bonus
 }
 
