@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useRef, useState } from "react"
 import { createRoot } from "react-dom/client"
 import OBR from "@owlbear-rodeo/sdk"
 import { CharacterSheetDerivedTile } from "@dnd-manager/game-ui/character-sheet-fields"
+import { SharedCharacterTabs } from "@dnd-manager/game-ui/shared-character-tabs"
 import "./style.css"
 
 const origin = (import.meta.env.VITE_DND_MANAGER_URL || "https://dnd-magic-manager.vercel.app").replace(/\/$/, "")
@@ -114,7 +115,23 @@ function App() {
  <label className="field">Campanha / sessão<select value={sessionId} disabled={!connected} onChange={e => void connectSession(e.target.value)}><option value="">Selecione uma sessão...</option>{sessions.map(s => <option key={s.id} value={s.id}>{s.name} ({s.role === "MASTER" ? "Mestre" : "Jogador"})</option>)}</select></label>
  <p>{status}{sessionId && role ? " · " + (role === "MASTER" ? "Mestre" : "Jogador") : ""}</p>
  <label className="field">Personagem da sessão<select value={selectedId} onChange={e => setSelectedId(e.target.value)}><option value="">Selecione um personagem...</option>{list.map(c => <option key={c.characterId} value={c.characterId}>{String(asRecord(abilities[c.characterId]?.character ?? c.character).name ?? c.characterId)}</option>)}</select></label>
- {selectedId && chosen && <article><h2>{String(raw.name ?? selectedId)}</h2><div className="stats"><CharacterSheetDerivedTile label="PV atual" value={numeric(health?.current)} /><CharacterSheetDerivedTile label="PV máximo" value={numeric(health?.currentMax ?? health?.max)} /><CharacterSheetDerivedTile label="PV temporário" value={numeric(health?.temporary)} /></div><div className="stats">{(["str","dex","con","int","wis","cha"] as const).map(k => <CharacterSheetDerivedTile key={k} label={k.toUpperCase()} value={numeric(health?.attributes?.[k] ?? attributes[k])} />)}</div><p>Visualização da sessão em tempo real. Edição de ações, magias e inventário ainda depende da implementação do workspace compartilhado.</p></article>}
+ {selectedId && chosen && <article>
+ <h2>{String(raw.name ?? selectedId)}</h2>
+ <SharedCharacterTabs key={selectedId} sections={{
+ sheet: <><div className="stats">
+   <CharacterSheetDerivedTile label="PV atual" value={numeric(health?.current)} />
+   <CharacterSheetDerivedTile label="PV máximo" value={numeric(health?.currentMax ?? health?.max)} />
+   <CharacterSheetDerivedTile label="PV temporário" value={numeric(health?.temporary)} />
+  </div><div className="stats">{(["str","dex","con","int","wis","cha"] as const).map(k => <CharacterSheetDerivedTile key={k} label={k.toUpperCase()} value={numeric(health?.attributes?.[k] ?? attributes[k])} />)}</div></>,
+ abilities: <p>Os controles de habilidades requerem a adaptação do CharacterWorkspace e as operações autorizadas do Session Server.</p>,
+ "spells-list": <p>Magias: integração com o estado autoritativo e o módulo de conjuração pendente.</p>,
+ equipment: <p>Equipamento: integração com as operações de equipamento da sessão pendente.</p>,
+ inventory: <p>Inventário: integração com o inventário da sessão pendente.</p>,
+ race: <p>Raça: a interface completa depende do módulo compartilhado de raça.</p>,
+ profile: <p>Perfil: a interface completa depende do módulo compartilhado de perfil.</p>,
+ proficiencies: <p>Proficiências: integração com as operações de proficiência pendente.</p>
+ }} />
+ </article>}
  </section><footer>O Durable Object é a fonte de verdade. O servidor da sessão determina quais personagens cada usuário pode receber.</footer>
  </main>
 }
