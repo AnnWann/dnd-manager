@@ -1,4 +1,48 @@
 @import "../../../packages/game-ui/src/theme.css";
 
-:root{font-family:system-ui,sans-serif;color:#f2f0ee;background:#191c23}*{box-sizing:border-box}main{min-height:100vh}header{display:flex;justify-content:space-between;align-items:center;padding:15px;background:#252b36;border-bottom:1px solid #414856}header strong{color:#ecd4a2}header span{font-size:12px;color:#aab4c2}section{padding:16px}h1{font-size:18px;margin:0 0 8px}p{font-size:13px;line-height:1.5;color:#bfc6cf}.toolbar{display:flex;gap:8px;flex-wrap:wrap;margin:15px 0}button,a{display:inline-block;padding:9px;border:1px solid #78869a;color:white;background:#334057;border-radius:6px;font-size:12px;text-decoration:none;cursor:pointer}button:disabled{opacity:.45}a{background:transparent}.field{display:grid;gap:7px;margin:15px 0;font-size:12px}select,input{width:100%;background:#2b3443;color:white;border:1px solid #778399;border-radius:6px;padding:9px}.stats{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin:16px 0}.stats>div{border:1px solid #596477;border-radius:8px;padding:12px 5px;text-align:center}.stats>div>div:first-child{font-size:11px;color:#bfc6cf}.stats>div>div:last-child{font-weight:bold;font-size:20px}.error{border-left:3px solid #d96d61;padding:9px;background:#432b31}.notice{color:#a9e7b5}article{border:1px solid #465267;border-radius:9px;padding:12px}footer{padding:16px;font-size:11px;color:#aab4c2}
-.sheet-shared-nav{display:flex;gap:6px;overflow-x:auto;padding:8px 0 12px;scrollbar-width:thin}.sheet-shared-nav button{white-space:nowrap;flex-shrink:0;background:#252c3a;border-color:#4a5871}.sheet-shared-nav button.sheet-tab-active{background:#674a9b;color:#fff;border-color:#ae91e0}.sheet-shared-tabs>section{padding-top:8px}.sheet-shared-tabs>section p{line-height:1.6}
+/* Extension chrome only. Never apply unscoped element rules to the imported
+   website character sheet: its controls rely on Tailwind and shared theme CSS. */
+:root {
+  font-family: var(--font-interface, system-ui, sans-serif);
+}
+.owlbear-shell {
+  min-height: 100vh;
+}
+.owlbear-shell > header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 15px;
+  background: var(--surface-elevated);
+  border-bottom: 1px solid var(--border-subtle);
+}
+.owlbear-shell > header strong { color: var(--text-primary); }
+.owlbear-shell > header span { font-size: 12px; color: var(--text-muted); }
+.owlbear-shell > section { padding: 16px; }
+.owlbear-shell > section > h1 { font-size: 18px; margin: 0 0 8px; }
+.owlbear-shell > section > p { font-size: 13px; line-height: 1.5; }
+.owlbear-shell .toolbar { display: flex; gap: 8px; flex-wrap: wrap; margin: 15px 0; }
+.owlbear-shell .toolbar > button,
+.owlbear-shell .field > select {
+  padding: 9px;
+  border: 1px solid var(--border-strong);
+  color: var(--text-primary);
+  background: var(--surface-secondary);
+  border-radius: 6px;
+  font-size: 12px;
+}
+.owlbear-shell .toolbar > button:disabled { opacity: .45; }
+.owlbear-shell .field { display: grid; gap: 7px; margin: 15px 0; font-size: 12px; }
+.owlbear-shell .field > select { width: 100%; }
+.owlbear-shell .error {
+  border-left: 3px solid var(--danger);
+  padding: 9px;
+  background: var(--danger-surface);
+}
+.owlbear-shell .notice { color: var(--success); }
+.owlbear-shell .character-panel {
+  border: 1px solid var(--border-subtle);
+  border-radius: 9px;
+  padding: 12px;
+}
+.owlbear-shell > footer { padding: 16px; font-size: 11px; color: var(--text-muted); }
