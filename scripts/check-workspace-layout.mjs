@@ -14,8 +14,12 @@ for (const folder of ["packages/game-core", "packages/game-ui", "packages/sessio
   assert.ok(pkg.name && !names.has(pkg.name), `duplicate or missing workspace name: ${folder}`)
   names.add(pkg.name)
   for (const [subpath, target] of Object.entries(pkg.exports ?? {})) {
-    assert.ok(subpath.startsWith("./") && target.startsWith("./src/"), `invalid export mapping: ${folder} ${subpath}`)
-    assert.ok(existsSync(join(folder, target)), `missing export target: ${folder} ${subpath}`)
+    const targets = typeof target === "string" ? [target] : Object.values(target ?? {})
+    assert.ok(subpath.startsWith("./") && targets.length > 0, `invalid export mapping: ${folder} ${subpath}`)
+    for (const item of targets) {
+      assert.ok(typeof item === "string" && (item.startsWith("./src/") || item.startsWith("./dist/")), `invalid export mapping: ${folder} ${subpath}`)
+      if (item.startsWith("./src/")) assert.ok(existsSync(join(folder, item)), `missing export target: ${folder} ${subpath}`)
+    }
   }
 }
 assert.ok(root.scripts["typecheck:session-server"])
