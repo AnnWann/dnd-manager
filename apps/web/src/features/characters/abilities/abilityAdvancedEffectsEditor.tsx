@@ -60,6 +60,11 @@ export function AbilityAdvancedEffectsEditor({ ability, character, onChange }: {
 
   return (
     <div className="grid gap-4">
+      <label className="flex items-center gap-2 text-xs font-medium text-textH">
+        <input type="checkbox" checked={Boolean(ability.allowMultipleWeaponActivations)}
+          onChange={event => onChange({ ...ability, allowMultipleWeaponActivations: event.target.checked })} />
+        Permitir infundir várias armas, mantendo um efeito separado para cada uma
+      </label>
       <SelfDamageEditor value={ability.selfDamageOnUse} onChange={selfDamageOnUse => onChange({ ...ability, selfDamageOnUse })} />
       <ConditionSection
         title="Condição ao usar"
