@@ -59,7 +59,7 @@ export function getAbilityRemainingUses(character: CharacterTemplate, usage: Usa
 export function canActivateAbility(character: CharacterTemplate, ability: Ability): boolean {
   if (abilityRequiresActivation(ability) && isAbilityBenefitsActive(ability)) {
     // Changing an active elemental/stance option isn't another initial activation.
-    return Boolean(ability.allowOptionSwitching && ((ability.activationOptions?.length ?? 0) > 0 || getAbilityAttackRiderDamageChoices(ability).length > 0))
+    return Boolean(ability.allowMultipleWeaponActivations || (ability.allowOptionSwitching && ((ability.activationOptions?.length ?? 0) > 0 || getAbilityAttackRiderDamageChoices(ability).length > 0)))
   }
   const usage = ability.usage
   if (!usage || usage.reset === "spellSlot") return true
@@ -112,8 +112,8 @@ export function useAbilityEffect(
   selectedWeaponAttribute?: Attribute,
 ): CharacterTemplate {
   if (!abilityRequiresActivation(ability) || !canActivateAbility(character, ability)) return character
-  const switchingOption = Boolean(ability.allowOptionSwitching && isAbilityBenefitsActive(ability) && (activationOptionId || selectedDamageType))
-  if (ability.allowOptionSwitching && isAbilityBenefitsActive(ability) && !activationOptionId && !selectedDamageType) return character
+  const switchingOption = Boolean(ability.allowOptionSwitching && !ability.allowMultipleWeaponActivations && isAbilityBenefitsActive(ability) && (activationOptionId || selectedDamageType))
+  if (ability.allowOptionSwitching && !ability.allowMultipleWeaponActivations && isAbilityBenefitsActive(ability) && !activationOptionId && !selectedDamageType) return character
   // The weapon initially infused by the ability cannot change when only the element changes.
   const originalWeaponId = switchingOption
     ? getCharacterConditions(character)
