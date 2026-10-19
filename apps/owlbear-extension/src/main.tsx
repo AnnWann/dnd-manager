@@ -360,7 +360,7 @@ function App() {
  const addCatalogToInitiative=()=>{
    if(!catalogCreature||status!=="Conectado à sessão"||role!=="MASTER"||!selectedToken||pendingCreatureAdd)return
    const entryId=crypto.randomUUID()
-   const entry={id:entryId,sourceId:catalogCreature.id,sourceType:"monster",name:catalogCreature.name,basicName:catalogCreature.basicName,realName:catalogCreature.name,initiative:0,initiativeBonus:catalogCreature.initiativeBonus,side:catalogCreature.defaultSide,armorClass:catalogCreature.armorClass,maxHp:catalogCreature.maxHp,currentHp:catalogCreature.maxHp,temporaryHp:0,conditions:[],order:initiativeEntries.length,createdAt:Date.now(),hidden:false,defeated:false}
+   const entry={id:entryId,sourceId:"compendium:"+catalogCreature.id,sourceType:"monster",name:catalogCreature.name,basicName:catalogCreature.basicName,realName:catalogCreature.name,initiative:0,initiativeBonus:catalogCreature.initiativeBonus,side:catalogCreature.defaultSide,armorClass:catalogCreature.armorClass,maxHp:catalogCreature.maxHp,currentHp:catalogCreature.maxHp,temporaryHp:0,conditions:[],order:initiativeEntries.length,createdAt:Date.now(),hidden:false,defeated:false}
    if(socket.current?.sendRaw(JSON.stringify({type:"session.initiative.operation",operation:{type:"initiative.entries.add",characterId:"session",entries:[entry]}})))setPendingCreatureAdd({tokenId:selectedToken.id,entryId,sessionId})
    else setError("Não foi possível enviar a criatura à iniciativa.")
  }
