@@ -1,4 +1,3 @@
-import { CREATURE_ROLL_REQUEST_EVENT } from "../../web/src/lib/diceRoller"
 import { MagicProvider } from "../../web/src/contexts/magicContext"
 import { CreatureQuickSheet, quickSheetFromCompendiumCreature } from "../../web/src/features/creatures/CreatureQuickSheet"
 import type { CompendiumCreature } from "../../web/src/models/creatures/CompendiumCreature"
