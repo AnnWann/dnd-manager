@@ -10,7 +10,7 @@ export type SelfDamageRollRequirement = {
   damageType: string
 }
 
-const DICE_PATTERN = /^(\\d{1,2})d(4|6|8|10|12|20)$/i
+const DICE_PATTERN = /^(\d{1,2})d(4|6|8|10|12|20)$/i
 
 function diceBounds(dice: string): { count: number; sides: number } | null {
   const match = DICE_PATTERN.exec(dice.trim())
