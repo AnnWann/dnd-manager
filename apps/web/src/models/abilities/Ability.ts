@@ -10,12 +10,21 @@ import type { SpellGrant } from "../magic/spells/SpellGrant"
 import type { Attribute } from "../sheet/Attribute"
 import type { Proficiency } from "../sheet/Proficiency"
 
+/** Self-inflicted, unpreventable hit-point cost paid when activating an ability. */
+export interface AbilitySelfDamageCost {
+  /** Dice notation, e.g. 1d6 (the blood hunter's hemocraft die at level 5). */
+  dice: string
+  damageType: DamageType
+}
+
 export type AbilityActivationOption = {
   id: string
   /** Rótulo exibido no modal de escolha. */
   name: string
   /** Texto curto exibido antes da escolha. */
   description?: string
+  /** Additional self-damage only when this option is selected (e.g. Amplify). */
+  selfDamageOnUse?: AbilitySelfDamageCost
   /** Por quanto tempo as mini-habilidades escolhidas permanecem disponíveis. */
   duration?: CharacterConditionDuration
   /**
@@ -93,6 +102,8 @@ export interface Ability {
   usage?: Usage
   /** Custos externos consumidos atomicamente ao ativar a habilidade. */
   resourceCosts?: AbilityResourceCostGroup[]
+  /** Unpreventable self-damage rolled on activation; bypasses resistance and temporary HP. */
+  selfDamageOnUse?: AbilitySelfDamageCost
   /** Permite escolher um nível maior no momento do uso. */
   resourceUpcast?: AbilityResourceUpcastDefinition
   kind?: AbilityKind
