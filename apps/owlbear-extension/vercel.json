@@ -2,5 +2,11 @@
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "buildCommand": "npm run build",
   "outputDirectory": "dist",
-  "installCommand": "npm ci --include=dev --ignore-scripts"
+  "installCommand": "npm ci --include=dev --ignore-scripts",
+  "rewrites": [
+    {
+      "source": "/api/compendium/:path*",
+      "destination": "https://dnd-magic-manager.vercel.app/api/compendium/:path*"
+    }
+  ]
 }
