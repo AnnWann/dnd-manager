@@ -92,6 +92,9 @@ function App() {
        onKicked:()=>{setError("Acesso à sessão revogado.");disconnect()},
        onStatusChange:state=>{
          if(socket.current !== ws)return
+         if(state === "reconnecting" || state === "error" || state === "disconnected") {
+           setCharacters({}); setAbilities({}); setHp({}); setConditions({}); setInventoryState(null); setRuntimeConfig(null)
+         }
          setStatus(state === "connected" ? "Conectado à sessão"
            : state === "reconnecting" ? "Reconectando à sessão..."
            : state === "error" ? "Erro de conexão; tentando novamente..."
@@ -116,6 +119,7 @@ function App() {
        if (message.type === "session.action.result") publishServerActionRoll(message.result as Parameters<typeof publishServerActionRoll>[0])
        if (message.type === "session.error") setError(String(message.message ?? "Erro na sessão."))
        if (message.type === "session.ready") {
+         setError("")
          setStatus("Conectado à sessão")
          // SessionTransport owns authenticated heartbeats and reconnection.
        }
