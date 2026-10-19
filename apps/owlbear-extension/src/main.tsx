@@ -6,12 +6,13 @@ import { SharedCharacterTabs } from "@dnd-manager/game-ui/shared-character-tabs"
 import { SharedSessionHp } from "@dnd-manager/game-ui/shared-session-hp"
 import { CharacterSheetLayout } from "@dnd-manager/game-ui/character-sheet-layout"
 import { CharacterSheetHeader } from "@dnd-manager/game-ui/character-sheet-header"
+import { CharacterSheetStatGrid } from "@dnd-manager/game-ui/character-sheet-stat-grid"
 import "./style.css"
 
 const origin = (import.meta.env.VITE_DND_MANAGER_URL || "https://dnd-magic-manager.vercel.app").replace(/\/$/, "")
 type Session = { id: string; name: string; role: "MASTER" | "PLAYER" }
 type RuntimeCharacter = { characterId: string; ownerUserId?: string; active?: boolean; character?: Record<string, unknown> }
-type RuntimeHp = { characterId: string; current: number; max: number; temporary: number; currentMax: number; attributes?: Record<string, number>; hitDice?: Record<string, {current: number; max: number}> }
+type RuntimeHp = { characterId: string; current: number; max: number; temporary: number; currentMax: number; attributes?: Record<string, number>; hitDice?: Record<string, {current: number; max: number}>; stats?: { exhaustion?: number; inspiration?: boolean; initiativeAdjustment?: number; armorClassAdjustment?: number } }
 type AbilityState = { characterId: string; character: Record<string, unknown> }
 const asRecord = (value: unknown): Record<string, unknown> => value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {}
 const numeric = (value: unknown): string => typeof value === "number" && Number.isFinite(value) ? String(value) : "—"
@@ -129,6 +130,12 @@ function App() {
  sheet: <CharacterSheetLayout mode={sheetMode} onModeChange={setSheetMode} configuration={<p>Os campos estruturais só serão editáveis depois de integrar os controles do CharacterWorkspace ao Owlbear.</p>} play={<><SharedSessionHp current={health?.current ?? 0} max={health?.currentMax ?? health?.max ?? 0}
    temporary={health?.temporary ?? 0} hitDice={health?.hitDice} canEdit={status === "Conectado à sessão"}
    onHeal={amount => sendHp("character.hp.heal", amount)} onDamage={amount => sendHp("character.hp.damage", amount)}/>
+   <CharacterSheetStatGrid stats={[
+     {id:"exhaustion",label:"Exaustão",value:numeric(health?.stats?.exhaustion ?? 0)},
+     {id:"inspiration",label:"Inspiração",value:health?.stats?.inspiration ? "Disponível" : "Gasta"},
+     {id:"initiative-adjust",label:"Ajuste de iniciativa",value:numeric(health?.stats?.initiativeAdjustment ?? 0)},
+     {id:"armor-adjust",label:"Ajuste de CA",value:numeric(health?.stats?.armorClassAdjustment ?? 0)},
+   ]} />
    <h3>Atributos</h3><div className="stats">{(["str","dex","con","int","wis","cha"] as const).map(k => <CharacterSheetDerivedTile key={k} label={k.toUpperCase()} value={numeric(health?.attributes?.[k] ?? attributes[k])} />)}</div></>} />,
  abilities: <p>Os controles de habilidades requerem a adaptação do CharacterWorkspace e as operações autorizadas do Session Server.</p>,
  "spells-list": <p>Magias: integração com o estado autoritativo e o módulo de conjuração pendente.</p>,
