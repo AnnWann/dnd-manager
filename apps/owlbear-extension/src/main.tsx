@@ -121,12 +121,12 @@ function App() {
        if (message.type === "session.dice.result") {
          publishServerDiceRoll(message.result as Parameters<typeof publishServerDiceRoll>[0])
          const result = message.result as DiceHistoryEntry["result"]
-         if (result && typeof result.id === "string") setRollHistory(previous => previous.some(entry=>entry.result.id===result.id)?previous:[{kind:"dice",result:result as Extract<DiceHistoryEntry,{kind:"dice"}>["result"]},...previous].slice(0,60))
+         if (result && typeof result.id === "string") setRollHistory(previous => previous.some(entry=>entry.result.id===result.id)?previous:[{kind:"dice" as const,result:result as Extract<DiceHistoryEntry,{kind:"dice"}>["result"]},...previous].slice(0,60))
        }
        if (message.type === "session.action.result") {
          publishServerActionRoll(message.result as Parameters<typeof publishServerActionRoll>[0])
          const result = message.result as DiceHistoryEntry["result"]
-         if (result && typeof result.id === "string") setRollHistory(previous => previous.some(entry=>entry.result.id===result.id)?previous:[{kind:"action",result:result as Extract<DiceHistoryEntry,{kind:"action"}>["result"]},...previous].slice(0,60))
+         if (result && typeof result.id === "string") setRollHistory(previous => previous.some(entry=>entry.result.id===result.id)?previous:[{kind:"action" as const,result:result as Extract<DiceHistoryEntry,{kind:"action"}>["result"]},...previous].slice(0,60))
        }
        if (message.type === "session.error") setError(String(message.message ?? "Erro na sessão."))
        if (message.type === "session.ready") {
