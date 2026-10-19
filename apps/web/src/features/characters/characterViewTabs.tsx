@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react"
+import { CharacterTabStrip } from "@dnd-manager/game-ui/character-tab-strip"
 import {
   BadgeCheck,
   ScrollText,
@@ -57,56 +57,10 @@ export function CharacterViewTabs({
   setActiveTab,
   tabs = CHARACTER_TABS,
 }: Props) {
-  const activeButtonRef = useRef<HTMLButtonElement | null>(null)
   const customSystemDefinitions = useCustomSystemDefinitions()
-
-  useEffect(() => {
-    activeButtonRef.current?.scrollIntoView({
-      behavior: "smooth",
-      block: "nearest",
-      inline: "center",
-    })
-  }, [activeTab])
-
-  return (
-    <nav
-      aria-label="Seções do personagem"
-      className="overflow-x-auto overscroll-x-contain rounded-xl border border-border bg-bg p-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
-    >
-      <div className="flex min-w-max snap-x snap-mandatory gap-1 sm:gap-2 lg:min-w-0">
-        {tabs.map((tab) => {
-          const customSystem = customSystemDefinitions.find(
-            (definition) => definition.id === tab.key,
-          )
-          const TabIcon = customSystem
-            ? getCustomSystemIconComponent(customSystem.icon)
-            : tab.icon
-          const isActive = activeTab === tab.key
-
-          return (
-            <button
-              ref={isActive ? activeButtonRef : undefined}
-              key={tab.key}
-              type="button"
-              title={tab.label}
-              aria-label={tab.label}
-              aria-current={isActive ? "page" : undefined}
-              onClick={() => setActiveTab(tab.key)}
-              className={[
-                "flex h-12 w-12 shrink-0 snap-center items-center justify-center gap-2 rounded-lg px-3 text-xs transition-colors sm:h-10 sm:w-auto sm:min-w-max lg:min-w-0 lg:flex-1",
-                isActive
-                  ? "bg-accentBg font-medium text-textH"
-                  : "text-text hover:bg-[color:var(--social-bg)]",
-              ].join(" ")}
-            >
-              <TabIcon className="h-5 w-5 shrink-0 sm:h-4 sm:w-4" />
-              <span className="hidden whitespace-nowrap sm:inline">
-                {tab.label}
-              </span>
-            </button>
-          )
-        })}
-      </div>
-    </nav>
-  )
+  return <CharacterTabStrip activeTab={activeTab} onChange={setActiveTab}
+    tabs={tabs.map(tab => {
+      const system = customSystemDefinitions.find(definition => definition.id === tab.key)
+      return { key: tab.key, label: tab.label, icon: system ? getCustomSystemIconComponent(system.icon) : tab.icon }
+    })} />
 }
