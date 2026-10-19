@@ -296,7 +296,7 @@ export function flattenBonuses(
           : " — todas as perícias"
         entries.push({
           id: `${target}-${index}`,
-          label: `${option.label}${scope}${entry.weaponId ? ` — ${entry.weaponId}` : ""}: ${formatBonus(entry.bonus)}`,
+          label: `${option.label}${scope}: ${formatBonus(entry.bonus)}`,
           remove: (current) => ({
             ...current,
             skillCheckBonus: (current.skillCheckBonus ?? []).filter(
@@ -316,7 +316,7 @@ export function flattenBonuses(
           : " — todos os atributos"
         entries.push({
           id: `${target}-${index}`,
-          label: `${option.label}${scope}: ${formatBonus(entry.bonus)}`,
+          label: `${option.label}${scope}${entry.weaponId ? ` — arma ${entry.weaponId}` : ""}: ${formatBonus(entry.bonus)}`,
           remove: (current) => ({
             ...current,
             [target]: (current[target] ?? []).filter(
