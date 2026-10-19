@@ -31,6 +31,7 @@ function App() {
  const [hp, setHp] = useState<Record<string, RuntimeHp>>({})
  const [conditions, setConditions] = useState<Record<string, Record<string, unknown>>>({})
  const [runtimeConfig, setRuntimeConfig] = useState<Record<string, unknown> | null>(null)
+ const [spellLibrary, setSpellLibrary] = useState<Record<string, unknown>[]>([])
  const [selectedId, setSelectedId] = useState("")
  const [sheetMode, setSheetMode] = useState<"play" | "configuration">("play")
  const [error, setError] = useState("")
@@ -43,7 +44,7 @@ function App() {
    heartbeat.current = null
    socket.current?.close(1000, "Leaving session")
    socket.current = null
-   setCharacters({}); setAbilities({}); setHp({}); setConditions({}); setRuntimeConfig(null); setSelectedId(""); setStatus("Desconectado")
+   setCharacters({}); setAbilities({}); setHp({}); setConditions({}); setRuntimeConfig(null); setSpellLibrary([]); setSelectedId(""); setStatus("Desconectado")
  }, [])
  useEffect(() => () => { socket.current?.close(); if (heartbeat.current) clearInterval(heartbeat.current) }, [])
  const api = useCallback(async <T,>(path: string): Promise<T> => {
@@ -82,6 +83,9 @@ function App() {
    try {
      const result = await api<{ token: string; baseUrl: string; role: string; clientId: string }>("?op=connect&sessionId=" + encodeURIComponent(id))
      setRole(result.role)
+     void api<{spells:Record<string,unknown>[]}>("?op=homebrew-spells&sessionId="+encodeURIComponent(id))
+       .then(data=>setSpellLibrary(Array.isArray(data.spells)?data.spells:[]))
+       .catch(error=>console.warn("[owlbear] homebrew spell library unavailable",error))
      const url = new URL(result.baseUrl)
      url.protocol = url.protocol === "https:" ? "wss:" : "ws:"
      url.pathname = "/session/" + encodeURIComponent(id) + "/connect"
@@ -138,7 +142,7 @@ function App() {
  {selectedId && chosen && <article>
  <CharacterSheetHeader name={String(raw.name ?? selectedId)} id={selectedId} />
  <NativeCharacterSheetHost
-   characterId={selectedId} raw={raw} hp={health as unknown as Record<string, unknown>} conditions={conditions[selectedId]} runtimeConfig={runtimeConfig} role={role === "MASTER" ? "MASTER" : "PLAYER"}
+   characterId={selectedId} raw={raw} hp={health as unknown as Record<string, unknown>} conditions={conditions[selectedId]} runtimeConfig={runtimeConfig} spells={spellLibrary} role={role === "MASTER" ? "MASTER" : "PLAYER"}
    sessionId={sessionId} connected={status === "Conectado à sessão"}
    send={message => { if (socket.current?.readyState !== WebSocket.OPEN) return false; socket.current.send(JSON.stringify(message)); return true }}
  />
