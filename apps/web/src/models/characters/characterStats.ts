@@ -145,7 +145,7 @@ export function getScopedCharacterBonuses(
   weaponId?: string,
 ): Bonus[] {
   const collect = (
-    collection: { bonuses?: Partial<Record<ScopedBonusKey, Array<{ attribute?: Attribute; bonus: Bonus }>>> },
+    collection: { bonuses?: Partial<Record<ScopedBonusKey, Array<{ attribute?: Attribute; weaponId?: string; bonus: Bonus }>>> },
   ) =>
     (collection.bonuses?.[key] ?? [])
       .filter((entry) => (!entry.attribute || entry.attribute === attribute) && (!entry.weaponId || entry.weaponId === weaponId))
