@@ -27,6 +27,7 @@ type Props = {
   hp?: Raw
   conditions?: Raw
   runtimeConfig?: Raw | null
+  inventoryState?: Raw | null
   spells?: Raw[]
   role: "MASTER" | "PLAYER"
   sessionId: string
@@ -66,7 +67,7 @@ function ensureCharacter(raw: Raw, hp: Raw | undefined, conditions: Raw | undefi
 /** Adapter for the original website components, not a rewritten character sheet.
  * Every mutation goes to the authoritative DO; unsupported diffs are rejected.
  */
-export function NativeCharacterSheetHost({ characterId, raw, hp, conditions, runtimeConfig, spells, role, sessionId, connected, send }: Props) {
+export function NativeCharacterSheetHost({ characterId, raw, hp, conditions, runtimeConfig, inventoryState, spells, role, sessionId, connected, send }: Props) {
   const [notice, setNotice] = useState("")
   useEffect(() => {
     const config = obj(runtimeConfig?.config)
@@ -183,7 +184,7 @@ export function NativeCharacterSheetHost({ characterId, raw, hp, conditions, run
     abilitiesByCharacterId: {[characterId]: {characterId, character:raw, initialized:true, revision:0}},
     conditionsByCharacterId: conditions ? {[characterId]:conditions} : {},
     sessionCharactersById: {[characterId]: {characterId,character:raw,active:true}},
-    characterSnapshotReady: true, inventoryState:null, missionState:null, initiativeState:null,
+    characterSnapshotReady: true, inventoryState:inventoryState ?? null, missionState:null, initiativeState:null,
     publishRuntimeConfig:noop, initializeAbilities:noop, initializeHp:noop, initializeConditions:noop,
     initializeInventory:noop,initializeMissions:noop,initializeInitiative:noop,
     dispatchSheetOperation:(operation:unknown)=>sendSheet(operation),
@@ -210,8 +211,8 @@ export function NativeCharacterSheetHost({ characterId, raw, hp, conditions, run
     dispatchSavingThrowOperation:(op:unknown)=>sendSheet(op),
     dispatchSkillOperation:(op:unknown)=>sendSheet(op),
     dispatchConditionOperation:(op:unknown)=>dispatch("session.conditions.operation",op),
-    canAssignOwners:role==="MASTER",canEditCharacterType:role==="MASTER",canUseGroundInventory:false,
-    partyInventory:[],owners:[],knownPlayerKeys:[],getOwner:()=>({id:"",name:"",role:"player"}),
+    canAssignOwners:role==="MASTER",canEditCharacterType:role==="MASTER",canUseGroundInventory:inventoryState?.partyInventoryAccessible !== false,
+    partyInventory:Array.isArray(inventoryState?.partyInventory) ? inventoryState.partyInventory : [],owners:[],knownPlayerKeys:[],getOwner:()=>({id:"",name:"",role:"player"}),
     createOwner:()=>{throw new Error("Não é permitido criar proprietários pelo Owlbear")},
     currentOwner:undefined,
     deleteCharacter:()=>reject("exclusão de personagem"),
