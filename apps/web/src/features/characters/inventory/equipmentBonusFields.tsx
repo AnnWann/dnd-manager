@@ -114,13 +114,14 @@ export function EquipmentBonusesFields({
   return (
     <BonusesFields
       bonuses={equipment.bonuses ?? {}}
-      description="Bônus aplicados enquanto o item estiver equipado."
+      description={item.equipSlot === "weapon" ? "Bônus de ataque e dano desta arma se aplicam somente a ela." : "Bônus aplicados enquanto o item estiver equipado."}
       onChange={(bonuses) =>
         onUpdate((current) => ({
           ...(current as Equipment),
           bonuses,
         }))
       }
+      owningWeapon={item.equipSlot === "weapon" ? { id: item.id, name: item.name } : undefined}
     />
   )
 }
@@ -130,11 +131,13 @@ export function BonusesFields({
   onChange,
   description = "Bônus aplicados enquanto esta habilidade estiver disponível.",
   character,
+  owningWeapon,
 }: {
   bonuses: BonusCollection
   onChange: (bonuses: BonusCollection) => void
   description?: string
   character?: CharacterTemplate
+  owningWeapon?: { id: string; name: string }
 }) {
   const [dialogOpen, setDialogOpen] = useState(false)
   const entries = flattenBonuses(bonuses)
@@ -188,6 +191,7 @@ export function BonusesFields({
       <AddBonusDialog
         open={dialogOpen}
         character={character}
+        owningWeapon={owningWeapon}
         onClose={() => setDialogOpen(false)}
         onAdd={(entry) => {
           if (entry.target === "damageAffinity") {
@@ -370,11 +374,13 @@ type AddBonusEntry =
 function AddBonusDialog({
   open,
   character,
+  owningWeapon,
   onClose,
   onAdd,
 }: {
   open: boolean
   character?: CharacterTemplate
+  owningWeapon?: { id: string; name: string }
   onClose: () => void
   onAdd: (entry: AddBonusEntry) => void
 }) {
@@ -528,7 +534,15 @@ function AddBonusDialog({
                 </label>
               ) : null}
 
-              {(target === "weaponAttackBonus" || target === "weaponDamageBonus") && character ? (
+              {(target === "weaponAttackBonus" || target === "weaponDamageBonus") && owningWeapon ? (
+                <label className="grid gap-1">
+                  <span className="text-xs font-medium text-textH">Limitar à arma</span>
+                  <Select value={owningWeapon.id} disabled>
+                    <option value={owningWeapon.id}>{owningWeapon.name} (esta arma)</option>
+                  </Select>
+                </label>
+              ) : null}
+              {(target === "weaponAttackBonus" || target === "weaponDamageBonus") && character && !owningWeapon ? (
                 <label className="grid gap-1">
                   <span className="text-xs font-medium text-textH">Limitar à arma</span>
                   <Select value={scopeWeaponId} onChange={(event) => setScopeWeaponId(event.target.value)}>
