@@ -219,7 +219,7 @@ export function BonusesFields({
               ...bonuses,
               [entry.target]: [
                 ...(bonuses[entry.target] ?? []),
-                { attribute: entry.scopeAttribute, bonus: entry.bonus },
+                { attribute: entry.scopeAttribute, ...((entry.target === "weaponAttackBonus" || entry.target === "weaponDamageBonus") && entry.scopeWeaponId ? { weaponId: entry.scopeWeaponId } : {}), bonus: entry.bonus },
               ],
             })
           } else {
@@ -316,7 +316,7 @@ export function flattenBonuses(
           : " — todos os atributos"
         entries.push({
           id: `${target}-${index}`,
-          label: `${option.label}${scope}: ${formatBonus(entry.bonus)}`,
+          label: `${option.label}${scope}${entry.weaponId ? ` — arma ${entry.weaponId}` : ""}: ${formatBonus(entry.bonus)}`,
           remove: (current) => ({
             ...current,
             [target]: (current[target] ?? []).filter(
@@ -363,6 +363,7 @@ type AddBonusEntry =
       attribute: Attribute
       scopeAttribute?: Attribute
       scopeSkill?: Skill
+      scopeWeaponId?: string
       bonus: Bonus
     }
 
@@ -381,6 +382,7 @@ function AddBonusDialog({
   const [attribute, setAttribute] = useState<Attribute>("str")
   const [scopeAttribute, setScopeAttribute] = useState<"all" | Attribute>("all")
   const [scopeSkill, setScopeSkill] = useState<"all" | Skill>("all")
+  const [scopeWeaponId, setScopeWeaponId] = useState("all")
   const [type, setType] = useState<Bonus["type"]>("add")
   const [value, setValue] = useState(1)
   const [useFormula, setUseFormula] = useState(false)
@@ -405,6 +407,7 @@ function AddBonusDialog({
     setAttribute("str")
     setScopeAttribute("all")
     setScopeSkill("all")
+    setScopeWeaponId("all")
     setType("add")
     setValue(1)
     setUseFormula(false)
@@ -525,6 +528,18 @@ function AddBonusDialog({
                 </label>
               ) : null}
 
+              {(target === "weaponAttackBonus" || target === "weaponDamageBonus") && character ? (
+                <label className="grid gap-1">
+                  <span className="text-xs font-medium text-textH">Limitar à arma</span>
+                  <Select value={scopeWeaponId} onChange={(event) => setScopeWeaponId(event.target.value)}>
+                    <option value="all">Todas as armas</option>
+                    {(character.get("equipment").weapons ?? []).map((weapon) => (
+                      <option key={weapon.id} value={weapon.id}>{weapon.name}</option>
+                    ))}
+                  </Select>
+                </label>
+              ) : null}
+
               {supportsSkillScope ? (
                 <label className="grid gap-1">
                   <span className="text-xs font-medium text-textH">Limitar à perícia</span>
@@ -618,6 +633,7 @@ function AddBonusDialog({
                 attribute,
                 scopeAttribute: scopeAttribute === "all" ? undefined : scopeAttribute,
                 scopeSkill: scopeSkill === "all" ? undefined : scopeSkill,
+                scopeWeaponId: scopeWeaponId === "all" ? undefined : scopeWeaponId,
                 bonus: {
                   type,
                   value: Math.abs(value),
