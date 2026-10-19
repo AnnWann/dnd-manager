@@ -40,3 +40,20 @@ export async function setTokenCreatureLink(tokenId:string,link:TokenCreatureLink
    }
  })
 }
+
+export const TOKEN_COMPENDIUM_CREATURE_METADATA = "com.dnd-manager.owlbear/compendium-creature"
+export function readTokenCompendiumCreature(metadata: Record<string, unknown>): Record<string,unknown> | null {
+ const value=metadata[TOKEN_COMPENDIUM_CREATURE_METADATA]
+ return value && typeof value==="object"&&!Array.isArray(value) ? value as Record<string,unknown>:null
+}
+export async function setTokenCompendiumCreature(tokenId:string,creature:Record<string,unknown>|null) {
+ await OBR.scene.items.updateItems([tokenId],items=>{
+   for(const item of items){
+     item.metadata[TOKEN_COMPENDIUM_CREATURE_METADATA]=creature
+     if(creature){
+       item.metadata[TOKEN_CREATURE_METADATA]=null
+       item.metadata[TOKEN_CHARACTER_METADATA]=null
+     }
+   }
+ })
+}
