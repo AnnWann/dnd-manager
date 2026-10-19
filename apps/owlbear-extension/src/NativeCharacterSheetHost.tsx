@@ -16,7 +16,12 @@ import { CharacterRaceTab } from "../../web/src/features/characters/race/charact
 import { CharacterProfileTab } from "../../web/src/features/characters/profile/characterProfileV2"
 import { CharacterRestControls } from "../../web/src/features/characters/rest/characterRestControlsV2"
 import { PartyInventorySettingsProvider } from "../../web/src/contexts/partyInventorySettingsContext"
-import { SharedCharacterTabs, STANDARD_SHEET_TABS } from "@dnd-manager/game-ui/shared-character-tabs"
+import { SharedCharacterTabs } from "@dnd-manager/game-ui/shared-character-tabs"
+import { CHARACTER_TABS } from "../../web/src/features/characters/characterViewTabs"
+import { orderCharacterTabs, orderEmbeddedSystems, toCustomSystemExistingTab } from "../../web/src/views/CharacterView"
+import { useCustomSystemDefinitions } from "../../web/src/lib/customSystems/CustomSystemRegistry"
+import { CustomSystemsRuntime, CustomSystemsTabWithLibrary, isActiveSystemState } from "../../web/src/features/characters/customSystems/CustomSystemsTabWithLibrary"
+import { getCustomSystemPlacement } from "../../web/src/features/customSystems/CustomSystemPlacementEditor"
 import { CustomClassConfigurationTab } from "../../web/src/features/characters/characterSheet/classes/CustomClassConfigurationTab"
 import { hasCustomClass } from "../../web/src/models/characters/customClassConfig"
 import { toSheetOperationMessage } from "../../web/src/features/session-runtime/sheetRoutes"
@@ -226,6 +231,46 @@ export function NativeCharacterSheetHost({ characterId, raw, hp, conditions, run
     dispatchGameOperation:()=>reject("operação de jogo"),
   } as unknown as CharacterWorkspaceValue
 
+  const definitions = useCustomSystemDefinitions()
+  const activeSystemIds = new Set((character.get("sheet").customSystems ?? [])
+    .filter(isActiveSystemState).map(state => state.systemId))
+  const activeDefinitions = definitions.filter(definition =>
+    activeSystemIds.has(definition.id) && !definition.hiddenFromSheet)
+  const hiddenTabs = new Set<string>(character.get("sheet").hiddenCharacterTabs ?? [])
+  const staticTabs = CHARACTER_TABS.filter(tab =>
+    (tab.key !== "custom-class" || hasCustomClass(character)) &&
+    (tab.key === "sheet" || !hiddenTabs.has(tab.key)))
+  const tabs = orderCharacterTabs(staticTabs,activeDefinitions).map(tab => ({id:tab.key,label:tab.label}))
+  const actor = role === "MASTER" ? "master" as const : "owner" as const
+  const embeddedTab = (tabId:string,content:React.ReactNode):React.ReactNode => {
+    const target = toCustomSystemExistingTab(tabId)
+    if (!target) return content
+    const embedded = orderEmbeddedSystems(activeDefinitions,target)
+    return <>
+      {embedded.before.length ? <CustomSystemsTabWithLibrary character={character} updateCharacter={updateCharacter} actor={actor} systemIds={embedded.before}/> : null}
+      {content}
+      {embedded.after.length ? <CustomSystemsTabWithLibrary character={character} updateCharacter={updateCharacter} actor={actor} systemIds={embedded.after}/> : null}
+    </>
+  }
+  const sections:Record<string,React.ReactNode> = {
+    sheet:embeddedTab("sheet",<CharacterSheetTab character={character} updateCharacter={updateCharacter}/>),
+    abilities:embeddedTab("abilities",<CharacterAbilitiesTab character={character} updateCharacter={updateCharacter}/>),
+    "spells-list":embeddedTab("spells-list",<CharacterMagicTab character={character} updateCharacter={updateCharacter}/>),
+    equipment:embeddedTab("equipment",<CharacterEquipmentTab character={character} updateCharacter={updateCharacter}/>),
+    inventory:embeddedTab("inventory",<CharacterInventoryTab character={character} updateCharacter={updateCharacter}/>),
+    race:embeddedTab("race",<CharacterRaceTab character={character} updateCharacter={updateCharacter}/>),
+    profile:embeddedTab("profile",<CharacterProfileTab character={character} updateCharacter={updateCharacter}/>),
+    proficiencies:embeddedTab("proficiencies",<CharacterProficienciesTab character={character} updateCharacter={updateCharacter}/>),
+    "custom-class":<CustomClassConfigurationTab character={character} updateCharacter={updateCharacter}
+      readOnly={!connected} onApply={(className,config)=>{
+        dispatch("session.custom-class.operation",{type:"character.class.custom.configure",characterId,className,config})
+      }}/>,
+  }
+  for(const definition of activeDefinitions){
+    if(getCustomSystemPlacement(definition).mode !== "newTab") continue
+    sections[definition.id]=<CustomSystemsTabWithLibrary character={character} updateCharacter={updateCharacter}
+      actor={actor} systemIds={[definition.id]}/>
+  }
   return <MemoryRouter>
     <MagicProvider spells={(spells ?? []) as Spell[]}>
       <SessionRuntimeContext.Provider value={runtime}>
@@ -237,21 +282,12 @@ export function NativeCharacterSheetHost({ characterId, raw, hp, conditions, run
             inventoryAccessible={inventoryState?.partyInventoryAccessible !== false}
             canEditCarryCapacity={false}
             setAppState={() => {}}>
+          <CustomSystemsRuntime character={character} updateCharacter={updateCharacter}/>
           <CharacterRestControls character={character}
             partyInventory={Array.isArray(inventoryState?.partyInventory) ? inventoryState.partyInventory as never[] : []}
             updateCharacter={updateCharacter}
             completeLongRest={() => reject("descanso sem sessão autoritativa")} />
-          <SharedCharacterTabs key={characterId} tabs={STANDARD_SHEET_TABS.filter(tab => tab.id !== "custom-class" || hasCustomClass(character))} sections={{
-            sheet:<CharacterSheetTab character={character} updateCharacter={updateCharacter}/>,
-            abilities:<CharacterAbilitiesTab character={character} updateCharacter={updateCharacter}/>,
-            "spells-list":<CharacterMagicTab character={character} updateCharacter={updateCharacter}/>,
-            equipment:<CharacterEquipmentTab character={character} updateCharacter={updateCharacter}/>,
-            inventory:<CharacterInventoryTab character={character} updateCharacter={updateCharacter}/>,
-            race:<CharacterRaceTab character={character} updateCharacter={updateCharacter}/>,
-            profile:<CharacterProfileTab character={character} updateCharacter={updateCharacter}/>,
-            proficiencies:<CharacterProficienciesTab character={character} updateCharacter={updateCharacter}/>,
-            "custom-class":<CustomClassConfigurationTab character={character} updateCharacter={updateCharacter} readOnly={!connected} onApply={(className,config)=>{ dispatch("session.custom-class.operation",{type:"character.class.custom.configure",characterId,className,config}) }}/>,
-          }}/>
+          <SharedCharacterTabs key={characterId} tabs={tabs} sections={sections}/>
           </PartyInventorySettingsProvider>
         </CharacterWorkspaceProvider>
       </SessionRuntimeContext.Provider>
