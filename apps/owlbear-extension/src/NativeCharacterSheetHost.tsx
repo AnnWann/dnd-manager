@@ -1,4 +1,4 @@
-import React, { useCallback, useMemo, useState } from "react"
+import React, { useCallback, useEffect, useMemo, useState } from "react"
 import { MemoryRouter } from "react-router-dom"
 import { CharacterTemplate, type CharacterTemplateProps } from "../../web/src/models/characters/CharacterTemplate"
 import { CharacterWorkspaceProvider, type CharacterWorkspaceValue } from "../../web/src/features/characters/workspace/CharacterWorkspaceContext"
@@ -13,6 +13,7 @@ import { CharacterProficienciesTab } from "../../web/src/features/characters/pro
 import { CharacterRaceTab } from "../../web/src/features/characters/race/characterRaceV2"
 import { CharacterProfileTab } from "../../web/src/features/characters/profile/characterProfileV2"
 import { SharedCharacterTabs } from "@dnd-manager/game-ui/shared-character-tabs"
+import { setRuntimeCustomSystemOverride } from "../../web/src/lib/customSystems/creationCustomSystemsBridge"
 
 type Raw = Record<string, unknown>
 type Props = {
@@ -20,6 +21,7 @@ type Props = {
   raw: Raw
   hp?: Raw
   conditions?: Raw
+  runtimeConfig?: Raw | null
   role: "MASTER" | "PLAYER"
   sessionId: string
   connected: boolean
@@ -28,7 +30,7 @@ type Props = {
 
 function same(a: unknown, b: unknown) { return JSON.stringify(a) === JSON.stringify(b) }
 const obj = (value: unknown): Raw => value && typeof value === "object" && !Array.isArray(value) ? value as Raw : {}
-function ensureCharacter(raw: Raw, hp: Raw | undefined) {
+function ensureCharacter(raw: Raw, hp: Raw | undefined, conditions: Raw | undefined) {
   const sheet = obj(raw.sheet)
   const hitpoints = obj(sheet.HP)
   const state = hp ?? {}
@@ -44,6 +46,9 @@ function ensureCharacter(raw: Raw, hp: Raw | undefined) {
         hitDice: state.hitDice ?? hitpoints.hitDice,
       },
       attributes: state.attributes ?? sheet.attributes,
+      savingThrowProficiencies: state.savingThrows ?? sheet.savingThrowProficiencies,
+      skills: state.skills ?? sheet.skills,
+      conditions: conditions?.conditions ?? sheet.conditions,
       stats: { ...obj(sheet.stats), ...obj(state.stats) },
     },
   } as Partial<CharacterTemplateProps>)
@@ -52,9 +57,14 @@ function ensureCharacter(raw: Raw, hp: Raw | undefined) {
 /** Adapter for the original website components, not a rewritten character sheet.
  * Every mutation goes to the authoritative DO; unsupported diffs are rejected.
  */
-export function NativeCharacterSheetHost({ characterId, raw, hp, conditions, role, sessionId, connected, send }: Props) {
+export function NativeCharacterSheetHost({ characterId, raw, hp, conditions, runtimeConfig, role, sessionId, connected, send }: Props) {
   const [notice, setNotice] = useState("")
-  const character = useMemo(() => ensureCharacter(raw, hp), [raw, hp])
+  useEffect(() => {
+    const config = obj(runtimeConfig?.config)
+    setRuntimeCustomSystemOverride(Array.isArray(config.customSystems) ? config.customSystems as never : null)
+    return () => setRuntimeCustomSystemOverride(null)
+  }, [runtimeConfig])
+  const character = useMemo(() => ensureCharacter(raw, hp, conditions), [raw, hp, conditions])
   const safeSend = useCallback((message: Raw) => {
     if (!connected) { setNotice("Sessão desconectada. Nenhuma alteração foi salva."); return false }
     const success = send(message)
@@ -122,7 +132,7 @@ export function NativeCharacterSheetHost({ characterId, raw, hp, conditions, rol
   const runtime = {
     status: connected ? "connected" : "disconnected",
     sessionId, clientId: "", role, presence: [], lastHeartbeatAckAt: null,
-    runtimeConfigSnapshot: null,
+    runtimeConfigSnapshot: runtimeConfig,
     hpByCharacterId: hp ? {[characterId]:hp} : {},
     abilitiesByCharacterId: {[characterId]: {characterId, character:raw, initialized:true, revision:0}},
     conditionsByCharacterId: conditions ? {[characterId]:conditions} : {},
