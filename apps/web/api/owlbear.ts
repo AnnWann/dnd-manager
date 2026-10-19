@@ -86,13 +86,14 @@ export async function GET(request: Request): Promise<Response> {
     const baseUrl = process.env.VITE_SESSION_SERVER_URL?.trim()
     if (!baseUrl || !baseUrl.startsWith("https://")) return json({ error: "Session server URL not configured" }, 503, headers)
     const issuedAt = Date.now(), expiresAt = issuedAt + 60_000
+    const clientId = crypto.randomUUID()
     const token = await signSessionConnectionToken({
       v: 1, sessionId, userId: grant.userId, role: role === CampaignRole.MASTER ? "MASTER" : "PLAYER",
-      clientId: crypto.randomUUID(), issuedAt, expiresAt,
+      clientId, issuedAt, expiresAt,
       canReadAnyCharacter: canReadAnyCharacter(role, permissions),
       canWriteAnyCharacter: canWriteAnyCharacter(role, permissions),
     }, secret)
-    return json({ token, baseUrl, expiresAt, role: role === CampaignRole.MASTER ? "MASTER" : "PLAYER" }, 200, headers)
+    return json({ token, baseUrl, clientId, expiresAt, role: role === CampaignRole.MASTER ? "MASTER" : "PLAYER" }, 200, headers)
   }
   if (op === "characters") {
     const characters = await prisma.character.findMany({ where: { ownerId: grant.userId }, select: { id: true, name: true, revision: true }, orderBy: { updatedAt: "desc" } })
