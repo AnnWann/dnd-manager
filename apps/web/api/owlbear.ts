@@ -62,6 +62,20 @@ export async function GET(request: Request): Promise<Response> {
   const grant = await validateGrant(request)
   if (!grant) return json({ error: "Authorization required or expired" }, 401, headers)
   const url = new URL(request.url), op = url.searchParams.get("op")
+  if (op === "creature-compendium") {
+    const campaignId = url.searchParams.get("sessionId") ?? ""
+    const campaign = await prisma.campaign.findUnique({
+      where: { id: campaignId },
+      select: { ownerId: true, members: { where: { userId: grant.userId, status: CampaignMemberStatus.ACTIVE }, select: { role: true }, take: 1 } },
+    })
+    if (!campaign || (campaign.ownerId !== grant.userId && campaign.members[0]?.role !== CampaignRole.MASTER))
+      return json({ error: "Master access required" }, 403, headers)
+    const assets = await prisma.campaignHomebrewAsset.findMany({
+      where: { campaignId, type: "CREATURE" },
+      select: { data: true },
+    })
+    return json({ creatures: assets.map(asset => asset.data) }, 200, headers)
+  }
   if (op === "homebrew-spells") {
     const campaignId = url.searchParams.get("sessionId") ?? ""
     if (!campaignId || campaignId.length > 256) return json({error:"Invalid session"},400,headers)
