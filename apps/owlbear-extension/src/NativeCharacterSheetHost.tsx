@@ -14,6 +14,8 @@ import { CharacterInventoryTab } from "../../web/src/features/characters/invento
 import { CharacterProficienciesTab } from "../../web/src/features/characters/proficiencies/characterProficiencies"
 import { CharacterRaceTab } from "../../web/src/features/characters/race/characterRaceV2"
 import { CharacterProfileTab } from "../../web/src/features/characters/profile/characterProfileV2"
+import { CharacterRestControls } from "../../web/src/features/characters/rest/characterRestControlsV2"
+import { PartyInventorySettingsProvider } from "../../web/src/contexts/partyInventorySettingsContext"
 import { SharedCharacterTabs } from "@dnd-manager/game-ui/shared-character-tabs"
 import { toSheetOperationMessage } from "../../web/src/features/session-runtime/sheetRoutes"
 import { deriveEquipmentOperations, deriveMagicOperations, deriveProficiencyOperations, deriveCustomSystemOperations, deriveConcentrationOperation, deriveGrantedSpellUsageOperation, resolveHandReference } from "../../web/src/features/characters/workspace/SessionCharacterWorkspace"
@@ -227,6 +229,16 @@ export function NativeCharacterSheetHost({ characterId, raw, hp, conditions, run
       <SessionRuntimeContext.Provider value={runtime}>
         <CharacterWorkspaceProvider value={workspace}>
           {notice ? <p role="alert" className="error">{notice}</p> : null}
+          <PartyInventorySettingsProvider
+            carryCapacity={Number(inventoryState?.carryCapacity ?? 0)}
+            additionalSupplyConsumption={Number(inventoryState?.additionalSupplyConsumption ?? 0)}
+            inventoryAccessible={inventoryState?.partyInventoryAccessible !== false}
+            canEditCarryCapacity={false}
+            setAppState={() => {}}>
+          <CharacterRestControls character={character}
+            partyInventory={Array.isArray(inventoryState?.partyInventory) ? inventoryState.partyInventory as never[] : []}
+            updateCharacter={updateCharacter}
+            completeLongRest={() => reject("descanso sem sessão autoritativa")} />
           <SharedCharacterTabs key={characterId} sections={{
             sheet:<CharacterSheetTab character={character} updateCharacter={updateCharacter}/>,
             abilities:<CharacterAbilitiesTab character={character} updateCharacter={updateCharacter}/>,
@@ -237,6 +249,7 @@ export function NativeCharacterSheetHost({ characterId, raw, hp, conditions, run
             profile:<CharacterProfileTab character={character} updateCharacter={updateCharacter}/>,
             proficiencies:<CharacterProficienciesTab character={character} updateCharacter={updateCharacter}/>,
           }}/>
+          </PartyInventorySettingsProvider>
         </CharacterWorkspaceProvider>
       </SessionRuntimeContext.Provider>
     </MagicProvider>
