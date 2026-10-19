@@ -1,7 +1,7 @@
 import { createHmac, timingSafeEqual } from "node:crypto"
 import { auth } from "../server/auth.js"
 import { prisma } from "../server/prisma.js"
-import { CampaignMemberStatus, CampaignRole } from "../generated/prisma/client.js"
+import { CampaignSpellApprovalStatus, HomebrewSpellStatus, CampaignMemberStatus, CampaignRole } from "../generated/prisma/client.js"
 import { canReadAnyCharacter, canWriteAnyCharacter, normalizeCampaignCapabilityOverrides } from "../src/shared/campaign/campaignRoles.js"
 import { isValidSessionConnectionSecret, signSessionConnectionToken } from "../src/shared/session-runtime/sessionConnectionToken.js"
 
@@ -62,6 +62,29 @@ export async function GET(request: Request): Promise<Response> {
   const grant = await validateGrant(request)
   if (!grant) return json({ error: "Authorization required or expired" }, 401, headers)
   const url = new URL(request.url), op = url.searchParams.get("op")
+  if (op === "homebrew-spells") {
+    const campaignId = url.searchParams.get("sessionId") ?? ""
+    if (!campaignId || campaignId.length > 256) return json({error:"Invalid session"},400,headers)
+    const membership = await prisma.campaign.findFirst({
+      where: { id:campaignId, OR:[{ownerId:grant.userId},{members:{some:{userId:grant.userId,status:CampaignMemberStatus.ACTIVE}}}] },
+      select: {id:true},
+    })
+    if (!membership) return json({error:"Session access denied"},403,headers)
+    const [approved, own] = await Promise.all([
+      prisma.campaignHomebrewSpell.findMany({
+        where:{ campaignId, status:CampaignSpellApprovalStatus.APPROVED, spell:{status:HomebrewSpellStatus.ACTIVE} },
+        select:{spell:{select:{index:true,data:true}}},
+      }),
+      prisma.homebrewSpell.findMany({
+        where:{ownerId:grant.userId,status:HomebrewSpellStatus.ACTIVE},
+        select:{index:true,data:true},
+      }),
+    ])
+    const spells = new Map<string,unknown>()
+    for (const entry of approved) spells.set(entry.spell.index,entry.spell.data)
+    for (const entry of own) spells.set(entry.index,entry.data)
+    return json({spells:[...spells.values()]},200,headers)
+  }
   if (op === "sessions") {
     const campaigns = await prisma.campaign.findMany({
       where: { OR: [{ ownerId: grant.userId }, { members: { some: { userId: grant.userId, status: CampaignMemberStatus.ACTIVE } } }] },
@@ -86,7 +109,8 @@ export async function GET(request: Request): Promise<Response> {
     const baseUrl = process.env.VITE_SESSION_SERVER_URL?.trim()
     if (!baseUrl || !baseUrl.startsWith("https://")) return json({ error: "Session server URL not configured" }, 503, headers)
     const issuedAt = Date.now(), expiresAt = issuedAt + 60_000
-    const clientId = crypto.randomUUID()
+    const requestedClientId = url.searchParams.get("clientId") ?? ""
+    const clientId = /^[a-f0-9-]{36}$/i.test(requestedClientId) ? requestedClientId : crypto.randomUUID()
     const token = await signSessionConnectionToken({
       v: 1, sessionId, userId: grant.userId, role: role === CampaignRole.MASTER ? "MASTER" : "PLAYER",
       clientId, issuedAt, expiresAt,

@@ -48,7 +48,11 @@
     "./inventory-floating-menu": "./src/InventoryFloatingMenu.tsx",
     "./inventory-item-tile": "./src/InventoryItemTile.tsx",
     "./shared-character-tabs": "./src/SharedCharacterTabs.tsx",
-    "./shared-session-hp": "./src/SharedSessionHp.tsx"
+    "./shared-session-hp": "./src/SharedSessionHp.tsx",
+    "./character-tab-strip": "./src/CharacterTabStrip.tsx",
+    "./character-sheet-header": "./src/CharacterSheetHeader.tsx",
+    "./character-sheet-stat-grid": "./src/CharacterSheetStatGrid.tsx",
+    "./character-workspace-bridge": "./src/CharacterWorkspaceBridge.tsx"
   },
   "peerDependencies": {
     "react": "^19.0.0",

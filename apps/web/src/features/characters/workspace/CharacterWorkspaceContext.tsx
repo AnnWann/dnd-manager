@@ -1,8 +1,4 @@
-import {
-  createContext,
-  useContext,
-  type ReactNode,
-} from "react"
+import { createCharacterWorkspaceBridge } from "@dnd-manager/game-ui/character-workspace-bridge"
 
 import type { TransferItemRequest } from "../../../contexts/characterContext"
 import type {
@@ -126,31 +122,6 @@ export type CharacterWorkspaceValue = {
   createOwner: (ownerName: string) => Player
 }
 
-const CharacterWorkspaceContext =
-  createContext<CharacterWorkspaceValue | null>(null)
-
-export function CharacterWorkspaceProvider({
-  value,
-  children,
-}: {
-  value: CharacterWorkspaceValue
-  children: ReactNode
-}) {
-  return (
-    <CharacterWorkspaceContext.Provider value={value}>
-      {children}
-    </CharacterWorkspaceContext.Provider>
-  )
-}
-
-export function useCharacterWorkspace(): CharacterWorkspaceValue {
-  const context = useContext(CharacterWorkspaceContext)
-
-  if (!context) {
-    throw new Error(
-      "useCharacterWorkspace precisa estar dentro de CharacterWorkspaceProvider.",
-    )
-  }
-
-  return context
-}
+const bridge = createCharacterWorkspaceBridge<CharacterWorkspaceValue>("CharacterWorkspace")
+export const CharacterWorkspaceProvider = bridge.Provider
+export const useCharacterWorkspace = bridge.useWorkspace

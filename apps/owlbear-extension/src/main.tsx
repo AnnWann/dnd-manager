@@ -1,15 +1,22 @@
+import { SessionTransport } from "@dnd-manager/session-client/transport"
+import { NativeCharacterSheetHost } from "./NativeCharacterSheetHost"
+import { publishServerDiceRoll, publishServerActionRoll } from "../../web/src/lib/diceRoller"
 import React, { useCallback, useEffect, useRef, useState } from "react"
 import { createRoot } from "react-dom/client"
 import OBR from "@owlbear-rodeo/sdk"
 import { CharacterSheetDerivedTile } from "@dnd-manager/game-ui/character-sheet-fields"
 import { SharedCharacterTabs } from "@dnd-manager/game-ui/shared-character-tabs"
 import { SharedSessionHp } from "@dnd-manager/game-ui/shared-session-hp"
+import { CharacterSheetLayout } from "@dnd-manager/game-ui/character-sheet-layout"
+import { CharacterSheetHeader } from "@dnd-manager/game-ui/character-sheet-header"
+import { CharacterSheetStatGrid } from "@dnd-manager/game-ui/character-sheet-stat-grid"
+import { sendCharacterSheetOperation } from "@dnd-manager/session-client/character-sheet-operations"
 import "./style.css"
 
 const origin = (import.meta.env.VITE_DND_MANAGER_URL || "https://dnd-magic-manager.vercel.app").replace(/\/$/, "")
 type Session = { id: string; name: string; role: "MASTER" | "PLAYER" }
 type RuntimeCharacter = { characterId: string; ownerUserId?: string; active?: boolean; character?: Record<string, unknown> }
-type RuntimeHp = { characterId: string; current: number; max: number; temporary: number; currentMax: number; attributes?: Record<string, number>; hitDice?: Record<string, {current: number; max: number}> }
+type RuntimeHp = { characterId: string; current: number; max: number; temporary: number; currentMax: number; attributes?: Record<string, number>; hitDice?: Record<string, {current: number; max: number}>; stats?: { exhaustion?: number; inspiration?: boolean; initiativeAdjustment?: number; armorClassAdjustment?: number } }
 type AbilityState = { characterId: string; character: Record<string, unknown> }
 const asRecord = (value: unknown): Record<string, unknown> => value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {}
 const numeric = (value: unknown): string => typeof value === "number" && Number.isFinite(value) ? String(value) : "—"
@@ -23,20 +30,22 @@ function App() {
  const [characters, setCharacters] = useState<Record<string, RuntimeCharacter>>({})
  const [abilities, setAbilities] = useState<Record<string, AbilityState>>({})
  const [hp, setHp] = useState<Record<string, RuntimeHp>>({})
+ const [conditions, setConditions] = useState<Record<string, Record<string, unknown>>>({})
+ const [runtimeConfig, setRuntimeConfig] = useState<Record<string, unknown> | null>(null)
+ const [spellLibrary, setSpellLibrary] = useState<Record<string, unknown>[]>([])
+ const [inventoryState, setInventoryState] = useState<Record<string, unknown> | null>(null)
  const [selectedId, setSelectedId] = useState("")
+ const [sheetMode, setSheetMode] = useState<"play" | "configuration">("play")
  const [error, setError] = useState("")
  const grant = useRef<string | null>(null)
- const socket = useRef<WebSocket | null>(null)
- const heartbeat = useRef<ReturnType<typeof setInterval> | null>(null)
+ const socket = useRef<SessionTransport | null>(null)
  useEffect(() => { let active = true; OBR.onReady(() => { if (active) setReady(true) }); return () => { active = false } }, [])
  const disconnect = useCallback(() => {
-   if (heartbeat.current) clearInterval(heartbeat.current)
-   heartbeat.current = null
-   socket.current?.close(1000, "Leaving session")
+   socket.current?.disconnect()
    socket.current = null
-   setCharacters({}); setAbilities({}); setHp({}); setSelectedId(""); setStatus("Desconectado")
+   setCharacters({}); setAbilities({}); setHp({}); setConditions({}); setRuntimeConfig(null); setSpellLibrary([]); setInventoryState(null); setSelectedId(""); setStatus("Desconectado")
  }, [])
- useEffect(() => () => { socket.current?.close(); if (heartbeat.current) clearInterval(heartbeat.current) }, [])
+ useEffect(() => () => { socket.current?.disconnect() }, [])
  const api = useCallback(async <T,>(path: string): Promise<T> => {
    if (!grant.current) throw new Error("Conecte sua conta primeiro.")
    const response = await fetch(origin + "/api/owlbear" + path, { credentials: "omit", headers: { Authorization: "Bearer " + grant.current, Accept: "application/json" } })
@@ -73,33 +82,62 @@ function App() {
    try {
      const result = await api<{ token: string; baseUrl: string; role: string; clientId: string }>("?op=connect&sessionId=" + encodeURIComponent(id))
      setRole(result.role)
-     const url = new URL(result.baseUrl)
-     url.protocol = url.protocol === "https:" ? "wss:" : "ws:"
-     url.pathname = "/session/" + encodeURIComponent(id) + "/connect"
-     url.search = ""; url.searchParams.set("token", result.token)
-     const ws = new WebSocket(url)
-     socket.current = ws
-     ws.onopen = () => { if (socket.current === ws) setStatus("Aguardando sincronização...") }
-     ws.onmessage = event => {
+     void api<{spells:Record<string,unknown>[]}>("?op=homebrew-spells&sessionId="+encodeURIComponent(id))
+       .then(data=>setSpellLibrary(Array.isArray(data.spells)?data.spells:[]))
+       .catch(error=>console.warn("[owlbear] homebrew spell library unavailable",error))
+     let firstToken:string|null = result.token
+     const ws = new SessionTransport({
+       baseUrl:result.baseUrl, sessionId:id, userId:"", role:result.role === "MASTER" ? "MASTER" : "PLAYER",
+       clientId:result.clientId, useTokenAuth:true, tokenEndpoint:"",
+       onKicked:()=>{setError("Acesso à sessão revogado.");disconnect()},
+       onStatusChange:state=>{
+         if(socket.current !== ws)return
+         if(state === "reconnecting" || state === "error" || state === "disconnected") {
+           setCharacters({}); setAbilities({}); setHp({}); setConditions({}); setInventoryState(null); setRuntimeConfig(null)
+         }
+         setStatus(state === "connected" ? "Conectado à sessão"
+           : state === "reconnecting" ? "Reconectando à sessão..."
+           : state === "error" ? "Erro de conexão; tentando novamente..."
+           : state === "connecting" ? "Aguardando sincronização..."
+           : "Desconectado")
+       },
+       getConnectionToken:async()=>{
+         if(firstToken){const value=firstToken;firstToken=null;return value}
+         const renewed=await api<{token:string}>("?op=connect&sessionId="+encodeURIComponent(id)+"&clientId="+encodeURIComponent(result.clientId))
+         return renewed.token
+       },
+       onMessage:rawMessage=>{
+         if(socket.current !== ws)return
+         const event = {data:rawMessage}
+
        if (socket.current !== ws) return
        let message: Record<string, unknown>
        try { message = JSON.parse(event.data) as Record<string, unknown> } catch { return }
        const entries = Array.isArray(message.characters) ? message.characters : []
        const character = asRecord(message.character)
+       if (message.type === "session.dice.result") publishServerDiceRoll(message.result as Parameters<typeof publishServerDiceRoll>[0])
+       if (message.type === "session.action.result") publishServerActionRoll(message.result as Parameters<typeof publishServerActionRoll>[0])
+       if (message.type === "session.error") setError(String(message.message ?? "Erro na sessão."))
        if (message.type === "session.ready") {
+         setError("")
          setStatus("Conectado à sessão")
-         heartbeat.current = setInterval(() => { if (ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify({ type: "session.heartbeat", clientId: result.clientId })) }, 30000)
+         // SessionTransport owns authenticated heartbeats and reconnection.
        }
        if (message.type === "session.characters.snapshot") setCharacters(Object.fromEntries(entries.map((v: unknown) => { const c = v as RuntimeCharacter; return [c.characterId, c] })))
        if (message.type === "session.character.updated") setCharacters(previous => ({ ...previous, [String(character.characterId)]: character as RuntimeCharacter }))
        if (message.type === "session.character.removed") setCharacters(previous => { const copy = { ...previous }; delete copy[String(message.characterId)]; return copy })
        if (message.type === "session.abilities.snapshot") setAbilities(Object.fromEntries(entries.map((v: unknown) => { const c = v as AbilityState; return [c.characterId, c] })))
        if (message.type === "session.abilities.updated") setAbilities(previous => ({ ...previous, [String(character.characterId)]: character as AbilityState }))
+       if (message.type === "session.inventory.snapshot" || message.type === "session.inventory.updated") setInventoryState(asRecord(message.state))
+       if (message.type === "session.config.snapshot") setRuntimeConfig(asRecord(message.snapshot))
+       if (message.type === "session.conditions.snapshot") setConditions(Object.fromEntries(entries.map((v: unknown) => { const c = v as {characterId: string}; return [c.characterId, asRecord(c)] })))
+       if (message.type === "session.conditions.updated") setConditions(previous => ({...previous,[String(character.characterId)]:character}))
        if (message.type === "session.hp.snapshot") setHp(Object.fromEntries(entries.map((v: unknown) => { const c = v as RuntimeHp; return [c.characterId, c] })))
        if (message.type === "session.hp.updated") setHp(previous => ({ ...previous, [String(character.characterId)]: character as RuntimeHp }))
-     }
-     ws.onclose = () => { if (socket.current === ws) { setStatus("Sessão desconectada; reconecte para atualizar."); if (heartbeat.current) clearInterval(heartbeat.current) } }
-     ws.onerror = () => { if (socket.current === ws) setError("Falha na conexão com o servidor da sessão.") }
+       }
+     })
+     socket.current=ws
+     ws.connect()
    } catch (e) { setStatus("Desconectado"); setError(String(e instanceof Error ? e.message : e)) }
  }, [api, disconnect])
  const list = Object.values(characters).filter(c => c.active !== false && (c.character || abilities[c.characterId]))
@@ -107,10 +145,6 @@ function App() {
  const raw = asRecord(abilities[selectedId]?.character ?? chosen?.character)
  const sheet = asRecord(raw.sheet)
  const health = hp[selectedId]
- const sendHp = (type: "character.hp.heal" | "character.hp.damage", amount: number) => {
-   if (!selectedId || socket.current?.readyState !== WebSocket.OPEN) { setError("Sessão desconectada."); return }
-   socket.current.send(JSON.stringify({ type: "session.hp.operation", operation: { type, characterId: selectedId, amount } }))
- }
  const attributes = asRecord(sheet.attributes)
  return <main>
  <header><strong>D&D Manager</strong><span>{ready ? "Owlbear conectado" : "Pré-visualização"}</span></header>
@@ -121,20 +155,12 @@ function App() {
  <p>{status}{sessionId && role ? " · " + (role === "MASTER" ? "Mestre" : "Jogador") : ""}</p>
  <label className="field">Personagem da sessão<select value={selectedId} onChange={e => setSelectedId(e.target.value)}><option value="">Selecione um personagem...</option>{list.map(c => <option key={c.characterId} value={c.characterId}>{String(asRecord(abilities[c.characterId]?.character ?? c.character).name ?? c.characterId)}</option>)}</select></label>
  {selectedId && chosen && <article>
- <h2>{String(raw.name ?? selectedId)}</h2>
- <SharedCharacterTabs key={selectedId} sections={{
- sheet: <><SharedSessionHp current={health?.current ?? 0} max={health?.currentMax ?? health?.max ?? 0}
-   temporary={health?.temporary ?? 0} hitDice={health?.hitDice} canEdit={status === "Conectado à sessão"}
-   onHeal={amount => sendHp("character.hp.heal", amount)} onDamage={amount => sendHp("character.hp.damage", amount)}/>
-   <h3>Atributos</h3><div className="stats">{(["str","dex","con","int","wis","cha"] as const).map(k => <CharacterSheetDerivedTile key={k} label={k.toUpperCase()} value={numeric(health?.attributes?.[k] ?? attributes[k])} />)}</div></>,
- abilities: <p>Os controles de habilidades requerem a adaptação do CharacterWorkspace e as operações autorizadas do Session Server.</p>,
- "spells-list": <p>Magias: integração com o estado autoritativo e o módulo de conjuração pendente.</p>,
- equipment: <p>Equipamento: integração com as operações de equipamento da sessão pendente.</p>,
- inventory: <p>Inventário: integração com o inventário da sessão pendente.</p>,
- race: <p>Raça: a interface completa depende do módulo compartilhado de raça.</p>,
- profile: <p>Perfil: a interface completa depende do módulo compartilhado de perfil.</p>,
- proficiencies: <p>Proficiências: integração com as operações de proficiência pendente.</p>
- }} />
+ <CharacterSheetHeader name={String(raw.name ?? selectedId)} id={selectedId} />
+ <NativeCharacterSheetHost
+   characterId={selectedId} raw={raw} hp={health as unknown as Record<string, unknown>} conditions={conditions[selectedId]} runtimeConfig={runtimeConfig} inventoryState={inventoryState} spells={spellLibrary} role={role === "MASTER" ? "MASTER" : "PLAYER"}
+   sessionId={sessionId} connected={status === "Conectado à sessão"}
+   send={message => socket.current?.sendRaw(JSON.stringify(message)) ?? false}
+ />
  </article>}
  </section><footer>O Durable Object é a fonte de verdade. O servidor da sessão determina quais personagens cada usuário pode receber.</footer>
  </main>

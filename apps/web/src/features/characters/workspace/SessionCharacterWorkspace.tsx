@@ -344,7 +344,7 @@ export function SessionCharacterWorkspace({ children }: { children: ReactNode })
   return <CharacterWorkspaceProvider value={value}>{children}</CharacterWorkspaceProvider>
 }
 
-function resolveHandReference(character: CharacterTemplate, reference: HandOccupantReference): EquippedItemReference | null {
+export function resolveHandReference(character: CharacterTemplate, reference: HandOccupantReference): EquippedItemReference | null {
   const equipment = character.get("equipment")
   if (reference.type === "shield") return equipment.shield ? { type: "shield" } : null
   if (reference.type === "weapon") {
@@ -355,7 +355,7 @@ function resolveHandReference(character: CharacterTemplate, reference: HandOccup
   return item ? { type: "held-item", itemId: item.id } : null
 }
 
-function deriveConcentrationOperation(
+export function deriveConcentrationOperation(
   current: CharacterTemplate,
   next: CharacterTemplate,
 ): SessionConcentrationOperation | null {
@@ -383,7 +383,7 @@ function deriveConcentrationOperation(
   }
 }
 
-function deriveGrantedSpellUsageOperation(
+export function deriveGrantedSpellUsageOperation(
   current: CharacterTemplate,
   next: CharacterTemplate,
 ): SessionAbilityOperation | null {
@@ -410,7 +410,7 @@ function deriveGrantedSpellUsageOperation(
   return null
 }
 
-function deriveCustomSystemOperations(current: CharacterTemplate, next: CharacterTemplate): SessionCustomSystemOperation[] {
+export function deriveCustomSystemOperations(current: CharacterTemplate, next: CharacterTemplate): SessionCustomSystemOperation[] {
   const activation = deriveCustomAbilityActivation(current, next)
   if (activation) return [activation]
 
@@ -588,7 +588,7 @@ function hasActivationSideEffects(current: CharacterTemplate, next: CharacterTem
   return JSON.stringify(beforeSheet) !== JSON.stringify(afterSheet)
 }
 
-function deriveProficiencyOperations(current: CharacterTemplate, next: CharacterTemplate): SessionProficiencyOperation[] {
+export function deriveProficiencyOperations(current: CharacterTemplate, next: CharacterTemplate): SessionProficiencyOperation[] {
   const characterId = current.get("id")
   const before = new Map((current.get("sheet").proficiencies ?? []).map((entry) => [entry.id, entry]))
   const after = new Map((next.get("sheet").proficiencies ?? []).map((entry) => [entry.id, entry]))
@@ -608,7 +608,7 @@ function deriveProficiencyOperations(current: CharacterTemplate, next: Character
   return operations
 }
 
-function deriveEquipmentOperations(current: CharacterTemplate, next: CharacterTemplate): SessionEquipmentOperation[] {
+export function deriveEquipmentOperations(current: CharacterTemplate, next: CharacterTemplate): SessionEquipmentOperation[] {
   const characterId = current.get("id")
   const attunementOperation = deriveAttunementOperation(current, next)
   if (attunementOperation) return [attunementOperation]
@@ -704,7 +704,7 @@ function collectEditableEquipmentItems(character: CharacterTemplate): Map<string
   return entries
 }
 
-function deriveMagicOperations(current: CharacterTemplate, next: CharacterTemplate): SessionMagicOperation[] {
+export function deriveMagicOperations(current: CharacterTemplate, next: CharacterTemplate): SessionMagicOperation[] {
   const characterId = current.get("id")
   const before = current.getOrCreateMagic()
   const after = next.getOrCreateMagic()
