@@ -104,6 +104,15 @@ export function NativeCharacterSheetHost({ characterId, raw, hp, conditions, run
     let next: CharacterTemplate
     try { next = updater(character) } catch (error) { reject(String(error)); return }
     if (same(character.toJSON(),next.toJSON())) return
+    const beforeJson = character.toJSON() as Record<string,unknown>
+    const afterJson = next.toJSON() as Record<string,unknown>
+    const changedTopLevel = Object.keys(afterJson).filter(key => !same(beforeJson[key],afterJson[key]))
+    const beforeSheet = character.get("sheet") as unknown as Record<string,unknown>
+    const afterSheet = next.get("sheet") as unknown as Record<string,unknown>
+    const changedSheet = Object.keys(afterSheet).filter(key => !same(beforeSheet[key],afterSheet[key]))
+    const domains = new Set(changedTopLevel.filter(key => key !== "sheet"))
+    for (const key of changedSheet) domains.add("sheet." + key)
+    if (domains.size > 1) return reject("alteração composta entre domínios")
     const ownerChanged = !same(character.get("owner"),next.get("owner"))
     const magicChanged = !same(character.get("magic"),next.get("magic"))
     const equipmentChanged = !same(character.get("equipment"),next.get("equipment"))
@@ -168,6 +177,15 @@ export function NativeCharacterSheetHost({ characterId, raw, hp, conditions, run
       if (!ops.length) return reject("sistemas customizados")
       if (ops.length !== 1) return reject("mudança composta de sistemas deve ser atômica")
       dispatch("session.abilities.operation",ops[0])
+      return
+    }
+    if (domains.size === 1 && domains.has("profile")) {
+      dispatch("session.profile.operation",{type:"character.profile.replace",characterId,profile:next.get("profile")})
+      return
+    }
+    if (domains.size === 1 && domains.has("sheet.race")) {
+      const sheet=next.get("sheet")
+      dispatch("session.race.operation",{type:"character.race.replace",characterId,race:sheet.race,skills:sheet.skills,savingThrowProficiencies:sheet.savingThrowProficiencies})
       return
     }
     if (concentration) {sendSheet(concentration);return}
