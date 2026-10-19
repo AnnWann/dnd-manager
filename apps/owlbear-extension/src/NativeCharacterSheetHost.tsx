@@ -14,6 +14,9 @@ import { CharacterProficienciesTab } from "../../web/src/features/characters/pro
 import { CharacterRaceTab } from "../../web/src/features/characters/race/characterRaceV2"
 import { CharacterProfileTab } from "../../web/src/features/characters/profile/characterProfileV2"
 import { SharedCharacterTabs } from "@dnd-manager/game-ui/shared-character-tabs"
+import { toSheetOperationMessage } from "../../web/src/features/session-runtime/sheetRoutes"
+import { deriveEquipmentOperations, deriveMagicOperations, deriveProficiencyOperations, deriveCustomSystemOperations, deriveConcentrationOperation, deriveGrantedSpellUsageOperation, resolveHandReference } from "../../web/src/features/characters/workspace/SessionCharacterWorkspace"
+import { ACTION_ROLL_REQUEST_EVENT, CREATURE_ROLL_REQUEST_EVENT, DICE_ROLL_REQUEST_EVENT } from "../../web/src/lib/diceRoller"
 import { setRuntimeCustomSystemOverride } from "../../web/src/lib/customSystems/creationCustomSystemsBridge"
 
 type Raw = Record<string, unknown>
@@ -132,6 +135,19 @@ export function NativeCharacterSheetHost({ characterId, raw, hp, conditions, run
     safeSend(actions[0])
   }, [character,characterId,reject,safeSend])
 
+  const sendSheet = (operation: unknown) => safeSend(toSheetOperationMessage(operation as Parameters<typeof toSheetOperationMessage>[0]) as Raw)
+  useEffect(() => {
+    const forward = (eventName: string, type: string) => (event: Event) => {
+      const detail = (event as CustomEvent).detail
+      if (!detail || !connected) return
+      if (eventName === DICE_ROLL_REQUEST_EVENT && obj(runtimeConfig?.config).diceRollingEnabled === false) return
+      safeSend({type,request:detail})
+    }
+    const events = [[DICE_ROLL_REQUEST_EVENT,"session.dice.roll"],[ACTION_ROLL_REQUEST_EVENT,"session.action.roll"],[CREATURE_ROLL_REQUEST_EVENT,"session.creature.roll"]] as const
+    const handlers = events.map(([event,type])=>[event,forward(event,type)] as const)
+    handlers.forEach(([event,handler])=>window.addEventListener(event,handler))
+    return () => handlers.forEach(([event,handler])=>window.removeEventListener(event,handler))
+  }, [connected,runtimeConfig,safeSend])
   const noop = () => false
   const runtime = {
     status: connected ? "connected" : "disconnected",
@@ -144,10 +160,10 @@ export function NativeCharacterSheetHost({ characterId, raw, hp, conditions, run
     characterSnapshotReady: true, inventoryState:null, missionState:null, initiativeState:null,
     publishRuntimeConfig:noop, initializeAbilities:noop, initializeHp:noop, initializeConditions:noop,
     initializeInventory:noop,initializeMissions:noop,initializeInitiative:noop,
-    dispatchSheetOperation:(operation:unknown)=>dispatch("session.hp.operation",operation),
-    dispatchHpOperation:(operation:unknown)=>dispatch("session.hp.operation",operation),
+    dispatchSheetOperation:(operation:unknown)=>sendSheet(operation),
+    dispatchHpOperation:(operation:unknown)=>sendSheet(operation),
     dispatchConditionOperation:(operation:unknown)=>dispatch("session.conditions.operation",operation),
-    dispatchConcentrationOperation:(operation:unknown)=>dispatch("session.hp.operation",operation),
+    dispatchConcentrationOperation:(operation:unknown)=>sendSheet(operation),
     dispatchAbilityOperation:(operation:unknown)=>dispatch("session.abilities.operation",operation),
     dispatchMagicOperation:(operation:unknown)=>dispatch("session.magic.operation",operation),
     dispatchEquipmentOperation:(operation:unknown)=>dispatch("session.equipment.operation",operation),
@@ -163,10 +179,10 @@ export function NativeCharacterSheetHost({ characterId, raw, hp, conditions, run
   const workspace = {
     mode:"campaign",characters:[character],activeCharacter:character,selectedCharacterId:characterId,
     setSelectedCharacterId:()=>{},updateCharacter,updateCharacterDomain:(_id:string,_domain:string,fn:(c:CharacterTemplate)=>CharacterTemplate)=>updateCharacter(_id,fn),
-    dispatchStatOperation:(op:unknown)=>dispatch("session.hp.operation",op),
-    dispatchAttributeOperation:(op:unknown)=>dispatch("session.hp.operation",op),
-    dispatchSavingThrowOperation:(op:unknown)=>dispatch("session.hp.operation",op),
-    dispatchSkillOperation:(op:unknown)=>dispatch("session.hp.operation",op),
+    dispatchStatOperation:(op:unknown)=>sendSheet(op),
+    dispatchAttributeOperation:(op:unknown)=>sendSheet(op),
+    dispatchSavingThrowOperation:(op:unknown)=>sendSheet(op),
+    dispatchSkillOperation:(op:unknown)=>sendSheet(op),
     dispatchConditionOperation:(op:unknown)=>dispatch("session.conditions.operation",op),
     canAssignOwners:role==="MASTER",canEditCharacterType:role==="MASTER",canUseGroundInventory:false,
     partyInventory:[],owners:[],knownPlayerKeys:[],getOwner:()=>({id:"",name:"",role:"player"}),
