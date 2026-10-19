@@ -14,6 +14,8 @@ import { CharacterSheetStatGrid } from "@dnd-manager/game-ui/character-sheet-sta
 import { sendCharacterSheetOperation } from "@dnd-manager/session-client/character-sheet-operations"
 import "./style.css"
 
+const DICE_POPOVER_ID = "com.dnd-manager.owlbear/dice-popover"
+const isDicePopover = new URLSearchParams(window.location.search).get("panel") === "dice"
 const origin = (import.meta.env.VITE_DND_MANAGER_URL || "https://dnd-magic-manager.vercel.app").replace(/\/$/, "")
 type Session = { id: string; name: string; role: "MASTER" | "PLAYER" }
 type RuntimeCharacter = { characterId: string; ownerUserId?: string; active?: boolean; character?: Record<string, unknown> }
@@ -36,8 +38,23 @@ function App() {
  const [spellLibrary, setSpellLibrary] = useState<Record<string, unknown>[]>([])
  const [inventoryState, setInventoryState] = useState<Record<string, unknown> | null>(null)
  const [selectedId, setSelectedId] = useState("")
- const [activeArea, setActiveArea] = useState<"sheet" | "dice">("sheet")
+ const [activeArea, setActiveArea] = useState<"sheet" | "dice">(isDicePopover ? "dice" : "sheet")
  const [rollHistory, setRollHistory] = useState<DiceHistoryEntry[]>([])
+ const openDicePopover = useCallback(async () => {
+   try {
+     await OBR.popover.open({
+       id: DICE_POPOVER_ID,
+       url: "/?panel=dice",
+       width: 440,
+       height: 590,
+       anchorReference: "POSITION",
+       anchorPosition: {left: window.screen.availWidth - 16, top: window.screen.availHeight - 16},
+       anchorOrigin: {horizontal: "RIGHT", vertical: "BOTTOM"},
+       transformOrigin: {horizontal: "RIGHT", vertical: "BOTTOM"},
+       disableClickAway: true,
+     })
+   } catch (error) { setError("Não foi possível abrir o rolador separado: " + String(error)) }
+ }, [])
  const [sheetMode, setSheetMode] = useState<"play" | "configuration">("play")
  const [error, setError] = useState("")
  const grant = useRef<string | null>(null)
@@ -158,19 +175,20 @@ function App() {
  const health = hp[selectedId]
  const attributes = asRecord(sheet.attributes)
  return <main className="owlbear-shell">
- <header><strong>D&D Manager</strong><span>{ready ? "Owlbear conectado" : "Pré-visualização"}</span></header>
- <section><h1>D&D Manager · Sessão</h1><p>Ficha e rolagens sincronizadas com o Session Server.</p>
+ <header><strong>{isDicePopover ? "D&D Manager · Dados" : "D&D Manager"}</strong><span>{ready ? "Owlbear conectado" : "Pré-visualização"}</span></header>
+ <section>{!isDicePopover && <><h1>D&D Manager · Sessão</h1><p>Ficha e rolagens sincronizadas com o Session Server.</p></>}
  <div className="toolbar"><button onClick={connectAccount}>{connected ? "Reconectar conta" : "Conectar ao D&D Manager"}</button><button disabled={!connected} onClick={() => void refreshSessions()}>Atualizar sessões</button></div>
  {error && <p role="alert" className="error">{error}</p>}
  <label className="field">Campanha / sessão<select value={sessionId} disabled={!connected} onChange={e => void connectSession(e.target.value)}><option value="">Selecione uma sessão...</option>{sessions.map(s => <option key={s.id} value={s.id}>{s.name} ({s.role === "MASTER" ? "Mestre" : "Jogador"})</option>)}</select></label>
  <p>{status}{sessionId && role ? " · " + (role === "MASTER" ? "Mestre" : "Jogador") : ""}</p>
  <label className="field">Personagem da sessão<select value={selectedId} onChange={e => setSelectedId(e.target.value)}><option value="">Selecione um personagem...</option>{list.map(c => <option key={c.characterId} value={c.characterId}>{String(asRecord(abilities[c.characterId]?.character ?? c.character).name ?? c.characterId)}</option>)}</select></label>
- <div className="mb-3 flex gap-2 rounded-xl border border-border bg-bg p-1" role="tablist" aria-label="Ferramentas da sessão">
+ {!isDicePopover && <button type="button" className="mb-3 inline-flex items-center gap-2 rounded-lg border border-accentBorder bg-accentBg px-3 py-2 text-xs font-semibold text-textH" onClick={()=>void openDicePopover()}>Abrir rolador separado ↗</button>}
+ {!isDicePopover && <div className="mb-3 flex gap-2 rounded-xl border border-border bg-bg p-1" role="tablist" aria-label="Ferramentas da sessão">
  <button type="button" role="tab" aria-selected={activeArea==="sheet"} onClick={()=>setActiveArea("sheet")} className={`flex-1 rounded-lg px-3 py-2 text-sm font-semibold ${activeArea==="sheet"?"bg-accentBg text-textH":"text-textMuted hover:bg-bg-subtle"}`}>Ficha</button>
  <button type="button" role="tab" aria-selected={activeArea==="dice"} onClick={()=>setActiveArea("dice")} className={`flex-1 rounded-lg px-3 py-2 text-sm font-semibold ${activeArea==="dice"?"bg-accentBg text-textH":"text-textMuted hover:bg-bg-subtle"}`}>Dados</button>
- </div>
+ </div>}
  <div role="tabpanel" hidden={activeArea!=="dice"}><SessionDicePanel connected={status==="Conectado à sessão"} selectedCharacterId={selectedId || undefined} history={rollHistory} onRoll={request=>socket.current?.sendRaw(JSON.stringify({type:"session.dice.roll",request}))??false}/></div>
- <div role="tabpanel" hidden={activeArea!=="sheet"}>
+ {!isDicePopover && <div role="tabpanel" hidden={activeArea!=="sheet"}>
  {selectedId && chosen && <article className="character-panel">
  <CharacterSheetHeader name={String(raw.name ?? selectedId)} id={selectedId} />
  <NativeCharacterSheetHost
@@ -179,7 +197,7 @@ function App() {
    send={message => socket.current?.sendRaw(JSON.stringify(message)) ?? false}
  />
  </article>}
- </div>
+ </div>}
  </section><footer>O Durable Object é a fonte de verdade. O servidor da sessão determina quais personagens cada usuário pode receber.</footer>
  </main>
 }
