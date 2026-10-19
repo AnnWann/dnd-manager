@@ -1,4 +1,5 @@
 import type { Ability } from "../../../../../web/src/models/abilities/Ability";
+import { getAbilitySelfDamageRollRequirements } from "../../../../../web/src/models/abilities/abilitySelfDamage";
 import {
   canActivateAbility,
   endAbilityEffect,
@@ -179,9 +180,33 @@ export class SessionActor extends BaseSessionActor {
       return;
     }
 
+    const digitalDiceEnabled = isDigitalDiceRollingEnabled(runtimeConfig);
+    if (operation.type === "character.ability.use") {
+      const ability = findAbilityForSource(current, operation.source);
+      if (!ability) {
+        this.sendAbilityError(webSocket, "ABILITY_NOT_FOUND", "A habilidade selecionada não existe.");
+        return;
+      }
+      const selfDamage = getAbilitySelfDamageRollRequirements(ability, operation.activationOptionId);
+      if (selfDamage.some(entry => entry.minimum < 1)) {
+        this.sendAbilityError(webSocket, "INVALID_SELF_DAMAGE_DICE", "Os dados de dano próprio estão configurados incorretamente.");
+        return;
+      }
+      if (!digitalDiceEnabled) {
+        const missingSelfDamage = selfDamage.filter(entry => {
+          const result = operation.bonusRollValues?.[entry.key];
+          return !Number.isInteger(result) || result! < entry.minimum || result! > entry.maximum;
+        });
+        if (missingSelfDamage.length > 0) {
+          this.sendAbilityError(webSocket, "PHYSICAL_SELF_DAMAGE_ROLL_REQUIRED", "Informe um resultado válido para o dano próprio: " + missingSelfDamage.map(entry => entry.label).join(", "));
+          return;
+        }
+      }
+    }
+
     if (
       operation.type === "character.ability.use"
-      && !isDigitalDiceRollingEnabled(runtimeConfig)
+      && !digitalDiceEnabled
     ) {
       const ability = findAbilityForSource(current, operation.source);
       const requirements = listBonusRollRequirements(ability?.bonuses);
@@ -199,7 +224,16 @@ export class SessionActor extends BaseSessionActor {
       }
     }
 
-    const next = applyAbilityOperation(current, operation);
+    // Digital dice are rolled by the authoritative actor, not supplied by clients.
+    const operationForApply: SessionAbilityOperation = operation.type === "character.ability.use" && digitalDiceEnabled
+      ? {
+          ...operation,
+          bonusRollValues: Object.fromEntries(
+            Object.entries(operation.bonusRollValues ?? {}).filter(([key]) => !key.startsWith("self-damage:")),
+          ),
+        }
+      : operation;
+    const next = applyAbilityOperation(current, operationForApply);
     if (!next) {
       this.sendAbilityError(webSocket, "ABILITY_OPERATION_INVALID", "The requested ability operation is invalid for the current character state.");
       return;
@@ -410,6 +444,7 @@ function applyAbilityOperation(
   if (operation.type === "character.ability.use") {
     const ability = findAbilityForSource(character, source);
     if (!ability || !canActivateAbility(character, ability)) return null;
+    if (ability.activationOptions?.length && !ability.activationOptions.some(option => option.id === operation.activationOptionId)) return null;
     if (ability.allowOptionSwitching && ability.benefitsActive && !operation.activationOptionId) return null;
     const types = getAbilityAttackRiderDamageChoices(ability, operation.activationOptionId);
     if (types.length && (!operation.resourceSelection?.damageType || !types.includes(operation.resourceSelection.damageType))) return null;
