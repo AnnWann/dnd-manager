@@ -1,3 +1,4 @@
+import { readSelectedToken, readTokenCharacterLink, setTokenCharacterLink } from "./tokenCharacterLink"
 import { SessionDicePanel, type DiceHistoryEntry } from "./SessionDicePanel"
 import { SessionTransport } from "@dnd-manager/session-client/transport"
 import { NativeCharacterSheetHost } from "./NativeCharacterSheetHost"
@@ -39,6 +40,8 @@ function App() {
  const [spellLibrary, setSpellLibrary] = useState<Record<string, unknown>[]>([])
  const [inventoryState, setInventoryState] = useState<Record<string, unknown> | null>(null)
  const [selectedId, setSelectedId] = useState("")
+ const [selectedToken, setSelectedToken] = useState<{id:string;name:string;link:{sessionId:string;characterId:string}|null}|null>(null)
+ const [tokenLinkError, setTokenLinkError] = useState("")
  const [activeArea, setActiveArea] = useState<"sheet" | "dice">(isDicePopover ? "dice" : "sheet")
  const [rollHistory, setRollHistory] = useState<DiceHistoryEntry[]>([])
  const [sharedDice, setSharedDice] = useState<{connected:boolean; selectedCharacterId?:string; history:DiceHistoryEntry[]}>({connected:false,history:[]})
@@ -92,6 +95,36 @@ function App() {
  const grant = useRef<string | null>(null)
  const socket = useRef<SessionTransport | null>(null)
  useEffect(() => { let active = true; OBR.onReady(() => { if (active) setReady(true) }); return () => { active = false } }, [])
+ useEffect(() => {
+   if (!ready || isDicePopover) return
+   let active = true
+   const update = async () => {
+     try {
+       const token = await readSelectedToken()
+       if (!active) return
+       setSelectedToken(token ? {id:token.id,name:token.name,link:readTokenCharacterLink(token.metadata)} : null)
+     } catch (e) { if (active) setTokenLinkError(String(e)) }
+   }
+   void update()
+   const stop = OBR.player.onChange(() => void update())
+   const stopItems = OBR.scene.items.onChange(() => void update())
+   return () => { active = false;stop();stopItems() }
+ }, [ready])
+ useEffect(() => {
+   if (!sessionId || !selectedToken?.link || selectedToken.link.sessionId !== sessionId) return
+   const linkedId = selectedToken.link.characterId
+   if (characters[linkedId]?.active !== false && (characters[linkedId]?.character || abilities[linkedId]))
+     setSelectedId(linkedId)
+ }, [sessionId,selectedToken?.id,selectedToken?.link?.characterId,selectedToken?.link?.sessionId,characters,abilities])
+ const saveTokenLink = useCallback(async (remove = false) => {
+   if (!selectedToken || !sessionId) return
+   if (!remove && !selectedId) return
+   try {
+     setTokenLinkError("")
+     await setTokenCharacterLink(selectedToken.id, remove ? null : {sessionId,characterId:selectedId})
+     setSelectedToken(prev => prev?.id===selectedToken.id ? {...prev,link: remove ? null : {sessionId,characterId:selectedId}} : prev)
+   } catch (e) {setTokenLinkError("Não foi possível alterar o vínculo: " + String(e))}
+ },[selectedToken,sessionId,selectedId])
  const disconnect = useCallback(() => {
    socket.current?.disconnect()
    socket.current = null
@@ -229,6 +262,19 @@ function App() {
  <label className="field">Campanha / sessão<select value={sessionId} disabled={!connected} onChange={e => void connectSession(e.target.value)}><option value="">Selecione uma sessão...</option>{sessions.map(s => <option key={s.id} value={s.id}>{s.name} ({s.role === "MASTER" ? "Mestre" : "Jogador"})</option>)}</select></label>
  <p>{status}{sessionId && role ? " · " + (role === "MASTER" ? "Mestre" : "Jogador") : ""}</p>
  <label className="field">Personagem da sessão<select value={selectedId} onChange={e => setSelectedId(e.target.value)}><option value="">Selecione um personagem...</option>{list.map(c => <option key={c.characterId} value={c.characterId}>{String(asRecord(abilities[c.characterId]?.character ?? c.character).name ?? c.characterId)}</option>)}</select></label>
+ {!isDicePopover && selectedToken && <div className="mb-3 grid gap-2 rounded-xl border border-border bg-bg p-3 text-xs">
+   <strong className="text-textH">Token selecionado: {selectedToken.name || "Sem nome"}</strong>
+   <span className="text-textMuted">{selectedToken.link?.sessionId===sessionId
+     ? "Associado a: " + String(asRecord(abilities[selectedToken.link.characterId]?.character ?? characters[selectedToken.link.characterId]?.character).name ?? selectedToken.link.characterId)
+     : selectedToken.link ? "Associado a outra sessão" : "Nenhuma ficha associada"}</span>
+   <div className="flex flex-wrap gap-2">
+     <button type="button" disabled={!selectedId || status!=="Conectado à sessão"} onClick={()=>void saveTokenLink()}
+       className="rounded-lg border border-accentBorder bg-accentBg px-3 py-2 font-semibold text-textH disabled:opacity-40">{selectedToken.link?"Trocar associação":"Associar ficha selecionada"}</button>
+     {selectedToken.link && <button type="button" onClick={()=>void saveTokenLink(true)}
+       className="rounded-lg border border-border px-3 py-2 text-textH">Desassociar</button>}
+   </div>
+   {tokenLinkError && <p role="alert" className="text-danger">{tokenLinkError}</p>}
+ </div>}
  {!isDicePopover && <button type="button" className="mb-3 inline-flex items-center gap-2 rounded-lg border border-accentBorder bg-accentBg px-3 py-2 text-xs font-semibold text-textH" onClick={()=>void openDicePopover()}>Abrir rolador separado ↗</button>}
  {!isDicePopover && <div className="mb-3 flex gap-2 rounded-xl border border-border bg-bg p-1" role="tablist" aria-label="Ferramentas da sessão">
  <button type="button" role="tab" aria-selected={activeArea==="sheet"} onClick={()=>setActiveArea("sheet")} className={`flex-1 rounded-lg px-3 py-2 text-sm font-semibold ${activeArea==="sheet"?"bg-accentBg text-textH":"text-textMuted hover:bg-bg-subtle"}`}>Ficha</button>
