@@ -163,7 +163,9 @@ function resetRestResources(
 
   nextCharacter = withCharacterConditions(
     nextCharacter,
-    getCharacterConditions(nextCharacter).map((condition) => ({
+    getCharacterConditions(nextCharacter)
+      .filter(condition => condition.duration.expiresOnRest !== "short" && !(restKind === "long" && condition.duration.expiresOnRest === "long"))
+      .map((condition) => ({
       ...condition,
       grantedAbilities: condition.grantedAbilities
         ? resetAbilities(
