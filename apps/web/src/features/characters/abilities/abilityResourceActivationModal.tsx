@@ -57,7 +57,7 @@ export function AbilityResourceActivationModal({
   const [selectedWeaponId, setSelectedWeaponId] = useState("")
   const [selectedWeaponAttribute, setSelectedWeaponAttribute] = useState<Attribute | "">("")
   const needsAttribute = abilityRequiresWeaponAttributeSelection(ability, optionId)
-  const boundWeaponId = getCharacterConditions(character)
+  const boundWeaponId = ability.allowMultipleWeaponActivations ? undefined : getCharacterConditions(character)
     .filter(condition => condition.sourceAbilityId === (ability.originalAbilityId ?? ability.id))
     .flatMap(condition => condition.grantedAbilities ?? [])
     .flatMap(granted => granted.bonuses?.attackRiders ?? [])
