@@ -1,4 +1,5 @@
 import { NativeCharacterSheetHost } from "./NativeCharacterSheetHost"
+import { publishServerDiceRoll, publishServerActionRoll } from "../../web/src/lib/diceRoller"
 import React, { useCallback, useEffect, useRef, useState } from "react"
 import { createRoot } from "react-dom/client"
 import OBR from "@owlbear-rodeo/sdk"
@@ -94,6 +95,9 @@ function App() {
        try { message = JSON.parse(event.data) as Record<string, unknown> } catch { return }
        const entries = Array.isArray(message.characters) ? message.characters : []
        const character = asRecord(message.character)
+       if (message.type === "session.dice.result") publishServerDiceRoll(message.result as Parameters<typeof publishServerDiceRoll>[0])
+       if (message.type === "session.action.result") publishServerActionRoll(message.result as Parameters<typeof publishServerActionRoll>[0])
+       if (message.type === "session.error") setError(String(message.message ?? "Erro na sessão."))
        if (message.type === "session.ready") {
          setStatus("Conectado à sessão")
          heartbeat.current = setInterval(() => { if (ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify({ type: "session.heartbeat", clientId: result.clientId })) }, 30000)
