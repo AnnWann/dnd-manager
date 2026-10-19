@@ -1,4 +1,4 @@
-import OBR from "@owlbear-rodeo/sdk"
+import OBR, { isImage } from "@owlbear-rodeo/sdk"
 
 export const TOKEN_CHARACTER_METADATA = "com.dnd-manager.owlbear/character-link"
 export type TokenCharacterLink = { sessionId: string; characterId: string }
@@ -20,5 +20,5 @@ export async function readSelectedToken() {
   const ids = await OBR.player.getSelection()
   if (!ids?.length) return null
   const items = await OBR.scene.items.getItems(ids)
-  return items.find(item => item.layer === "CHARACTER") ?? null
+  return items.find(item => item.layer === "CHARACTER" || isImage(item)) ?? null
 }
