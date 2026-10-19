@@ -6,7 +6,7 @@ import { readSelectedToken, readTokenCharacterLink, setTokenCharacterLink, readT
 import { SessionDicePanel, type DiceHistoryEntry } from "./SessionDicePanel"
 import { SessionTransport } from "@dnd-manager/session-client/transport"
 import { NativeCharacterSheetHost } from "./NativeCharacterSheetHost"
-import { publishServerDiceRoll, publishServerActionRoll } from "../../web/src/lib/diceRoller"
+import { publishServerDiceRoll, publishServerActionRoll, CREATURE_ROLL_REQUEST_EVENT } from "../../web/src/lib/diceRoller"
 import React, { useCallback, useEffect, useRef, useState } from "react"
 import { createRoot } from "react-dom/client"
 import OBR from "@owlbear-rodeo/sdk"
@@ -111,6 +111,20 @@ function App() {
  const [error, setError] = useState("")
  const grant = useRef<string | null>(null)
  const socket = useRef<SessionTransport | null>(null)
+ useEffect(() => {
+   if(isDicePopover||isAssociatePopover)return
+   const forward=(event:Event)=>{
+     const request=(event as CustomEvent).detail
+     if(!request || status!=="Conectado à sessão" || role!=="MASTER"){
+       setError("Rolagem de criatura exige sessão conectada como mestre.")
+       return
+     }
+     if(!socket.current?.sendRaw(JSON.stringify({type:"session.creature.roll",request})))
+       setError("Não foi possível enviar a rolagem da criatura.")
+   }
+   window.addEventListener(CREATURE_ROLL_REQUEST_EVENT,forward)
+   return()=>window.removeEventListener(CREATURE_ROLL_REQUEST_EVENT,forward)
+ },[status,role])
  useEffect(() => { let active = true; OBR.onReady(() => { if (active) setReady(true) }); return () => { active = false } }, [])
  useEffect(() => {
    if (!ready || isDicePopover || isAssociatePopover) return
@@ -305,6 +319,9 @@ function App() {
          const result = message.result as DiceHistoryEntry["result"]
          if (result && typeof result.id === "string") setRollHistory(previous => previous.some(entry=>entry.result.id===result.id)?previous:[{kind:"dice" as const,result:result as Extract<DiceHistoryEntry,{kind:"dice"}>["result"]},...previous].slice(0,60))
        }
+       if (message.type === "session.creature.result") {
+         if(!isDicePopover)void openDicePopover()
+       }
        if (message.type === "session.action.result") {
          if(!isDicePopover){void openDicePopover();diceChannel.current?.postMessage({type:"result",entry:{kind:"action",result:message.result}})}
          publishServerActionRoll(message.result as Parameters<typeof publishServerActionRoll>[0])
@@ -426,7 +443,7 @@ function App() {
  </div>}
  <div role="tabpanel" hidden={activeArea!=="dice"}><SessionDicePanel connected={status==="Conectado à sessão"} selectedCharacterId={selectedId || undefined} history={rollHistory} onRoll={request=>socket.current?.sendRaw(JSON.stringify({type:"session.dice.roll",request}))??false}/></div>
  {!isDicePopover && <div role="tabpanel" hidden={activeArea!=="sheet"}>
- {catalogCreature && !boundCreature ? <div className="grid gap-3"><CreatureQuickSheet data={quickSheetFromCompendiumCreature(catalogCreature)} compact/><button type="button" disabled={Boolean(pendingCreatureAdd)} onClick={addCatalogToInitiative} className="rounded-lg border border-accentBorder bg-accentBg px-3 py-2 text-sm font-semibold disabled:opacity-40">{pendingCreatureAdd?"Aguardando confirmação...":"Adicionar à iniciativa"}</button></div> : boundCreature ? <CreatureTokenInspector key={boundCreature.id} entry={boundCreature} creature={compendiumCreatures.find(c=>c.id===boundCreature.sourceId)} connected={status==="Conectado à sessão"} onOperation={operation=>socket.current?.sendRaw(JSON.stringify({type:"session.initiative.operation",operation}))??false}/> : selectedId && chosen && <article className="character-panel">
+ {catalogCreature && !boundCreature ? <div className="grid gap-3"><CreatureQuickSheet data={quickSheetFromCompendiumCreature(catalogCreature,undefined,{enableRolls:true})} compact/><button type="button" disabled={Boolean(pendingCreatureAdd)} onClick={addCatalogToInitiative} className="rounded-lg border border-accentBorder bg-accentBg px-3 py-2 text-sm font-semibold disabled:opacity-40">{pendingCreatureAdd?"Aguardando confirmação...":"Adicionar à iniciativa"}</button></div> : boundCreature ? <CreatureTokenInspector key={boundCreature.id} entry={boundCreature} creature={compendiumCreatures.find(c=>c.id===boundCreature.sourceId)} connected={status==="Conectado à sessão"} onOperation={operation=>socket.current?.sendRaw(JSON.stringify({type:"session.initiative.operation",operation}))??false}/> : selectedId && chosen && <article className="character-panel">
  <CharacterSheetHeader name={String(raw.name ?? selectedId)} id={selectedId} />
  <NativeCharacterSheetHost
    characterId={selectedId} raw={raw} hp={health as unknown as Record<string, unknown>} conditions={conditions[selectedId]} runtimeConfig={runtimeConfig} inventoryState={inventoryState} spells={spellLibrary} role={role === "MASTER" ? "MASTER" : "PLAYER"}
