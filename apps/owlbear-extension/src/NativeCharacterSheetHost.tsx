@@ -5,6 +5,7 @@ import { withCharacterConditions } from "../../web/src/models/characters/charact
 import { CharacterWorkspaceProvider, type CharacterWorkspaceValue } from "../../web/src/features/characters/workspace/CharacterWorkspaceContext"
 import { SessionRuntimeContext, type SessionRuntimeContextValue } from "../../web/src/features/session-runtime/SessionRuntimeProvider"
 import { MagicProvider } from "../../web/src/contexts/magicContext"
+import type { Spell } from "../../web/src/models/magic/spells/Spell"
 import { CharacterSheetTab } from "../../web/src/features/characters/characterSheet/characterSheet"
 import { CharacterAbilitiesTab } from "../../web/src/features/characters/abilities/characterAbilities"
 import { CharacterMagicTab } from "../../web/src/features/characters/magic/characterMagicModule"
@@ -26,6 +27,7 @@ type Props = {
   hp?: Raw
   conditions?: Raw
   runtimeConfig?: Raw | null
+  spells?: Raw[]
   role: "MASTER" | "PLAYER"
   sessionId: string
   connected: boolean
@@ -64,7 +66,7 @@ function ensureCharacter(raw: Raw, hp: Raw | undefined, conditions: Raw | undefi
 /** Adapter for the original website components, not a rewritten character sheet.
  * Every mutation goes to the authoritative DO; unsupported diffs are rejected.
  */
-export function NativeCharacterSheetHost({ characterId, raw, hp, conditions, runtimeConfig, role, sessionId, connected, send }: Props) {
+export function NativeCharacterSheetHost({ characterId, raw, hp, conditions, runtimeConfig, spells, role, sessionId, connected, send }: Props) {
   const [notice, setNotice] = useState("")
   useEffect(() => {
     const config = obj(runtimeConfig?.config)
@@ -220,7 +222,7 @@ export function NativeCharacterSheetHost({ characterId, raw, hp, conditions, run
   } as unknown as CharacterWorkspaceValue
 
   return <MemoryRouter>
-    <MagicProvider spells={[]}>
+    <MagicProvider spells={(spells ?? []) as Spell[]}>
       <SessionRuntimeContext.Provider value={runtime}>
         <CharacterWorkspaceProvider value={workspace}>
           {notice ? <p role="alert" className="error">{notice}</p> : null}
