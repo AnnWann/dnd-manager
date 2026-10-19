@@ -5,6 +5,7 @@ import { CharacterSheetDerivedTile } from "@dnd-manager/game-ui/character-sheet-
 import { SharedCharacterTabs } from "@dnd-manager/game-ui/shared-character-tabs"
 import { SharedSessionHp } from "@dnd-manager/game-ui/shared-session-hp"
 import { CharacterSheetLayout } from "@dnd-manager/game-ui/character-sheet-layout"
+import { CharacterSheetHeader } from "@dnd-manager/game-ui/character-sheet-header"
 import "./style.css"
 
 const origin = (import.meta.env.VITE_DND_MANAGER_URL || "https://dnd-magic-manager.vercel.app").replace(/\/$/, "")
@@ -123,7 +124,7 @@ function App() {
  <p>{status}{sessionId && role ? " · " + (role === "MASTER" ? "Mestre" : "Jogador") : ""}</p>
  <label className="field">Personagem da sessão<select value={selectedId} onChange={e => setSelectedId(e.target.value)}><option value="">Selecione um personagem...</option>{list.map(c => <option key={c.characterId} value={c.characterId}>{String(asRecord(abilities[c.characterId]?.character ?? c.character).name ?? c.characterId)}</option>)}</select></label>
  {selectedId && chosen && <article>
- <h2>{String(raw.name ?? selectedId)}</h2>
+ <CharacterSheetHeader name={String(raw.name ?? selectedId)} id={selectedId} />
  <SharedCharacterTabs key={selectedId} sections={{
  sheet: <CharacterSheetLayout mode={sheetMode} onModeChange={setSheetMode} configuration={<p>Os campos estruturais só serão editáveis depois de integrar os controles do CharacterWorkspace ao Owlbear.</p>} play={<><SharedSessionHp current={health?.current ?? 0} max={health?.currentMax ?? health?.max ?? 0}
    temporary={health?.temporary ?? 0} hitDice={health?.hitDice} canEdit={status === "Conectado à sessão"}
