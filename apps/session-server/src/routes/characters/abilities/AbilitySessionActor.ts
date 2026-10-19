@@ -262,7 +262,7 @@ export class SessionActor extends BaseSessionActor {
     if (hpChanged) hpState[operation.characterId] = nextHp;
     if (conditionsChanged) conditionsState[operation.characterId] = nextConditions;
 
-    let loggedOperation = operation;
+    let loggedOperation = operationForApply;
     if (operation.type === "character.ability.use") {
       const resolvedAbility = findAbilityForSource(next, operation.source);
       const bonusRollResults = listResolvedBonusRolls(resolvedAbility?.bonuses);
