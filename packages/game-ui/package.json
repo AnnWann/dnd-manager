@@ -47,7 +47,8 @@
     "./mission-dialog": "./src/MissionDialog.tsx",
     "./inventory-floating-menu": "./src/InventoryFloatingMenu.tsx",
     "./inventory-item-tile": "./src/InventoryItemTile.tsx",
-    "./shared-character-tabs": "./src/SharedCharacterTabs.tsx"
+    "./shared-character-tabs": "./src/SharedCharacterTabs.tsx",
+    "./shared-session-hp": "./src/SharedSessionHp.tsx"
   },
   "peerDependencies": {
     "react": "^19.0.0",
