@@ -6,7 +6,7 @@ const EXTENSION_ORIGIN = "https://dnd-manager-owlbear-annwanns-projects.vercel.a
 const TOKEN_TTL_SECONDS = 15 * 60
 const SECRET = process.env.BETTER_AUTH_SECRET
 type Grant = { userId: string; sessionId: string; expires: number; scope: "owlbear:characters" }
-const json = (data: unknown, status = 200, headers: HeadersInit = {}) =>
+const json = (data: unknown, status = 200, headers: Record<string, string> = {}) =>
   Response.json(data, { status, headers: { "Cache-Control": "no-store", ...headers } })
 const cors = (origin: string | null): Record<string, string> =>
   origin === EXTENSION_ORIGIN
