@@ -1,3 +1,4 @@
+import { CharacterTabStrip } from "./CharacterTabStrip"
 import { useState, type ReactNode } from "react"
 
 export type SheetTabId = "sheet" | "abilities" | "spells-list" | "equipment" | "inventory" | "race" | "profile" | "proficiencies"
@@ -18,11 +19,8 @@ export function SharedCharacterTabs({ sections, defaultTab = "sheet" }: {
 }) {
   const [active, setActive] = useState<SheetTabId>(defaultTab)
   return <div className="sheet-shared-tabs">
-    <nav className="sheet-shared-nav" aria-label="Seções do personagem" role="tablist">
-      {STANDARD_SHEET_TABS.map(tab => <button key={tab.id} type="button" role="tab"
-        aria-selected={active === tab.id} className={active === tab.id ? "sheet-tab-active" : ""}
-        onClick={() => setActive(tab.id)}>{tab.label}</button>)}
-    </nav>
+    <CharacterTabStrip activeTab={active} onChange={setActive}
+      tabs={STANDARD_SHEET_TABS.map(tab => ({ key: tab.id, label: tab.label }))} />
     <section role="tabpanel" aria-label={STANDARD_SHEET_TABS.find(tab => tab.id === active)?.label}>
       {sections[active] ?? <p>Os dados desta seção ainda não estão disponíveis no adaptador de sessão.</p>}
     </section>
