@@ -238,16 +238,6 @@ function App() {
    }catch(error){setAssociationError(String(error))}
    finally{setAssociationBusy(false)}
  },[associationTokenId,associationState,associationChoice,associationKind])
- useEffect(()=>{
-   if(isDicePopover||isAssociatePopover||!selectedToken?.catalogId&&!selectedToken?.creatureLink)return
-   const forward=(event:Event)=>{
-     const request=(event as CustomEvent).detail
-     if(!request||!socket.current)return
-     socket.current.sendRaw(JSON.stringify({type:"session.creature.roll",request}))
-   }
-   window.addEventListener(CREATURE_ROLL_REQUEST_EVENT,forward)
-   return()=>window.removeEventListener(CREATURE_ROLL_REQUEST_EVENT,forward)
- },[selectedToken?.catalogId,selectedToken?.creatureLink?.entryId])
  const disconnect = useCallback(() => {
    socket.current?.disconnect()
    socket.current = null
