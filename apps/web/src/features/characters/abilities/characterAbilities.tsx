@@ -359,7 +359,7 @@ export function CharacterAbilitiesTab({ character, updateCharacter }: Props) {
                   conditionAbility,
                   weaponIds,
                 )
-                const editAbility = grantedAbility ? undefined : () => setEditingAbility(ability)
+                const editAbility = grantedAbility && !asiAbility ? undefined : () => setEditingAbility(ability)
                 const deleteAbility = grantedAbility ? undefined : () => removeAbility(ability.id)
                 const onUse = () => requestUseAbility(ability)
 
