@@ -175,7 +175,6 @@ function App() {
    if(isDicePopover)return
    const channel=new BroadcastChannel(ASSOC_CHANNEL)
    assocChannel.current=channel
-   if(isAssociatePopover)channel.postMessage({type:"request-state"})
    channel.onmessage=event=>{
      const message=event.data as Record<string,unknown>
      if(isAssociatePopover){
@@ -187,6 +186,7 @@ function App() {
        channel.postMessage({type:"state",value:associationSnapshot.current})
      }
    }
+   if(isAssociatePopover)channel.postMessage({type:"request-state"})
    return()=>{channel.close();if(assocChannel.current===channel)assocChannel.current=null}
  },[])
  useEffect(()=>{
