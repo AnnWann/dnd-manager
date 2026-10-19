@@ -1,5 +1,6 @@
 import { useState } from "react"
 import { Dices, Eye, EyeOff, History, Send } from "lucide-react"
+import { ActionRollEntry, DiceRollEntry } from "../../web/src/features/session/SessionActionLog"
 import { parseManualDiceExpression } from "../../web/src/shared/session-runtime/manualDiceExpression"
 import type { SessionDiceRollResult, SessionActionRollResult } from "../../web/src/shared/session-runtime/diceRollProtocol"
 
@@ -70,17 +71,10 @@ export function SessionDicePanel({ connected, selectedCharacterId, onRoll, histo
     <section className="rounded-xl border border-border bg-bg p-4 shadow-theme-sm">
       <div className="mb-3 flex items-center gap-2 text-textH"><History className="h-4 w-4"/><h3 className="text-sm font-semibold">Rolagens da sessão</h3></div>
       {history.length===0 ? <p className="text-xs text-textMuted">As próximas rolagens aparecerão aqui.</p> : <div className="grid gap-2">
-        {history.map(entry=>{
-          const result=entry.result
-          const title=entry.kind==="dice"?entry.result.label:entry.result.title
-          const total=entry.kind==="dice"?entry.result.total:(entry.result.attack?.total ?? entry.result.primary?.total ?? entry.result.damage?.total)
-          return <div key={result.id} className="flex items-center justify-between gap-3 rounded-lg border border-border bg-bg-subtle p-3">
-            <div className="min-w-0"><div className="truncate text-xs font-semibold text-textH">{title}</div>
-              <div className="text-[11px] text-textMuted">{result.sourceName || "Sessão"}{result.visibility==="roller-master"?" · Privada":""}</div>
-            </div>
-            <strong className="text-xl tabular-nums text-textH">{typeof total==="number"?total:"—"}</strong>
-          </div>
-        })}
+        {history.map(entry => entry.kind === "action"
+          ? <ActionRollEntry key={entry.result.id} roll={entry.result} characterName={entry.result.sourceName}/>
+          : <DiceRollEntry key={entry.result.id} roll={entry.result} characterName={entry.result.sourceName}/>
+        )}
       </div>}
     </section>
   </div>
