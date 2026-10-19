@@ -1,3 +1,4 @@
+import { SessionTransport } from "@dnd-manager/session-client/transport"
 import { NativeCharacterSheetHost } from "./NativeCharacterSheetHost"
 import { publishServerDiceRoll, publishServerActionRoll } from "../../web/src/lib/diceRoller"
 import React, { useCallback, useEffect, useRef, useState } from "react"
@@ -37,17 +38,14 @@ function App() {
  const [sheetMode, setSheetMode] = useState<"play" | "configuration">("play")
  const [error, setError] = useState("")
  const grant = useRef<string | null>(null)
- const socket = useRef<WebSocket | null>(null)
- const heartbeat = useRef<ReturnType<typeof setInterval> | null>(null)
+ const socket = useRef<SessionTransport | null>(null)
  useEffect(() => { let active = true; OBR.onReady(() => { if (active) setReady(true) }); return () => { active = false } }, [])
  const disconnect = useCallback(() => {
-   if (heartbeat.current) clearInterval(heartbeat.current)
-   heartbeat.current = null
-   socket.current?.close(1000, "Leaving session")
+   socket.current?.disconnect()
    socket.current = null
    setCharacters({}); setAbilities({}); setHp({}); setConditions({}); setRuntimeConfig(null); setSpellLibrary([]); setInventoryState(null); setSelectedId(""); setStatus("Desconectado")
  }, [])
- useEffect(() => () => { socket.current?.close(); if (heartbeat.current) clearInterval(heartbeat.current) }, [])
+ useEffect(() => () => { socket.current?.disconnect() }, [])
  const api = useCallback(async <T,>(path: string): Promise<T> => {
    if (!grant.current) throw new Error("Conecte sua conta primeiro.")
    const response = await fetch(origin + "/api/owlbear" + path, { credentials: "omit", headers: { Authorization: "Bearer " + grant.current, Accept: "application/json" } })
@@ -87,14 +85,28 @@ function App() {
      void api<{spells:Record<string,unknown>[]}>("?op=homebrew-spells&sessionId="+encodeURIComponent(id))
        .then(data=>setSpellLibrary(Array.isArray(data.spells)?data.spells:[]))
        .catch(error=>console.warn("[owlbear] homebrew spell library unavailable",error))
-     const url = new URL(result.baseUrl)
-     url.protocol = url.protocol === "https:" ? "wss:" : "ws:"
-     url.pathname = "/session/" + encodeURIComponent(id) + "/connect"
-     url.search = ""; url.searchParams.set("token", result.token)
-     const ws = new WebSocket(url)
-     socket.current = ws
-     ws.onopen = () => { if (socket.current === ws) setStatus("Aguardando sincronização...") }
-     ws.onmessage = event => {
+     let firstToken:string|null = result.token
+     const ws = new SessionTransport({
+       baseUrl:result.baseUrl, sessionId:id, userId:"", role:result.role === "MASTER" ? "MASTER" : "PLAYER",
+       clientId:result.clientId, useTokenAuth:true, tokenEndpoint:"",
+       onKicked:()=>{setError("Acesso à sessão revogado.");disconnect()},
+       onStatusChange:state=>{
+         if(socket.current !== ws)return
+         setStatus(state === "connected" ? "Conectado à sessão"
+           : state === "reconnecting" ? "Reconectando à sessão..."
+           : state === "error" ? "Erro de conexão; tentando novamente..."
+           : state === "connecting" ? "Aguardando sincronização..."
+           : "Desconectado")
+       },
+       getConnectionToken:async()=>{
+         if(firstToken){const value=firstToken;firstToken=null;return value}
+         const renewed=await api<{token:string}>("?op=connect&sessionId="+encodeURIComponent(id)+"&clientId="+encodeURIComponent(result.clientId))
+         return renewed.token
+       },
+       onMessage:rawMessage=>{
+         if(socket.current !== ws)return
+         const event = {data:rawMessage}
+
        if (socket.current !== ws) return
        let message: Record<string, unknown>
        try { message = JSON.parse(event.data) as Record<string, unknown> } catch { return }
@@ -105,7 +117,7 @@ function App() {
        if (message.type === "session.error") setError(String(message.message ?? "Erro na sessão."))
        if (message.type === "session.ready") {
          setStatus("Conectado à sessão")
-         heartbeat.current = setInterval(() => { if (ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify({ type: "session.heartbeat", clientId: result.clientId })) }, 30000)
+         // SessionTransport owns authenticated heartbeats and reconnection.
        }
        if (message.type === "session.characters.snapshot") setCharacters(Object.fromEntries(entries.map((v: unknown) => { const c = v as RuntimeCharacter; return [c.characterId, c] })))
        if (message.type === "session.character.updated") setCharacters(previous => ({ ...previous, [String(character.characterId)]: character as RuntimeCharacter }))
@@ -119,8 +131,8 @@ function App() {
        if (message.type === "session.hp.snapshot") setHp(Object.fromEntries(entries.map((v: unknown) => { const c = v as RuntimeHp; return [c.characterId, c] })))
        if (message.type === "session.hp.updated") setHp(previous => ({ ...previous, [String(character.characterId)]: character as RuntimeHp }))
      }
-     ws.onclose = () => { if (socket.current === ws) { setStatus("Sessão desconectada; reconecte para atualizar."); if (heartbeat.current) clearInterval(heartbeat.current) } }
-     ws.onerror = () => { if (socket.current === ws) setError("Falha na conexão com o servidor da sessão.") }
+     socket.current=ws
+     ws.connect()
    } catch (e) { setStatus("Desconectado"); setError(String(e instanceof Error ? e.message : e)) }
  }, [api, disconnect])
  const list = Object.values(characters).filter(c => c.active !== false && (c.character || abilities[c.characterId]))
@@ -128,10 +140,6 @@ function App() {
  const raw = asRecord(abilities[selectedId]?.character ?? chosen?.character)
  const sheet = asRecord(raw.sheet)
  const health = hp[selectedId]
- const sendHp = (type: "character.hp.heal" | "character.hp.damage", amount: number) => {
-   if (!selectedId || socket.current?.readyState !== WebSocket.OPEN) { setError("Sessão desconectada."); return }
-   sendCharacterSheetOperation(socket.current, { type, characterId: selectedId, amount })
- }
  const attributes = asRecord(sheet.attributes)
  return <main>
  <header><strong>D&D Manager</strong><span>{ready ? "Owlbear conectado" : "Pré-visualização"}</span></header>
@@ -146,7 +154,7 @@ function App() {
  <NativeCharacterSheetHost
    characterId={selectedId} raw={raw} hp={health as unknown as Record<string, unknown>} conditions={conditions[selectedId]} runtimeConfig={runtimeConfig} inventoryState={inventoryState} spells={spellLibrary} role={role === "MASTER" ? "MASTER" : "PLAYER"}
    sessionId={sessionId} connected={status === "Conectado à sessão"}
-   send={message => { if (socket.current?.readyState !== WebSocket.OPEN) return false; socket.current.send(JSON.stringify(message)); return true }}
+   send={message => socket.current?.sendRaw(JSON.stringify(message)) ?? false}
  />
  </article>}
  </section><footer>O Durable Object é a fonte de verdade. O servidor da sessão determina quais personagens cada usuário pode receber.</footer>
