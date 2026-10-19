@@ -94,6 +94,11 @@ export function getActiveAbilities(
     ...getEquippedItems(character).flatMap(
       (item) => item.abilities ?? [],
     ),
+    // Abilities granted by an active condition contribute their passive bonuses
+    // for as long as the granting condition exists.
+    ...getCharacterConditions(character)
+      .filter(isConditionActive)
+      .flatMap((condition) => condition.grantedAbilities ?? []),
   ].filter(isAbilityBenefitsActive)
 }
 
