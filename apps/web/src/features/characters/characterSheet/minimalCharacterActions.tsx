@@ -52,6 +52,7 @@ import {
   hasAbilityResourceCosts,
   spendAbilityResourceCosts,
 } from "../../../models/abilities/abilityResourceCosts"
+import { abilityHasSelfDamage } from "../../../models/abilities/abilitySelfDamage"
 import { useAbility as useCharacterAbility } from "../../../models/characters/characterAbilities"
 import { getChannelDivinityPool } from "../../../models/characters/characterChannelDivinity"
 import { getKiPool } from "../../../models/characters/characterKi"
@@ -892,6 +893,7 @@ export function MinimalCharacterActions({
                 ) : abilityRequiresWeaponAttributeSelection(selected.ability) || (selected.ability.activationOptions ?? []).some(option => abilityRequiresWeaponAttributeSelection(selected.ability!, option.id)) || getAbilityAttackRiderDamageChoices(selected.ability).length > 0
                     || (selected.ability.activationOptions ?? []).some(option => getAbilityAttackRiderDamageChoices(selected.ability!, option.id).length > 0)
                     || hasAbilityResourceCosts(selected.ability)
+                    || abilityHasSelfDamage(selected.ability)
                     || selected.ability.resourceUpcast?.enabled
                     || hasManualBonusRolls(selected.ability.bonuses)
                     || (
