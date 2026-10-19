@@ -1,0 +1,16 @@
+<!doctype html><html lang="pt-BR"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Autorizar Owlbear — D&D Manager</title><style>body{font:16px system-ui;background:#191c23;color:white;margin:2rem auto;max-width:480px;padding:1rem}button{padding:12px 18px}a{color:#bcd9ff}p{line-height:1.5}</style><h2>Conectar ao Owlbear</h2><p>A extensão poderá visualizar os personagens da sua conta e alterar seus nomes. O acesso expira em 15 minutos e termina se a sessão for encerrada.</p><button id="approve">Autorizar acesso</button><p id="status"></p><script>
+const allowed="https://dnd-manager-owlbear-annwanns-projects.vercel.app";
+const qs=new URLSearchParams(location.search), origin=qs.get("origin"),nonce=qs.get("nonce");
+const status=document.getElementById("status"),button=document.getElementById("approve");
+if(origin!==allowed || !nonce || !/^[0-9a-f-]{36}$/.test(nonce) || !window.opener){button.disabled=true;status.textContent="Solicitação inválida."}
+button.addEventListener("click",async()=>{
+ button.disabled=true;status.textContent="Verificando sua sessão...";
+ try {
+  const response=await fetch("/api/owlbear?op=authorize",{method:"POST",credentials:"same-origin",headers:{"Content-Type":"application/json"},body:JSON.stringify({extensionOrigin:origin})});
+  if(!response.ok)throw new Error(response.status===401?"Faça login no D&D Manager nesta aba e tente novamente.":"Autorização falhou (HTTP "+response.status+").");
+  const data=await response.json();
+  window.opener.postMessage({type:"dnd-manager:owlbear-grant",nonce,token:data.token},allowed);
+  status.textContent="Autorizado. Você pode fechar esta janela.";window.close();
+ }catch(e){status.textContent=String(e.message||e);button.disabled=false}
+});
+</script></html>
