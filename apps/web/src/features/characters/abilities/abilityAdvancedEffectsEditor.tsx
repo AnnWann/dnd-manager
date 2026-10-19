@@ -150,6 +150,7 @@ export function AbilityAdvancedEffectsEditor({ ability, character, onChange }: {
                           placeholder="Ex.: até o próximo descanso longo"
                           onChange={(event) => updateOption(option.id, {
                             duration: {
+                              ...optionDuration,
                               type: "custom",
                               customLabel: event.target.value,
                               tickOn: "manual",
