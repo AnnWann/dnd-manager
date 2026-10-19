@@ -157,7 +157,11 @@ export function getScopedCharacterBonuses(
       .map((entry) => resolveBonus(character, entry.bonus))
 
   return [
-    ...getEquippedItems(character).flatMap(collect),
+    ...getEquippedItems(character).flatMap((item) => {
+      // Weapon-owned attack/damage bonuses affect only their source weapon.
+      if ((key === "weaponAttackBonus" || key === "weaponDamageBonus") && item.equipSlot === "weapon" && item.id !== weaponId) return []
+      return collect(item)
+    }),
     ...getActiveAbilities(character).flatMap(collect),
     ...getCharacterConditions(character)
       .filter(isConditionActive)
