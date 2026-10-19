@@ -114,7 +114,9 @@ export function AbilityResourceActivationModal({
   const optionRequired = (ability.activationOptions?.length ?? 0) > 0
   const manualRollsValid = manualRollRequirements.every((entry) => {
     const raw = manualRollValues[entry.key]?.trim() ?? ""
-    return raw !== "" && Number.isFinite(Number(raw))
+    if (raw === "" || !Number.isFinite(Number(raw))) return false
+    const selfCost = selfDamageRequirements.find(cost => cost.key === entry.key)
+    return !selfCost || (Number.isInteger(Number(raw)) && Number(raw) >= selfCost.minimum && Number(raw) <= selfCost.maximum)
   })
   const canConfirm = payment.ok && selfDamageRequirements.every(entry => entry.minimum > 0) && (!optionRequired || Boolean(optionId)) && manualRollsValid && (!damageTypeChoices.length || Boolean(effectiveDamageType)) && (!needsWeapon || Boolean(boundWeaponId || selectedWeaponId)) && (!needsAttribute || Boolean(selectedWeaponAttribute))
 
