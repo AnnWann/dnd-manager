@@ -1,6 +1,9 @@
 import { createHmac, timingSafeEqual } from "node:crypto"
 import { auth } from "../server/auth.js"
 import { prisma } from "../server/prisma.js"
+import { CampaignMemberStatus, CampaignRole } from "../generated/prisma/client.js"
+import { canReadAnyCharacter, canWriteAnyCharacter, normalizeCampaignCapabilityOverrides } from "../src/shared/campaign/campaignRoles.js"
+import { isValidSessionConnectionSecret, signSessionConnectionToken } from "../src/shared/session-runtime/sessionConnectionToken.js"
 
 const ALLOWED_EXTENSION_ORIGINS = new Set(["https://dnd-manager-owlbear-annwanns-projects.vercel.app", "https://dnd-manager-seven.vercel.app"])
 const TOKEN_TTL_SECONDS = 15 * 60
@@ -59,6 +62,38 @@ export async function GET(request: Request): Promise<Response> {
   const grant = await validateGrant(request)
   if (!grant) return json({ error: "Authorization required or expired" }, 401, headers)
   const url = new URL(request.url), op = url.searchParams.get("op")
+  if (op === "sessions") {
+    const campaigns = await prisma.campaign.findMany({
+      where: { OR: [{ ownerId: grant.userId }, { members: { some: { userId: grant.userId, status: CampaignMemberStatus.ACTIVE } } }] },
+      select: { id: true, name: true, ownerId: true, members: { where: { userId: grant.userId, status: CampaignMemberStatus.ACTIVE }, select: { role: true, permissions: true }, take: 1 } },
+      orderBy: { updatedAt: "desc" },
+    })
+    return json({ sessions: campaigns.map(c => ({ id: c.id, name: c.name, role: c.ownerId === grant.userId || c.members[0]?.role === CampaignRole.MASTER ? "MASTER" : "PLAYER" })) }, 200, headers)
+  }
+  if (op === "connect") {
+    const sessionId = url.searchParams.get("sessionId") ?? ""
+    if (!sessionId || sessionId.length > 256) return json({ error: "Invalid session" }, 400, headers)
+    const campaign = await prisma.campaign.findUnique({
+      where: { id: sessionId },
+      select: { ownerId: true, members: { where: { userId: grant.userId, status: CampaignMemberStatus.ACTIVE }, select: { role: true, permissions: true }, take: 1 } },
+    })
+    if (!campaign || (campaign.ownerId !== grant.userId && !campaign.members.length)) return json({ error: "Session access denied" }, 403, headers)
+    const isOwner = campaign.ownerId === grant.userId
+    const role = isOwner ? CampaignRole.MASTER : campaign.members[0]!.role
+    const permissions = isOwner ? {} : normalizeCampaignCapabilityOverrides(campaign.members[0]!.permissions)
+    const secret = process.env.SESSION_CONNECTION_SECRET?.trim()
+    if (!isValidSessionConnectionSecret(secret)) return json({ error: "Session authentication not configured" }, 503, headers)
+    const baseUrl = process.env.VITE_SESSION_SERVER_URL?.trim()
+    if (!baseUrl || !baseUrl.startsWith("https://")) return json({ error: "Session server URL not configured" }, 503, headers)
+    const issuedAt = Date.now(), expiresAt = issuedAt + 60_000
+    const token = await signSessionConnectionToken({
+      v: 1, sessionId, userId: grant.userId, role: role === CampaignRole.MASTER ? "MASTER" : "PLAYER",
+      clientId: crypto.randomUUID(), issuedAt, expiresAt,
+      canReadAnyCharacter: canReadAnyCharacter(role, permissions),
+      canWriteAnyCharacter: canWriteAnyCharacter(role, permissions),
+    }, secret)
+    return json({ token, baseUrl, expiresAt, role: role === CampaignRole.MASTER ? "MASTER" : "PLAYER" }, 200, headers)
+  }
   if (op === "characters") {
     const characters = await prisma.character.findMany({ where: { ownerId: grant.userId }, select: { id: true, name: true, revision: true }, orderBy: { updatedAt: "desc" } })
     return json({ characters }, 200, headers)
