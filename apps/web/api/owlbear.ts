@@ -2,15 +2,15 @@ import { createHmac, timingSafeEqual } from "node:crypto"
 import { auth } from "../server/auth.js"
 import { prisma } from "../server/prisma.js"
 
-const EXTENSION_ORIGIN = "https://dnd-manager-owlbear-annwanns-projects.vercel.app"
+const ALLOWED_EXTENSION_ORIGINS = new Set(["https://dnd-manager-owlbear-annwanns-projects.vercel.app", "https://dnd-manager-seven.vercel.app"])
 const TOKEN_TTL_SECONDS = 15 * 60
 const SECRET = process.env.BETTER_AUTH_SECRET
 type Grant = { userId: string; sessionId: string; expires: number; scope: "owlbear:characters" }
 const json = (data: unknown, status = 200, headers: Record<string, string> = {}) =>
   Response.json(data, { status, headers: { "Cache-Control": "no-store", ...headers } })
 const cors = (origin: string | null): Record<string, string> =>
-  origin === EXTENSION_ORIGIN
-    ? { "Access-Control-Allow-Origin": EXTENSION_ORIGIN, "Access-Control-Allow-Methods": "GET, PATCH, OPTIONS", "Access-Control-Allow-Headers": "Authorization, Content-Type", Vary: "Origin" }
+  Boolean(origin && ALLOWED_EXTENSION_ORIGINS.has(origin))
+    ? { "Access-Control-Allow-Origin": origin!, "Access-Control-Allow-Methods": "GET, PATCH, OPTIONS", "Access-Control-Allow-Headers": "Authorization, Content-Type", Vary: "Origin" }
     : { Vary: "Origin" }
 const sign = (payload: string): string => {
   if (!SECRET) throw new Error("BETTER_AUTH_SECRET ausente")
@@ -39,7 +39,7 @@ async function validateGrant(request: Request): Promise<Grant | null> {
 }
 export function OPTIONS(request: Request): Response {
   const origin = request.headers.get("Origin")
-  return new Response(null, { status: origin === EXTENSION_ORIGIN ? 204 : 403, headers: cors(origin) })
+  return new Response(null, { status: Boolean(origin && ALLOWED_EXTENSION_ORIGINS.has(origin)) ? 204 : 403, headers: cors(origin) })
 }
 export async function POST(request: Request): Promise<Response> {
   if (new URL(request.url).searchParams.get("op") !== "authorize") return json({ error: "Not found" }, 404)
@@ -48,14 +48,14 @@ export async function POST(request: Request): Promise<Response> {
   const target = new URL(request.url).origin
   if (origin !== target || request.headers.get("Sec-Fetch-Site") === "cross-site") return json({ error: "Invalid origin" }, 403)
   const body = await request.json().catch(() => null) as { extensionOrigin?: string } | null
-  if (body?.extensionOrigin !== EXTENSION_ORIGIN) return json({ error: "Extension not allowed" }, 403)
+  if (!body?.extensionOrigin || !ALLOWED_EXTENSION_ORIGINS.has(body.extensionOrigin)) return json({ error: "Extension not allowed" }, 403)
   const session = await auth.api.getSession({ headers: request.headers })
   if (!session) return json({ error: "Login required" }, 401)
   return json({ token: createGrant({ userId: session.user.id, sessionId: session.session.id, expires: Date.now() + TOKEN_TTL_SECONDS * 1000, scope: "owlbear:characters" }), expiresIn: TOKEN_TTL_SECONDS })
 }
 export async function GET(request: Request): Promise<Response> {
   const origin = request.headers.get("Origin"), headers = cors(origin)
-  if (origin !== EXTENSION_ORIGIN) return json({ error: "Origin not allowed" }, 403, headers)
+  if (!origin || !ALLOWED_EXTENSION_ORIGINS.has(origin)) return json({ error: "Origin not allowed" }, 403, headers)
   const grant = await validateGrant(request)
   if (!grant) return json({ error: "Authorization required or expired" }, 401, headers)
   const url = new URL(request.url), op = url.searchParams.get("op")
@@ -72,7 +72,7 @@ export async function GET(request: Request): Promise<Response> {
 }
 export async function PATCH(request: Request): Promise<Response> {
   const origin = request.headers.get("Origin"), headers = cors(origin)
-  if (origin !== EXTENSION_ORIGIN) return json({ error: "Origin not allowed" }, 403, headers)
+  if (!origin || !ALLOWED_EXTENSION_ORIGINS.has(origin)) return json({ error: "Origin not allowed" }, 403, headers)
   const grant = await validateGrant(request)
   if (!grant) return json({ error: "Authorization required or expired" }, 401, headers)
   const url = new URL(request.url)
