@@ -7,7 +7,7 @@ import "./style.css"
 const origin = (import.meta.env.VITE_DND_MANAGER_URL || "https://dnd-magic-manager.vercel.app").replace(/\/$/, "")
 type Session = { id: string; name: string; role: "MASTER" | "PLAYER" }
 type RuntimeCharacter = { characterId: string; ownerUserId?: string; active?: boolean; character?: Record<string, unknown> }
-type RuntimeHp = { characterId: string; current: number; max: number; temporary: number; currentMax: number }
+type RuntimeHp = { characterId: string; current: number; max: number; temporary: number; currentMax: number; attributes?: Record<string, number> }
 type AbilityState = { characterId: string; character: Record<string, unknown> }
 const asRecord = (value: unknown): Record<string, unknown> => value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {}
 const numeric = (value: unknown): string => typeof value === "number" && Number.isFinite(value) ? String(value) : "—"
