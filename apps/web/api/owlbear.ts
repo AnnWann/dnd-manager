@@ -109,7 +109,8 @@ export async function GET(request: Request): Promise<Response> {
     const baseUrl = process.env.VITE_SESSION_SERVER_URL?.trim()
     if (!baseUrl || !baseUrl.startsWith("https://")) return json({ error: "Session server URL not configured" }, 503, headers)
     const issuedAt = Date.now(), expiresAt = issuedAt + 60_000
-    const clientId = crypto.randomUUID()
+    const requestedClientId = url.searchParams.get("clientId") ?? ""
+    const clientId = /^[a-f0-9-]{36}$/i.test(requestedClientId) ? requestedClientId : crypto.randomUUID()
     const token = await signSessionConnectionToken({
       v: 1, sessionId, userId: grant.userId, role: role === CampaignRole.MASTER ? "MASTER" : "PLAYER",
       clientId, issuedAt, expiresAt,
