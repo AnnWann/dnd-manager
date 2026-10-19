@@ -146,7 +146,7 @@ function App() {
  const sheet = asRecord(raw.sheet)
  const health = hp[selectedId]
  const attributes = asRecord(sheet.attributes)
- return <main>
+ return <main className="owlbear-shell">
  <header><strong>D&D Manager</strong><span>{ready ? "Owlbear conectado" : "Pré-visualização"}</span></header>
  <section><h1>Ficha da sessão</h1><p>Estado em tempo real do Session Server. A lista e as permissões são determinadas pelo servidor, não pelos personagens persistidos.</p>
  <div className="toolbar"><button onClick={connectAccount}>{connected ? "Reconectar conta" : "Conectar ao D&D Manager"}</button><button disabled={!connected} onClick={() => void refreshSessions()}>Atualizar sessões</button></div>
@@ -154,7 +154,7 @@ function App() {
  <label className="field">Campanha / sessão<select value={sessionId} disabled={!connected} onChange={e => void connectSession(e.target.value)}><option value="">Selecione uma sessão...</option>{sessions.map(s => <option key={s.id} value={s.id}>{s.name} ({s.role === "MASTER" ? "Mestre" : "Jogador"})</option>)}</select></label>
  <p>{status}{sessionId && role ? " · " + (role === "MASTER" ? "Mestre" : "Jogador") : ""}</p>
  <label className="field">Personagem da sessão<select value={selectedId} onChange={e => setSelectedId(e.target.value)}><option value="">Selecione um personagem...</option>{list.map(c => <option key={c.characterId} value={c.characterId}>{String(asRecord(abilities[c.characterId]?.character ?? c.character).name ?? c.characterId)}</option>)}</select></label>
- {selectedId && chosen && <article>
+ {selectedId && chosen && <article className="character-panel">
  <CharacterSheetHeader name={String(raw.name ?? selectedId)} id={selectedId} />
  <NativeCharacterSheetHost
    characterId={selectedId} raw={raw} hp={health as unknown as Record<string, unknown>} conditions={conditions[selectedId]} runtimeConfig={runtimeConfig} inventoryState={inventoryState} spells={spellLibrary} role={role === "MASTER" ? "MASTER" : "PLAYER"}
