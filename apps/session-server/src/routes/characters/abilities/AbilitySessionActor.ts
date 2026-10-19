@@ -452,7 +452,7 @@ function applyAbilityOperation(
     const needsAttribute = abilityRequiresWeaponAttributeSelection(ability, operation.activationOptionId);
     if (needsAttribute !== Boolean(operation.resourceSelection?.weaponAttribute)) return null;
     if (optionRequiresWeaponSelection(ability, operation.activationOptionId)) {
-      const previousWeapon = getCharacterConditions(character)
+      const previousWeapon = ability.allowMultipleWeaponActivations ? undefined : getCharacterConditions(character)
         .filter(condition => condition.sourceAbilityId === ability.id && condition.sourceAbilityOptionId?.endsWith(":abilities"))
         .flatMap(condition => condition.grantedAbilities ?? [])
         .flatMap(granted => granted.bonuses?.attackRiders ?? [])
