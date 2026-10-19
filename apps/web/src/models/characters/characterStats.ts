@@ -142,12 +142,13 @@ export function getScopedCharacterBonuses(
   character: CharacterTemplate,
   key: ScopedBonusKey,
   attribute: Attribute,
+  weaponId?: string,
 ): Bonus[] {
   const collect = (
     collection: { bonuses?: Partial<Record<ScopedBonusKey, Array<{ attribute?: Attribute; bonus: Bonus }>>> },
   ) =>
     (collection.bonuses?.[key] ?? [])
-      .filter((entry) => !entry.attribute || entry.attribute === attribute)
+      .filter((entry) => (!entry.attribute || entry.attribute === attribute) && (!entry.weaponId || entry.weaponId === weaponId))
       .map((entry) => resolveBonus(character, entry.bonus))
 
   return [
@@ -514,6 +515,7 @@ export function getEffectiveWeaponAttackBonus(
       character,
       "weaponAttackBonus",
       modifierAttribute,
+      weapon.id,
     ),
     ...(weaponAttackBonus ? [weaponAttackBonus] : []),
   ])
@@ -542,6 +544,7 @@ export function getEffectiveWeaponDamageBonus(
       character,
       "weaponDamageBonus",
       modifierAttribute,
+      weapon.id,
     ),
     ...(weaponDamageBonus ? [weaponDamageBonus] : []),
   ])
