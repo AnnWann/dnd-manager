@@ -97,6 +97,29 @@ function App() {
  useEffect(() => { let active = true; OBR.onReady(() => { if (active) setReady(true) }); return () => { active = false } }, [])
  useEffect(() => {
    if (!ready || isDicePopover) return
+   const id = "com.dnd-manager.owlbear/associate-character"
+   void OBR.contextMenu.create({
+     id,
+     icons: [{
+       icon: "/icon.svg",
+       label: "D&D Manager · Associar ficha ao token",
+       filter: { min: 1, max: 1, every: [{key: "type", value: "IMAGE"}] },
+     }],
+     onClick(context) {
+       const token = context.items[0]
+       if (!token) return
+       setSelectedToken({
+         id: token.id, name: token.name,
+         link: readTokenCharacterLink(token.metadata),
+       })
+       setActiveArea("sheet")
+       void OBR.action.open()
+     },
+   })
+   return () => { void OBR.contextMenu.remove(id) }
+ }, [ready])
+ useEffect(() => {
+   if (!ready || isDicePopover) return
    let active = true
    const update = async () => {
      try {
