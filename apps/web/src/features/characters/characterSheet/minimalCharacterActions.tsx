@@ -44,6 +44,7 @@ import {
   abilityRequiresActivation,
   endAbilityEffect,
   getAbilityUsageMax,
+  getSharedAbilityUsage,
   isAbilityBenefitsActive,
   useAbilityEffect,
 } from "../../../models/abilities/abilityActivation"
@@ -1088,14 +1089,14 @@ function getAbilityActions(
           : usesKi
             ? ki?.max
             : ability.usage
-              ? getAbilityUsageMax(character, ability.usage)
+              ? getAbilityUsageMax(character, getSharedAbilityUsage(character, ability)!)
               : undefined,
         usageRemaining: usesChannelDivinity
           ? channelDivinity?.current
           : usesKi
             ? ki?.current
             : ability.usage
-              ? Math.max(0, getAbilityUsageMax(character, ability.usage) - ability.usage.used)
+              ? Math.max(0, getAbilityUsageMax(character, getSharedAbilityUsage(character, ability)!) - getSharedAbilityUsage(character, ability)!.used)
               : undefined,
       }
     })
