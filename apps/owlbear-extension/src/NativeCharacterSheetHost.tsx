@@ -292,7 +292,7 @@ export function NativeCharacterSheetHost({ characterId, raw, hp, conditions, run
   const staticTabs = CHARACTER_TABS.filter(tab =>
     (tab.key !== "custom-class" || hasCustomClass(character)) &&
     (tab.key === "sheet" || !hiddenTabs.has(tab.key)))
-  const tabs = orderCharacterTabs(staticTabs,activeDefinitions).map(tab => ({id:tab.key,label:tab.label}))
+  const tabs = orderCharacterTabs(staticTabs,activeDefinitions).map(tab => ({id:tab.key,label:tab.label,icon:tab.icon}))
   const actor = role === "MASTER" ? "master" as const : "owner" as const
   const embeddedTab = (tabId:string,content:React.ReactNode):React.ReactNode => {
     const target = toCustomSystemExistingTab(tabId)
