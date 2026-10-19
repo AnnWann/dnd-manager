@@ -1,3 +1,4 @@
+import { NativeCharacterSheetHost } from "./NativeCharacterSheetHost"
 import React, { useCallback, useEffect, useRef, useState } from "react"
 import { createRoot } from "react-dom/client"
 import OBR from "@owlbear-rodeo/sdk"
@@ -127,25 +128,11 @@ function App() {
  <label className="field">Personagem da sessão<select value={selectedId} onChange={e => setSelectedId(e.target.value)}><option value="">Selecione um personagem...</option>{list.map(c => <option key={c.characterId} value={c.characterId}>{String(asRecord(abilities[c.characterId]?.character ?? c.character).name ?? c.characterId)}</option>)}</select></label>
  {selectedId && chosen && <article>
  <CharacterSheetHeader name={String(raw.name ?? selectedId)} id={selectedId} />
- <SharedCharacterTabs key={selectedId} sections={{
- sheet: <CharacterSheetLayout mode={sheetMode} onModeChange={setSheetMode} configuration={<p>Os campos estruturais só serão editáveis depois de integrar os controles do CharacterWorkspace ao Owlbear.</p>} play={<><SharedSessionHp current={health?.current ?? 0} max={health?.currentMax ?? health?.max ?? 0}
-   temporary={health?.temporary ?? 0} hitDice={health?.hitDice} canEdit={status === "Conectado à sessão"}
-   onHeal={amount => sendHp("character.hp.heal", amount)} onDamage={amount => sendHp("character.hp.damage", amount)}/>
-   <CharacterSheetStatGrid stats={[
-     {id:"exhaustion",label:"Exaustão",value:numeric(health?.stats?.exhaustion ?? 0)},
-     {id:"inspiration",label:"Inspiração",value:health?.stats?.inspiration ? "Disponível" : "Gasta"},
-     {id:"initiative-adjust",label:"Ajuste de iniciativa",value:numeric(health?.stats?.initiativeAdjustment ?? 0)},
-     {id:"armor-adjust",label:"Ajuste de CA",value:numeric(health?.stats?.armorClassAdjustment ?? 0)},
-   ]} />
-   <h3>Atributos</h3><div className="stats">{(["str","dex","con","int","wis","cha"] as const).map(k => <CharacterSheetDerivedTile key={k} label={k.toUpperCase()} value={numeric(health?.attributes?.[k] ?? attributes[k])} />)}</div></>} />,
- abilities: <p>Os controles de habilidades requerem a adaptação do CharacterWorkspace e as operações autorizadas do Session Server.</p>,
- "spells-list": <p>Magias: integração com o estado autoritativo e o módulo de conjuração pendente.</p>,
- equipment: <p>Equipamento: integração com as operações de equipamento da sessão pendente.</p>,
- inventory: <p>Inventário: integração com o inventário da sessão pendente.</p>,
- race: <p>Raça: a interface completa depende do módulo compartilhado de raça.</p>,
- profile: <p>Perfil: a interface completa depende do módulo compartilhado de perfil.</p>,
- proficiencies: <p>Proficiências: integração com as operações de proficiência pendente.</p>
- }} />
+ <NativeCharacterSheetHost
+   characterId={selectedId} raw={raw} hp={health as unknown as Record<string, unknown>} role={role === "MASTER" ? "MASTER" : "PLAYER"}
+   sessionId={sessionId} connected={status === "Conectado à sessão"}
+   send={message => { if (socket.current?.readyState !== WebSocket.OPEN) return false; socket.current.send(JSON.stringify(message)); return true }}
+ />
  </article>}
  </section><footer>O Durable Object é a fonte de verdade. O servidor da sessão determina quais personagens cada usuário pode receber.</footer>
  </main>
