@@ -152,7 +152,11 @@ export function getScopedCharacterBonuses(
       .map((entry) => resolveBonus(character, entry.bonus))
 
   return [
-    ...getEquippedItems(character).flatMap(collect),
+    ...getEquippedItems(character).flatMap((item) => {
+      // A bonus granted by a weapon is restricted to that weapon by default.
+      if ((key === "weaponAttackBonus" || key === "weaponDamageBonus") && item.equipSlot === "weapon" && item.id !== weaponId) return []
+      return collect(item)
+    }),
     ...getActiveAbilities(character).flatMap(collect),
     ...getCharacterConditions(character)
       .filter(isConditionActive)
