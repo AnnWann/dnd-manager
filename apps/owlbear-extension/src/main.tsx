@@ -57,7 +57,7 @@ function App() {
  const [compendiumCreatures,setCompendiumCreatures] = useState<CompendiumCreature[]>([])
  const [pendingCreatureAdd,setPendingCreatureAdd] = useState<{tokenId:string;entryId:string;sessionId:string}|null>(null)
  const [initiativeState,setInitiativeState] = useState<Record<string,unknown>|null>(null)
- const [selectedToken, setSelectedToken] = useState<{id:string;name:string;link:{sessionId:string;characterId:string}|null;creatureLink:{sessionId:string;entryId:string}|null;catalogId:string|null}|null>(null)
+ const [selectedToken, setSelectedToken] = useState<{id:string;name:string;link:{sessionId:string;characterId:string}|null;creatureLink:{sessionId:string;entryId:string}|null;catalogId:string|null;catalogSessionId:string|null}|null>(null)
  const [tokenLinkError, setTokenLinkError] = useState("")
  const [activeArea, setActiveArea] = useState<"sheet" | "dice">(isDicePopover ? "dice" : "sheet")
  const [rollHistory, setRollHistory] = useState<DiceHistoryEntry[]>([])
@@ -127,7 +127,7 @@ function App() {
        if (!token) return
        setSelectedToken({
          id: token.id, name: token.name,
-         link: readTokenCharacterLink(token.metadata),creatureLink:readTokenCreatureLink(token.metadata),catalogId:String(readTokenCompendiumCreature(token.metadata)?.creatureId??"")||null,
+         link: readTokenCharacterLink(token.metadata),creatureLink:readTokenCreatureLink(token.metadata),catalogId:String(readTokenCompendiumCreature(token.metadata)?.creatureId??"")||null,catalogSessionId:String(readTokenCompendiumCreature(token.metadata)?.sessionId??"")||null,
        })
        void OBR.popover.open({
          id: ASSOC_POPOVER_ID,
@@ -148,7 +148,7 @@ function App() {
      try {
        const token = await readSelectedToken()
        if (!active) return
-       setSelectedToken(token ? {id:token.id,name:token.name,link:readTokenCharacterLink(token.metadata),creatureLink:readTokenCreatureLink(token.metadata),catalogId:String(readTokenCompendiumCreature(token.metadata)?.creatureId??"")||null} : null)
+       setSelectedToken(token ? {id:token.id,name:token.name,link:readTokenCharacterLink(token.metadata),creatureLink:readTokenCreatureLink(token.metadata),catalogId:String(readTokenCompendiumCreature(token.metadata)?.creatureId??"")||null,catalogSessionId:String(readTokenCompendiumCreature(token.metadata)?.sessionId??"")||null} : null)
      } catch (e) { if (active) setTokenLinkError(String(e)) }
    }
    void update()
@@ -333,7 +333,7 @@ function App() {
   ? asRecord(initiativeState?.session).entries : []) as InitiativeEntry[]
  const boundCreature=role==="MASTER" && selectedToken?.creatureLink?.sessionId===sessionId
   ? initiativeEntries.find(entry=>entry.id===selectedToken.creatureLink?.entryId) : undefined
- const catalogCreature=role==="MASTER"&&selectedToken?.catalogId?compendiumCreatures.find(c=>c.id===selectedToken.catalogId):undefined
+ const catalogCreature=role==="MASTER"&&selectedToken?.catalogSessionId===sessionId&&selectedToken?.catalogId?compendiumCreatures.find(c=>c.id===selectedToken.catalogId):undefined
  const addCatalogToInitiative=()=>{
    if(!catalogCreature||status!=="Conectado à sessão"||role!=="MASTER"||!selectedToken||pendingCreatureAdd)return
    const entryId=crypto.randomUUID()
