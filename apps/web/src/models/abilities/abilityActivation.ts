@@ -56,12 +56,34 @@ export function getAbilityRemainingUses(character: CharacterTemplate, usage: Usa
   return Math.max(0, getAbilityUsageMax(character, usage) - usage.used)
 }
 
+/** Resolve a shared usage pool by its stable ID, rather than the individual ability. */
+export function getSharedAbilityUsage(character: CharacterTemplate, ability: Ability): Usage | undefined {
+  const usage = ability.usage
+  const id = usage?.sharedResourceId?.trim()
+  if (!usage || !id) return usage
+  return (character.get("abilities") ?? [])
+    .find((candidate) => candidate.usage?.sharedResourceId?.trim() === id)
+    ?.usage ?? usage
+}
+
+function synchronizeSharedAbilityUsage(character: CharacterTemplate, ability: Ability): CharacterTemplate {
+  const usage = ability.usage
+  const id = usage?.sharedResourceId?.trim()
+  if (!usage || !id) return character
+  const abilities = character.get("abilities") ?? []
+  return character.set("abilities", abilities.map((candidate) =>
+    candidate.usage?.sharedResourceId?.trim() === id
+      ? { ...candidate, usage: { ...candidate.usage!, used: usage.used } }
+      : candidate,
+  ))
+}
+
 export function canActivateAbility(character: CharacterTemplate, ability: Ability): boolean {
   if (abilityRequiresActivation(ability) && isAbilityBenefitsActive(ability)) {
     // Changing an active elemental/stance option isn't another initial activation.
     return Boolean(ability.allowOptionSwitching && ((ability.activationOptions?.length ?? 0) > 0 || getAbilityAttackRiderDamageChoices(ability).length > 0))
   }
-  const usage = ability.usage
+  const usage = getSharedAbilityUsage(character, ability)
   if (!usage || usage.reset === "spellSlot") return true
   return usage.used < getAbilityUsageMax(character, usage)
 }
@@ -83,7 +105,7 @@ export function activateAbilityBenefits(character: CharacterTemplate, ability: A
   if (!abilityRequiresActivation(ability) || !canActivateAbility(character, ability)) return ability
   const duration = getAbilityEffectDuration(ability)
   const persists = ability.effectPersistence === "permanent"
-  const usage = ability.usage
+  const usage = getSharedAbilityUsage(character, ability)
   return {
     ...ability,
     effectDuration: duration,
@@ -149,6 +171,7 @@ export function useAbilityEffect(
   const previousCurrentHp = character.get("sheet").HP.current
   const nextAbility = switchingOption ? resolvedAbility : activateAbilityBenefits(character, resolvedAbility)
   let next = replaceAbilityAtSource(character, nextAbility, source)
+  if (!switchingOption) next = synchronizeSharedAbilityUsage(next, nextAbility)
   if (switchingOption) {
     const optionConditionIds = new Set((resolvedAbility.activationOptions ?? []).map(option => `${getAbilityConditionId(resolvedAbility.id, source)}:grant:${option.id}:abilities`))
     next = withCharacterConditions(next, getCharacterConditions(next).filter(condition => !optionConditionIds.has(condition.id)))
