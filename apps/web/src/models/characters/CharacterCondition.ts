@@ -33,6 +33,8 @@ export type CharacterConditionDuration = {
   tickOwner?: ConditionTickOwner
   autoRemoveAtZero?: boolean
   customLabel?: string
+  /** Optional rest boundary for temporary effects such as a crimson rite. */
+  expiresOnRest?: "short" | "long"
   expiresAt?: string
 }
 
