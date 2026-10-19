@@ -5,9 +5,13 @@
   "type": "module",
   "exports": {
     "./transport": "./src/sessionTransport.ts",
-    "./messages": "./src/sessionMessageClient.ts"
+    "./messages": "./src/sessionMessageClient.ts",
+    "./character-sheet-operations": "./src/characterSheetOperations.ts"
   },
   "scripts": {
     "typecheck": "tsc --project tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "@dnd-manager/session-protocol": "0.1.0"
   }
 }
