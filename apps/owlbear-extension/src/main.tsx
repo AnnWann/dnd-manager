@@ -184,6 +184,12 @@ function App() {
        }
      } else if(message.type==="request-state") {
        channel.postMessage({type:"state",value:associationSnapshot.current})
+       if(associationSnapshot.current.role==="MASTER" && grant.current){
+         void fetch(origin+"/api/owlbear?op=creature-compendium&sessionId="+encodeURIComponent(associationSnapshot.current.sessionId),{headers:{Authorization:"Bearer "+grant.current},credentials:"omit"})
+           .then(async response=>{if(!response.ok)throw Error("HTTP "+response.status);return response.json() as Promise<{creatures:CompendiumCreature[]}>})
+           .then(data=>setCompendiumCreatures(Array.isArray(data.creatures)?data.creatures:[]))
+           .catch(error=>setError("Compêndio indisponível: "+String(error)))
+       }
      }
    }
    if(isAssociatePopover)channel.postMessage({type:"request-state"})
@@ -370,6 +376,7 @@ function App() {
            {(associationKind==="creature"?(associationState.creatures??[]):associationKind==="catalog"?(associationState.catalog??[]):associationState.characters).map(c=><option key={c.id} value={c.id}>{c.name}</option>)}
          </select>
        </label>
+       {associationKind==="catalog" && !associationState.catalog?.length && <p className="text-xs text-textMuted">Nenhuma criatura recebida do compêndio da campanha. Verifique se o compêndio foi salvo em Criação.</p>}
        <button type="button" disabled={!associationChoice||associationBusy} onClick={()=>void submitAssociation(false)}
          className="rounded-lg bg-accentBg px-3 py-2 text-xs font-semibold text-textH disabled:opacity-40">Associar {associationKind==="character"?"personagem":"criatura"}</button>
        <button type="button" disabled={associationBusy} onClick={()=>void submitAssociation(true)}
