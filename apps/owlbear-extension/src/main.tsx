@@ -130,7 +130,8 @@ function App() {
        if (message.type === "session.conditions.updated") setConditions(previous => ({...previous,[String(character.characterId)]:character}))
        if (message.type === "session.hp.snapshot") setHp(Object.fromEntries(entries.map((v: unknown) => { const c = v as RuntimeHp; return [c.characterId, c] })))
        if (message.type === "session.hp.updated") setHp(previous => ({ ...previous, [String(character.characterId)]: character as RuntimeHp }))
-     }
+       }
+     })
      socket.current=ws
      ws.connect()
    } catch (e) { setStatus("Desconectado"); setError(String(e instanceof Error ? e.message : e)) }
