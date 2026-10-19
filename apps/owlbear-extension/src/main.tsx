@@ -1,6 +1,8 @@
+import { CreatureQuickSheet, quickSheetFromCompendiumCreature } from "../../web/src/features/creatures/CreatureQuickSheet"
+import type { CompendiumCreature } from "../../web/src/models/creatures/CompendiumCreature"
 import { CreatureTokenInspector } from "./CreatureTokenInspector"
 import type { InitiativeEntry } from "../../web/src/models/initiative/Initiative"
-import { readSelectedToken, readTokenCharacterLink, setTokenCharacterLink, readTokenCreatureLink, setTokenCreatureLink } from "./tokenCharacterLink"
+import { readSelectedToken, readTokenCharacterLink, setTokenCharacterLink, readTokenCreatureLink, setTokenCreatureLink, readTokenCompendiumCreature, TOKEN_COMPENDIUM_CREATURE_METADATA } from "./tokenCharacterLink"
 import { SessionDicePanel, type DiceHistoryEntry } from "./SessionDicePanel"
 import { SessionTransport } from "@dnd-manager/session-client/transport"
 import { NativeCharacterSheetHost } from "./NativeCharacterSheetHost"
@@ -45,15 +47,16 @@ function App() {
  const [spellLibrary, setSpellLibrary] = useState<Record<string, unknown>[]>([])
  const [inventoryState, setInventoryState] = useState<Record<string, unknown> | null>(null)
  const [selectedId, setSelectedId] = useState("")
- const [associationState, setAssociationState] = useState<{sessionId:string;connected:boolean;characters:{id:string;name:string}[];role?:string;creatures?:{id:string;name:string;hp?:number;maxHp?:number;armorClass?:number}[]}>({sessionId:"",connected:false,characters:[],creatures:[]})
+ const [associationState, setAssociationState] = useState<{sessionId:string;connected:boolean;characters:{id:string;name:string}[];role?:string;creatures?:{id:string;name:string;hp?:number;maxHp?:number;armorClass?:number}[];catalog?:{id:string;name:string}[]}>({sessionId:"",connected:false,characters:[],creatures:[],catalog:[]})
  const [associationChoice,setAssociationChoice] = useState("")
- const [associationKind,setAssociationKind] = useState<"character"|"creature">("character")
+ const [associationKind,setAssociationKind] = useState<"character"|"creature"|"catalog">("character")
  const [associationError,setAssociationError] = useState("")
  const [associationBusy,setAssociationBusy] = useState(false)
  const assocChannel = useRef<BroadcastChannel|null>(null)
- const associationSnapshot = useRef({sessionId:"",connected:false,characters:[] as {id:string;name:string}[],role:"",creatures:[] as {id:string;name:string;hp?:number;maxHp?:number;armorClass?:number}[]})
+ const associationSnapshot = useRef({sessionId:"",connected:false,characters:[] as {id:string;name:string}[],role:"",catalog:[] as {id:string;name:string}[],creatures:[] as {id:string;name:string;hp?:number;maxHp?:number;armorClass?:number}[]})
+ const [compendiumCreatures,setCompendiumCreatures] = useState<CompendiumCreature[]>([])
  const [initiativeState,setInitiativeState] = useState<Record<string,unknown>|null>(null)
- const [selectedToken, setSelectedToken] = useState<{id:string;name:string;link:{sessionId:string;characterId:string}|null;creatureLink:{sessionId:string;entryId:string}|null}|null>(null)
+ const [selectedToken, setSelectedToken] = useState<{id:string;name:string;link:{sessionId:string;characterId:string}|null;creatureLink:{sessionId:string;entryId:string}|null;catalogId:string|null}|null>(null)
  const [tokenLinkError, setTokenLinkError] = useState("")
  const [activeArea, setActiveArea] = useState<"sheet" | "dice">(isDicePopover ? "dice" : "sheet")
  const [rollHistory, setRollHistory] = useState<DiceHistoryEntry[]>([])
@@ -123,7 +126,7 @@ function App() {
        if (!token) return
        setSelectedToken({
          id: token.id, name: token.name,
-         link: readTokenCharacterLink(token.metadata),creatureLink:readTokenCreatureLink(token.metadata),
+         link: readTokenCharacterLink(token.metadata),creatureLink:readTokenCreatureLink(token.metadata),catalogId:String(readTokenCompendiumCreature(token.metadata)?.creatureId??"")||null,
        })
        void OBR.popover.open({
          id: ASSOC_POPOVER_ID,
@@ -144,7 +147,7 @@ function App() {
      try {
        const token = await readSelectedToken()
        if (!active) return
-       setSelectedToken(token ? {id:token.id,name:token.name,link:readTokenCharacterLink(token.metadata),creatureLink:readTokenCreatureLink(token.metadata)} : null)
+       setSelectedToken(token ? {id:token.id,name:token.name,link:readTokenCharacterLink(token.metadata),creatureLink:readTokenCreatureLink(token.metadata),catalogId:String(readTokenCompendiumCreature(token.metadata)?.creatureId??"")||null} : null)
      } catch (e) { if (active) setTokenLinkError(String(e)) }
    }
    void update()
@@ -189,6 +192,7 @@ function App() {
    if(isDicePopover||isAssociatePopover)return
    associationSnapshot.current={
      sessionId,connected:status==="Conectado à sessão",role,
+     catalog:role==="MASTER"?compendiumCreatures.map(c=>({id:c.id,name:c.name})):[],
      creatures:role==="MASTER"? (Array.isArray(asRecord(initiativeState?.session).entries)? asRecord(initiativeState?.session).entries as Record<string,unknown>[]:[])
        .filter(entry=>entry.sourceType==="monster"||entry.sourceType==="npc"||entry.sourceType==="custom")
        .map(entry=>({id:String(entry.id),name:String(entry.customName??entry.realName??entry.name),hp:typeof entry.currentHp==="number"?entry.currentHp:undefined,maxHp:typeof entry.maxHp==="number"?entry.maxHp:undefined,armorClass:typeof entry.armorClass==="number"?entry.armorClass:undefined})) : [],
@@ -197,14 +201,15 @@ function App() {
        .map(c=>({id:c.characterId,name:String(asRecord(abilities[c.characterId]?.character??c.character).name??c.characterId)})),
    }
    assocChannel.current?.postMessage({type:"state",value:associationSnapshot.current})
- },[sessionId,status,role,initiativeState,characters,abilities])
+ },[sessionId,status,role,initiativeState,compendiumCreatures,characters,abilities])
  const associationTokenId=new URLSearchParams(window.location.search).get("tokenId")??""
  const submitAssociation=useCallback(async(remove:boolean)=>{
    if(!associationTokenId||!associationState.connected||!associationState.sessionId)return
-   if(!remove&&!(associationKind==="creature"&&associationState.role==="MASTER"?associationState.creatures?.some(c=>c.id===associationChoice):associationState.characters.some(c=>c.id===associationChoice)))return
+   if(!remove&&!(associationKind==="creature"&&associationState.role==="MASTER"?associationState.creatures?.some(c=>c.id===associationChoice):associationKind==="catalog"&&associationState.role==="MASTER"?associationState.catalog?.some(c=>c.id===associationChoice):associationState.characters.some(c=>c.id===associationChoice)))return
    setAssociationBusy(true);setAssociationError("")
    try{
-     if(remove){ await setTokenCreatureLink(associationTokenId,null);await setTokenCharacterLink(associationTokenId,null) }
+     if(remove){ await OBR.scene.items.updateItems([associationTokenId],items=>{for(const item of items){item.metadata["com.dnd-manager.owlbear/creature-link"]=null;item.metadata["com.dnd-manager.owlbear/character-link"]=null;item.metadata[TOKEN_COMPENDIUM_CREATURE_METADATA]=null}}) }
+     else if(associationKind==="catalog")await OBR.scene.items.updateItems([associationTokenId],items=>{for(const item of items){item.metadata[TOKEN_COMPENDIUM_CREATURE_METADATA]={sessionId:associationState.sessionId,creatureId:associationChoice};item.metadata["com.dnd-manager.owlbear/creature-link"]=null;item.metadata["com.dnd-manager.owlbear/character-link"]=null}})
      else if(associationKind==="creature")await setTokenCreatureLink(associationTokenId,{sessionId:associationState.sessionId,entryId:associationChoice})
      else {await setTokenCharacterLink(associationTokenId,{sessionId:associationState.sessionId,characterId:associationChoice});await setTokenCreatureLink(associationTokenId,null)}
      await OBR.popover.close(ASSOC_POPOVER_ID)
@@ -214,7 +219,7 @@ function App() {
  const disconnect = useCallback(() => {
    socket.current?.disconnect()
    socket.current = null
-   setCharacters({}); setAbilities({}); setHp({}); setConditions({}); setRuntimeConfig(null); setSpellLibrary([]); setInventoryState(null);setInitiativeState(null); setSelectedId(""); setRollHistory([]); setStatus("Desconectado")
+   setCharacters({}); setAbilities({}); setHp({}); setConditions({}); setRuntimeConfig(null); setSpellLibrary([]); setInventoryState(null);setInitiativeState(null);setCompendiumCreatures([]); setSelectedId(""); setRollHistory([]); setStatus("Desconectado")
  }, [])
  useEffect(() => () => { socket.current?.disconnect() }, [])
  const api = useCallback(async <T,>(path: string): Promise<T> => {
@@ -253,6 +258,7 @@ function App() {
    try {
      const result = await api<{ token: string; baseUrl: string; role: string; clientId: string }>("?op=connect&sessionId=" + encodeURIComponent(id))
      setRole(result.role)
+     if(result.role==="MASTER")void api<{creatures:CompendiumCreature[]}>("?op=creature-compendium&sessionId="+encodeURIComponent(id)).then(data=>setCompendiumCreatures(Array.isArray(data.creatures)?data.creatures:[])).catch(error=>setError("Compêndio indisponível: "+String(error)))
      void api<{spells:Record<string,unknown>[]}>("?op=homebrew-spells&sessionId="+encodeURIComponent(id))
        .then(data=>setSpellLibrary(Array.isArray(data.spells)?data.spells:[]))
        .catch(error=>console.warn("[owlbear] homebrew spell library unavailable",error))
@@ -326,6 +332,13 @@ function App() {
   ? asRecord(initiativeState?.session).entries : []) as InitiativeEntry[]
  const boundCreature=role==="MASTER" && selectedToken?.creatureLink?.sessionId===sessionId
   ? initiativeEntries.find(entry=>entry.id===selectedToken.creatureLink?.entryId) : undefined
+ const catalogCreature=role==="MASTER"&&selectedToken?.catalogId?compendiumCreatures.find(c=>c.id===selectedToken.catalogId):undefined
+ const addCatalogToInitiative=()=>{
+   if(!catalogCreature||status!=="Conectado à sessão"||role!=="MASTER")return
+   const entryId=crypto.randomUUID()
+   const entry={id:entryId,sourceId:catalogCreature.id,sourceType:"monster",name:catalogCreature.name,basicName:catalogCreature.basicName,realName:catalogCreature.name,initiative:0,initiativeBonus:catalogCreature.initiativeBonus,side:catalogCreature.defaultSide,armorClass:catalogCreature.armorClass,maxHp:catalogCreature.maxHp,currentHp:catalogCreature.maxHp,temporaryHp:0,conditions:[],order:initiativeEntries.length,createdAt:Date.now(),hidden:false,defeated:false}
+   if(socket.current?.sendRaw(JSON.stringify({type:"session.initiative.operation",operation:{type:"initiative.entries.add",characterId:"session",entries:[entry]}})))setError("Criatura enviada à iniciativa; confirme a inclusão na lista.")
+ }
  const list = Object.values(characters).filter(c => c.active !== false && (c.character || abilities[c.characterId]))
  const chosen = characters[selectedId]
  const raw = asRecord(abilities[selectedId]?.character ?? chosen?.character)
@@ -339,16 +352,16 @@ function App() {
        <button type="button" onClick={()=>void OBR.popover.close(ASSOC_POPOVER_ID)} className="rounded border border-border px-2 py-1 text-xs">Fechar</button>
      </div>
      {!associationState.connected?<p className="text-xs text-textMuted">Abra e conecte o painel principal do D&D Manager à sessão para associar um personagem.</p>:<>
-       {associationState.role==="MASTER"&&<div className="flex gap-2"><button type="button" onClick={()=>{setAssociationKind("character");setAssociationChoice("")}} className={"rounded px-3 py-2 text-xs "+(associationKind==="character"?"bg-accentBg":"border border-border")}>Personagem</button><button type="button" onClick={()=>{setAssociationKind("creature");setAssociationChoice("")}} className={"rounded px-3 py-2 text-xs "+(associationKind==="creature"?"bg-accentBg":"border border-border")}>Criatura na iniciativa</button></div>}
-       <label className="grid gap-2 text-xs text-textH">{associationKind==="creature"?"Instância da criatura":"Personagem da sessão"}
+       {associationState.role==="MASTER"&&<div className="flex gap-2"><button type="button" onClick={()=>{setAssociationKind("character");setAssociationChoice("")}} className={"rounded px-3 py-2 text-xs "+(associationKind==="character"?"bg-accentBg":"border border-border")}>Personagem</button><button type="button" onClick={()=>{setAssociationKind("creature");setAssociationChoice("")}} className={"rounded px-3 py-2 text-xs "+(associationKind==="creature"?"bg-accentBg":"border border-border")}>Criatura na iniciativa</button><button type="button" onClick={()=>{setAssociationKind("catalog");setAssociationChoice("")}} className={"rounded px-3 py-2 text-xs "+(associationKind==="catalog"?"bg-accentBg":"border border-border")}>Compêndio</button></div>}
+       <label className="grid gap-2 text-xs text-textH">{associationKind==="creature"?"Instância da criatura":associationKind==="catalog"?"Criatura do compêndio":"Personagem da sessão"}
          <select className="w-full rounded-lg border border-border bg-bg-subtle px-3 py-2" value={associationChoice}
            onChange={event=>setAssociationChoice(event.target.value)}>
            <option value="">Selecione...</option>
-           {(associationKind==="creature"?(associationState.creatures??[]):associationState.characters).map(c=><option key={c.id} value={c.id}>{c.name}</option>)}
+           {(associationKind==="creature"?(associationState.creatures??[]):associationKind==="catalog"?(associationState.catalog??[]):associationState.characters).map(c=><option key={c.id} value={c.id}>{c.name}</option>)}
          </select>
        </label>
        <button type="button" disabled={!associationChoice||associationBusy} onClick={()=>void submitAssociation(false)}
-         className="rounded-lg bg-accentBg px-3 py-2 text-xs font-semibold text-textH disabled:opacity-40">Associar {associationKind==="creature"?"criatura":"personagem"}</button>
+         className="rounded-lg bg-accentBg px-3 py-2 text-xs font-semibold text-textH disabled:opacity-40">Associar {associationKind==="character"?"personagem":"criatura"}</button>
        <button type="button" disabled={associationBusy} onClick={()=>void submitAssociation(true)}
          className="rounded-lg border border-border px-3 py-2 text-xs text-textH">Desassociar token</button>
      </>}
@@ -396,7 +409,7 @@ function App() {
  </div>}
  <div role="tabpanel" hidden={activeArea!=="dice"}><SessionDicePanel connected={status==="Conectado à sessão"} selectedCharacterId={selectedId || undefined} history={rollHistory} onRoll={request=>socket.current?.sendRaw(JSON.stringify({type:"session.dice.roll",request}))??false}/></div>
  {!isDicePopover && <div role="tabpanel" hidden={activeArea!=="sheet"}>
- {boundCreature ? <CreatureTokenInspector key={boundCreature.id} entry={boundCreature} connected={status==="Conectado à sessão"} onOperation={operation=>socket.current?.sendRaw(JSON.stringify({type:"session.initiative.operation",operation}))??false}/> : selectedId && chosen && <article className="character-panel">
+ {catalogCreature && !boundCreature ? <div className="grid gap-3"><CreatureQuickSheet data={quickSheetFromCompendiumCreature(catalogCreature)} compact/><button type="button" onClick={addCatalogToInitiative} className="rounded-lg border border-accentBorder bg-accentBg px-3 py-2 text-sm font-semibold">Adicionar à iniciativa</button></div> : boundCreature ? <CreatureTokenInspector key={boundCreature.id} entry={boundCreature} connected={status==="Conectado à sessão"} onOperation={operation=>socket.current?.sendRaw(JSON.stringify({type:"session.initiative.operation",operation}))??false}/> : selectedId && chosen && <article className="character-panel">
  <CharacterSheetHeader name={String(raw.name ?? selectedId)} id={selectedId} />
  <NativeCharacterSheetHost
    characterId={selectedId} raw={raw} hp={health as unknown as Record<string, unknown>} conditions={conditions[selectedId]} runtimeConfig={runtimeConfig} inventoryState={inventoryState} spells={spellLibrary} role={role === "MASTER" ? "MASTER" : "PLAYER"}
