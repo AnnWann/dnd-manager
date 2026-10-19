@@ -1,3 +1,4 @@
+import { CharacterSheetHeader } from "@dnd-manager/game-ui/character-sheet-header"
 import {
   useEffect,
   useLayoutEffect,
@@ -7,7 +8,7 @@ import {
   type CSSProperties,
   type TouchEvent,
 } from "react"
-import { ArrowLeft, Settings2, Swords, TrendingUp } from "lucide-react"
+import { ArrowLeft, Settings2 } from "lucide-react"
 import { useNavigate, useParams } from "react-router-dom"
 import { CharacterAbilitiesTab } from "../features/characters/abilities/characterAbilities"
 import { CharacterSelector } from "../features/characters/characterSelector"
@@ -384,49 +385,14 @@ export function CharacterView() {
         updateCharacter={updateCharacter}
       />
 
-      <header className="relative flex flex-wrap items-center justify-between gap-3 rounded-xl border border-border bg-bg p-3 shadow-theme-sm">
-        <button
-          type="button"
-          onClick={() => navigate(characterIndexPath(mode, campaignId))}
-          className="inline-flex items-center gap-2 rounded-lg border border-border px-3 py-2 text-sm font-medium text-textH hover:bg-accentBg"
-        >
-          <ArrowLeft className="h-4 w-4" /> Selecionar personagem
-        </button>
-
-        <div className="min-w-0 flex-1 text-center sm:text-left">
-          <div className="truncate font-semibold text-textH">
-            {routeCharacter.get("name")}
-          </div>
-          <div className="truncate text-xs text-text">
-            {routeCharacter.get("id")}
-          </div>
-        </div>
-
-        {combatActive && campaignId ? (
-          <button
-            type="button"
-            onClick={() => navigate(campaignPath(campaignId, "initiative"))}
-            className="order-last mx-auto inline-flex w-full items-center justify-center gap-2 rounded-lg border border-danger bg-dangerBg px-4 py-2 text-sm font-semibold text-danger transition hover:brightness-110 sm:absolute sm:left-1/2 sm:top-1/2 sm:order-none sm:w-auto sm:-translate-x-1/2 sm:-translate-y-1/2"
-            title="Abrir iniciativa"
-          >
-            <Swords className="h-4 w-4" />
-            Em combate
-          </button>
-        ) : null}
-
-        <div className="flex shrink-0 items-center gap-2">
-          <button
-            type="button"
-            onClick={() =>
-              navigate(characterLevelUpPath(mode, campaignId, routeCharacter.get("id")))
-            }
-            className="inline-flex items-center gap-2 rounded-lg border border-accentBorder bg-accentBg px-3 py-2 text-sm font-medium text-textH hover:bg-bg-subtle"
-          >
-            <TrendingUp className="h-4 w-4" />
-            Subir de nível
-          </button>
-        </div>
-      </header>
+      <CharacterSheetHeader
+        name={routeCharacter.get("name")}
+        id={routeCharacter.get("id")}
+        onBack={() => navigate(characterIndexPath(mode, campaignId))}
+        onLevelUp={() => navigate(characterLevelUpPath(mode, campaignId, routeCharacter.get("id")))}
+        inCombat={combatActive && Boolean(campaignId)}
+        onCombat={campaignId ? () => navigate(campaignPath(campaignId, "initiative")) : undefined}
+      />
 
       <CharacterRestControls
         character={routeCharacter}
