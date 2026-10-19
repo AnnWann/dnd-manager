@@ -485,7 +485,7 @@ export function CharacterView() {
   )
 }
 
-function orderCharacterTabs(
+export function orderCharacterTabs(
   standardTabs: CharacterViewTabDefinition[],
   definitions: CustomSystemDefinition[],
 ): CharacterViewTabDefinition[] {
@@ -549,7 +549,7 @@ function orderCharacterTabs(
   return result
 }
 
-function orderEmbeddedSystems(
+export function orderEmbeddedSystems(
   definitions: CustomSystemDefinition[],
   targetTab: CustomSystemExistingCharacterTab,
 ): { before: string[]; after: string[] } {
@@ -650,7 +650,7 @@ function characterLevelUpPath(
   return `/user/characters/${encodeURIComponent(characterId)}/level-up`
 }
 
-function toCustomSystemExistingTab(
+export function toCustomSystemExistingTab(
   tab: string,
 ): CustomSystemExistingCharacterTab | undefined {
   if (tab === "spells-list") return "spellsList"
