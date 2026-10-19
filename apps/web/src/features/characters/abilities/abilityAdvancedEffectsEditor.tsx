@@ -161,6 +161,22 @@ export function AbilityAdvancedEffectsEditor({ ability, character, onChange }: {
                       </label>
                     </div>
 
+                    <label className="grid gap-1 text-xs text-textMuted">
+                      Encerrar efeito ao descansar
+                      <Select
+                        value={optionDuration.expiresOnRest ?? "none"}
+                        onChange={event => updateOption(option.id, {
+                          duration: {
+                            ...optionDuration,
+                            expiresOnRest: event.target.value === "none" ? undefined : event.target.value as "short" | "long",
+                          },
+                        })}
+                      >
+                        <option value="none">Não — duração manual</option>
+                        <option value="short">Descanso curto ou longo</option>
+                        <option value="long">Apenas descanso longo</option>
+                      </Select>
+                    </label>
                     <SelfDamageEditor
                       value={option.selfDamageOnUse}
                       label="Dano próprio adicional desta opção (ex.: amplificação)"
