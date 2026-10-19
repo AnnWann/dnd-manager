@@ -164,6 +164,9 @@ export function AbilityDialog({
     (draft.grantedSpells?.length ?? 0) + (draft.grantedProficiencies?.length ?? 0)
   const hasAdvancedEffects =
     Boolean(draft.conditionOnUse) ||
+    Boolean(draft.selfDamageOnUse) ||
+    Boolean(draft.allowMultipleWeaponActivations) ||
+    Boolean(draft.activationOptions?.some(option => option.selfDamageOnUse)) ||
     (draft.activationOptions?.length ?? 0) > 0 ||
     Object.values(draft.bonuses ?? {}).some((value) => Array.isArray(value) && value.length > 0)
   const hasConfiguredResource =

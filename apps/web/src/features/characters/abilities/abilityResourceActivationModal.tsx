@@ -20,6 +20,7 @@ import {
 } from "../../../models/abilities/abilityResourceCosts"
 import type { CharacterTemplate } from "../../../models/characters/CharacterTemplate"
 import { listBonusRollRequirements } from "../../../models/bonuses/BonusRoll"
+import { getAbilitySelfDamageRollRequirements } from "../../../models/abilities/abilitySelfDamage"
 
 export function AbilityResourceActivationModal({
   ability,
@@ -56,7 +57,7 @@ export function AbilityResourceActivationModal({
   const [selectedWeaponId, setSelectedWeaponId] = useState("")
   const [selectedWeaponAttribute, setSelectedWeaponAttribute] = useState<Attribute | "">("")
   const needsAttribute = abilityRequiresWeaponAttributeSelection(ability, optionId)
-  const boundWeaponId = getCharacterConditions(character)
+  const boundWeaponId = ability.allowMultipleWeaponActivations ? undefined : getCharacterConditions(character)
     .filter(condition => condition.sourceAbilityId === (ability.originalAbilityId ?? ability.id))
     .flatMap(condition => condition.grantedAbilities ?? [])
     .flatMap(granted => granted.bonuses?.attackRiders ?? [])
@@ -70,12 +71,19 @@ export function AbilityResourceActivationModal({
         .map((group) => [group.id, group.costs[0]!.id]),
     ),
   )
-  const manualRollRequirements = useMemo(
-    () => listBonusRollRequirements(ability.bonuses).filter(
-      (entry) => forceManualRolls || entry.mode === "manual",
-    ),
+  const bonusRollRequirements = useMemo(
+    () => listBonusRollRequirements(ability.bonuses)
+      .filter(entry => forceManualRolls || entry.mode === "manual")
+      .map(entry => ({ key: entry.key, label: entry.label, dice: entry.dice, formula: entry.formula })),
     [ability.bonuses, forceManualRolls],
   )
+  const selfDamageRequirements = getAbilitySelfDamageRollRequirements(ability, optionId)
+  const manualRollRequirements = [
+    ...bonusRollRequirements,
+    ...(forceManualRolls ? selfDamageRequirements.map(entry => ({
+      key: entry.key, label: entry.label, dice: entry.dice, formula: undefined,
+    })) : []),
+  ]
   const [manualRollValues, setManualRollValues] = useState<Record<string, string>>({})
 
   const selectedUsesPact = useMemo(() =>
@@ -106,9 +114,11 @@ export function AbilityResourceActivationModal({
   const optionRequired = (ability.activationOptions?.length ?? 0) > 0
   const manualRollsValid = manualRollRequirements.every((entry) => {
     const raw = manualRollValues[entry.key]?.trim() ?? ""
-    return raw !== "" && Number.isFinite(Number(raw))
+    if (raw === "" || !Number.isFinite(Number(raw))) return false
+    const selfCost = selfDamageRequirements.find(cost => cost.key === entry.key)
+    return !selfCost || (Number.isInteger(Number(raw)) && Number(raw) >= selfCost.minimum && Number(raw) <= selfCost.maximum)
   })
-  const canConfirm = payment.ok && (!optionRequired || Boolean(optionId)) && manualRollsValid && (!damageTypeChoices.length || Boolean(effectiveDamageType)) && (!needsWeapon || Boolean(boundWeaponId || selectedWeaponId)) && (!needsAttribute || Boolean(selectedWeaponAttribute))
+  const canConfirm = payment.ok && selfDamageRequirements.every(entry => entry.minimum > 0) && (!optionRequired || Boolean(optionId)) && manualRollsValid && (!damageTypeChoices.length || Boolean(effectiveDamageType)) && (!needsWeapon || Boolean(boundWeaponId || selectedWeaponId)) && (!needsAttribute || Boolean(selectedWeaponAttribute))
 
   return (
     <Modal title={`Usar habilidade — ${ability.name}`} onClose={onClose} className="max-w-xl">
@@ -216,6 +226,20 @@ export function AbilityResourceActivationModal({
                 )}
               </div>
             ))}
+          </div>
+        ) : null}
+
+        {selfDamageRequirements.length > 0 ? (
+          <div className="rounded-lg border border-border bg-bg-subtle p-3 text-xs text-textH">
+            <div className="font-semibold">Dano próprio na ativação</div>
+            {selfDamageRequirements.map(entry => (
+              <p key={entry.key} className="mt-1">
+                {entry.label}: {entry.dice} ({entry.damageType}). O custo é aplicado diretamente aos PV e não pode ser reduzido.
+              </p>
+            ))}
+            {selfDamageRequirements.some(entry => entry.minimum === 0) ? (
+              <p className="mt-1 text-danger">Dado inválido. Use Nd4, Nd6, Nd8, Nd10, Nd12 ou Nd20.</p>
+            ) : null}
           </div>
         ) : null}
 
