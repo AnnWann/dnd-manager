@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react"
 import { MemoryRouter } from "react-router-dom"
 import { CharacterTemplate, type CharacterTemplateProps } from "../../web/src/models/characters/CharacterTemplate"
+import { withCharacterConditions } from "../../web/src/models/characters/characterConditionStorage"
 import { CharacterWorkspaceProvider, type CharacterWorkspaceValue } from "../../web/src/features/characters/workspace/CharacterWorkspaceContext"
 import { SessionRuntimeContext, type SessionRuntimeContextValue } from "../../web/src/features/session-runtime/SessionRuntimeProvider"
 import { MagicProvider } from "../../web/src/contexts/magicContext"
@@ -34,7 +35,7 @@ function ensureCharacter(raw: Raw, hp: Raw | undefined, conditions: Raw | undefi
   const sheet = obj(raw.sheet)
   const hitpoints = obj(sheet.HP)
   const state = hp ?? {}
-  return CharacterTemplate.fromJSON({
+  const projected = CharacterTemplate.fromJSON({
     ...raw,
     sheet: {
       ...sheet,
@@ -43,15 +44,18 @@ function ensureCharacter(raw: Raw, hp: Raw | undefined, conditions: Raw | undefi
         current: state.current ?? hitpoints.current,
         max: state.max ?? hitpoints.max,
         temporary: state.temporary ?? hitpoints.temporary,
-        hitDice: state.hitDice ?? hitpoints.hitDice,
+        hitDice: state.hitDice ? Object.fromEntries(Object.entries(obj(state.hitDice)).map(([side,pool]) => [side,{ current:{quantity:Number(obj(pool).current),sides:side}, max:{quantity:Number(obj(pool).max),sides:side}}])) : hitpoints.hitDice,
       },
-      attributes: state.attributes ?? sheet.attributes,
-      savingThrowProficiencies: state.savingThrows ?? sheet.savingThrowProficiencies,
-      skills: state.skills ?? sheet.skills,
-      conditions: conditions?.conditions ?? sheet.conditions,
-      stats: { ...obj(sheet.stats), ...obj(state.stats) },
+      attributes: state.attributesInitialized ? state.attributes : sheet.attributes,
+      savingThrowProficiencies: state.savingThrowsInitialized ? state.savingThrows : sheet.savingThrowProficiencies,
+      skills: state.skillsInitialized ? state.skills : sheet.skills,
+      conditions: sheet.conditions,
+      stats: state.statsInitialized ? { ...obj(sheet.stats), ...obj(state.stats) } : sheet.stats,
     },
   } as Partial<CharacterTemplateProps>)
+  return conditions?.initialized && Array.isArray(conditions.conditions)
+    ? withCharacterConditions(projected, conditions.conditions as Parameters<typeof withCharacterConditions>[1])
+    : projected
 }
 
 /** Adapter for the original website components, not a rewritten character sheet.
