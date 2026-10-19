@@ -1,65 +1,121 @@
-import React, { useCallback, useEffect, useState } from "react"
+import React, { useCallback, useEffect, useRef, useState } from "react"
 import { createRoot } from "react-dom/client"
 import OBR from "@owlbear-rodeo/sdk"
 import { CharacterSheetDerivedTile } from "@dnd-manager/game-ui/character-sheet-fields"
 import "./style.css"
 
-type Character = { id:string; name:string; revision?:number; data?:Record<string,unknown> }
-const origin=(import.meta.env.VITE_DND_MANAGER_URL || "https://dnd-magic-manager.vercel.app").replace(/\/$/,"")
-const profile=origin+"/user"
-const number=(x:unknown)=>typeof x==="number"&&Number.isFinite(x)?x:undefined
-const record=(x:unknown):Record<string,unknown>=>x&&typeof x==="object"&&!Array.isArray(x)?x as Record<string,unknown>:{}
-let accessToken: string | null = null
-async function api<T>(path:string,options:RequestInit={}):Promise<T>{
-  if(!accessToken)throw new Error("Conecte sua conta ao D&D Manager antes de consultar as fichas.")
-  const response=await fetch(origin+"/api/owlbear"+path,{...options,credentials:"omit",headers:{"Accept":"application/json","Content-Type":"application/json",Authorization:"Bearer "+accessToken,...options.headers}})
-  if(!response.ok)throw new Error(response.status===401?"Autorização expirada. Conecte sua conta novamente.":response.status===409?"Conflito de edição: atualize a ficha.":`Falha na API (HTTP ${response.status})`)
-  return response.json() as Promise<T>
-}
-function App(){
- const [ready,setReady]=useState(false)
- const [connected,setConnected]=useState(false)
- const [list,setList]=useState<Character[]>([])
- const [chosen,setChosen]=useState("")
- const [current,setCurrent]=useState<Character|null>(null)
- const [name,setName]=useState("")
- const [busy,setBusy]=useState(false)
- const [error,setError]=useState("")
- const [notice,setNotice]=useState("")
- useEffect(()=>{let active=true;OBR.onReady(()=>{if(active)setReady(true)});return()=>{active=false}},[])
- const connect=useCallback(()=>{
-   const nonce=crypto.randomUUID()
-   const popup=window.open(origin+"/owlbear-connect.html?origin="+encodeURIComponent(window.location.origin)+"&nonce="+encodeURIComponent(nonce),"dnd-owlbear-connect","width=530,height=630")
-   if(!popup){setError("O navegador bloqueou o popup de autorização.");return}
-   const timeout=window.setTimeout(()=>{window.removeEventListener("message",receive);setError("Tempo de autorização esgotado. Tente novamente.")},120000)
-   function receive(event:MessageEvent){
-     if(event.origin!==origin||event.source!==popup||event.data?.type!=="dnd-manager:owlbear-grant"||event.data.nonce!==nonce||typeof event.data.token!=="string")return
-     clearTimeout(timeout);window.removeEventListener("message",receive)
-     accessToken=event.data.token;setConnected(true);setError("");void refresh()
+const origin = (import.meta.env.VITE_DND_MANAGER_URL || "https://dnd-magic-manager.vercel.app").replace(/\/$/, "")
+type Session = { id: string; name: string; role: "MASTER" | "PLAYER" }
+type RuntimeCharacter = { characterId: string; ownerUserId?: string; active?: boolean; character?: Record<string, unknown> }
+type RuntimeHp = { characterId: string; current: number; max: number; temporary: number; currentMax: number }
+type AbilityState = { characterId: string; character: Record<string, unknown> }
+const asRecord = (value: unknown): Record<string, unknown> => value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {}
+const numeric = (value: unknown): string => typeof value === "number" && Number.isFinite(value) ? String(value) : "—"
+function App() {
+ const [ready, setReady] = useState(false)
+ const [connected, setConnected] = useState(false)
+ const [sessions, setSessions] = useState<Session[]>([])
+ const [sessionId, setSessionId] = useState("")
+ const [role, setRole] = useState("")
+ const [status, setStatus] = useState("Desconectado")
+ const [characters, setCharacters] = useState<Record<string, RuntimeCharacter>>({})
+ const [abilities, setAbilities] = useState<Record<string, AbilityState>>({})
+ const [hp, setHp] = useState<Record<string, RuntimeHp>>({})
+ const [selectedId, setSelectedId] = useState("")
+ const [error, setError] = useState("")
+ const grant = useRef<string | null>(null)
+ const socket = useRef<WebSocket | null>(null)
+ const heartbeat = useRef<ReturnType<typeof setInterval> | null>(null)
+ useEffect(() => { let active = true; OBR.onReady(() => { if (active) setReady(true) }); return () => { active = false } }, [])
+ const disconnect = useCallback(() => {
+   if (heartbeat.current) clearInterval(heartbeat.current)
+   heartbeat.current = null
+   socket.current?.close(1000, "Leaving session")
+   socket.current = null
+   setCharacters({}); setAbilities({}); setHp({}); setSelectedId(""); setStatus("Desconectado")
+ }, [])
+ useEffect(() => () => { socket.current?.close(); if (heartbeat.current) clearInterval(heartbeat.current) }, [])
+ const api = useCallback(async <T,>(path: string): Promise<T> => {
+   if (!grant.current) throw new Error("Conecte sua conta primeiro.")
+   const response = await fetch(origin + "/api/owlbear" + path, { credentials: "omit", headers: { Authorization: "Bearer " + grant.current, Accept: "application/json" } })
+   if (!response.ok) throw new Error(response.status === 401 ? "Autorização expirada. Reconecte sua conta." : "Erro da API: HTTP " + response.status)
+   return response.json() as Promise<T>
+ }, [])
+ const refreshSessions = useCallback(async () => {
+   setError("")
+   try {
+     const result = await api<{ sessions: Session[] }>("?op=sessions")
+     setSessions(result.sessions)
+   } catch (e) { setError(String(e instanceof Error ? e.message : e)) }
+ }, [api])
+ const connectAccount = useCallback(() => {
+   const nonce = crypto.randomUUID()
+   const popup = window.open(origin + "/owlbear-connect.html?origin=" + encodeURIComponent(location.origin) + "&nonce=" + nonce, "dnd-owlbear-connect", "width=530,height=630")
+   if (!popup) { setError("Permita a janela de autorização no navegador."); return }
+   const timeout = setTimeout(() => { window.removeEventListener("message", receive); setError("Autorização expirada.") }, 120000)
+   function receive(event: MessageEvent) {
+     if (event.origin !== origin || event.source !== popup || event.data?.type !== "dnd-manager:owlbear-grant" || event.data.nonce !== nonce || typeof event.data.token !== "string") return
+     clearTimeout(timeout); window.removeEventListener("message", receive)
+     grant.current = event.data.token
+     setConnected(true); setError("")
+     void (async () => {
+       try { const result = await api<{sessions: Session[]}>("?op=sessions"); setSessions(result.sessions) }
+       catch (e) { setError(String(e instanceof Error ? e.message : e)) }
+     })()
    }
-   window.addEventListener("message",receive)
- },[])
- const refresh=useCallback(async()=>{setBusy(true);setError("");try{const response=await api<{characters:Character[]}>("?op=characters");setList(response.characters??[])}catch(e){setError(String(e instanceof Error?e.message:e))}finally{setBusy(false)}},[])
-
- const open=useCallback(async(id:string)=>{setChosen(id);setBusy(true);setError("");setNotice("");try{const data=await api<{character:Character}>("?op=character&id="+encodeURIComponent(id));setCurrent(data.character);setName(data.character.name)}catch(e){setError(String(e instanceof Error?e.message:e))}finally{setBusy(false)}},[])
- async function save(){if(!current)return;setBusy(true);setError("");try{const result=await api<{character:Character}>("?op=character&id="+encodeURIComponent(current.id),{method:"PATCH",body:JSON.stringify({name:name.trim(),expectedVersion:current.revision})});setCurrent(result.character);setName(result.character.name);setNotice("Nome salvo no D&D Manager.");await refresh()}catch(e){setError(String(e instanceof Error?e.message:e))}finally{setBusy(false)}}
- const sheet=record(current?.data?.sheet)
- const hp=record(sheet.hp)
- const stats=record(sheet.stats)
+   window.addEventListener("message", receive)
+ }, [api])
+ const connectSession = useCallback(async (id: string) => {
+   disconnect(); setSessionId(id); if (!id) return
+   setStatus("Autorizando sessão..."); setError("")
+   try {
+     const result = await api<{ token: string; baseUrl: string; role: string }>("?op=connect&sessionId=" + encodeURIComponent(id))
+     setRole(result.role)
+     const url = new URL(result.baseUrl)
+     url.protocol = url.protocol === "https:" ? "wss:" : "ws:"
+     url.pathname = "/session/" + encodeURIComponent(id) + "/connect"
+     url.search = ""; url.searchParams.set("token", result.token)
+     const ws = new WebSocket(url)
+     socket.current = ws
+     ws.onopen = () => { if (socket.current === ws) setStatus("Aguardando sincronização...") }
+     ws.onmessage = event => {
+       if (socket.current !== ws) return
+       let message: Record<string, unknown>
+       try { message = JSON.parse(event.data) as Record<string, unknown> } catch { return }
+       const entries = Array.isArray(message.characters) ? message.characters : []
+       const character = asRecord(message.character)
+       if (message.type === "session.ready") {
+         setStatus("Conectado à sessão")
+         heartbeat.current = setInterval(() => { if (ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify({ type: "session.heartbeat" })) }, 30000)
+       }
+       if (message.type === "session.characters.snapshot") setCharacters(Object.fromEntries(entries.map((v: unknown) => { const c = v as RuntimeCharacter; return [c.characterId, c] })))
+       if (message.type === "session.character.updated") setCharacters(previous => ({ ...previous, [String(character.characterId)]: character as RuntimeCharacter }))
+       if (message.type === "session.character.removed") setCharacters(previous => { const copy = { ...previous }; delete copy[String(message.characterId)]; return copy })
+       if (message.type === "session.abilities.snapshot") setAbilities(Object.fromEntries(entries.map((v: unknown) => { const c = v as AbilityState; return [c.characterId, c] })))
+       if (message.type === "session.abilities.updated") setAbilities(previous => ({ ...previous, [String(character.characterId)]: character as AbilityState }))
+       if (message.type === "session.hp.snapshot") setHp(Object.fromEntries(entries.map((v: unknown) => { const c = v as RuntimeHp; return [c.characterId, c] })))
+       if (message.type === "session.hp.updated") setHp(previous => ({ ...previous, [String(character.characterId)]: character as RuntimeHp }))
+     }
+     ws.onclose = () => { if (socket.current === ws) { setStatus("Sessão desconectada; reconecte para atualizar."); if (heartbeat.current) clearInterval(heartbeat.current) } }
+     ws.onerror = () => { if (socket.current === ws) setError("Falha na conexão com o servidor da sessão.") }
+   } catch (e) { setStatus("Desconectado"); setError(String(e instanceof Error ? e.message : e)) }
+ }, [api, disconnect])
+ const list = Object.values(characters).filter(c => c.active !== false && (c.character || abilities[c.characterId]))
+ const chosen = characters[selectedId]
+ const raw = asRecord(abilities[selectedId]?.character ?? chosen?.character)
+ const sheet = asRecord(raw.sheet)
+ const health = hp[selectedId]
+ const attributes = asRecord(sheet.attributes)
  return <main>
- <header><strong>D&D Manager</strong><span>{ready?"Owlbear conectado":"Pré-visualização"}</span></header>
- <section><h1>Fichas dos personagens</h1><p>Conecte sua conta para consultar fichas sem cookies de terceiros. A autorização expira em 15 minutos e não é armazenada no navegador.</p>
- <div className="toolbar"><button onClick={connect}>{connected?"Reconectar conta":"Conectar ao D&D Manager"}</button><button onClick={()=>void refresh()} disabled={busy||!connected}>Atualizar lista</button><a href={profile} target="_blank" rel="noopener noreferrer">Entrar / abrir ficha completa ↗</a></div>
- {error&&<p role="alert" className="error">{error}</p>}
- {notice&&<p role="status" className="notice">{notice}</p>}
- <label className="field">Personagem<select value={chosen} onChange={e=>void open(e.target.value)} disabled={busy}><option value="">Selecione uma ficha...</option>{list.map(c=><option value={c.id} key={c.id}>{c.name}</option>)}</select></label>
- {current&&<article><label className="field">Nome<input value={name} onChange={e=>setName(e.target.value)} /></label>
- <button onClick={()=>void save()} disabled={busy||!name.trim()||name===current.name}>Salvar nome</button>
- <div className="stats"><CharacterSheetDerivedTile label="PV atual" value={String(number(hp.current)??"—")} /><CharacterSheetDerivedTile label="PV máximo" value={String(number(hp.max)??"—")}/><CharacterSheetDerivedTile label="CA" value={String(number(stats.ac)??"—")}/></div>
- <p>Esta é uma visualização inicial dos campos da ficha. Para ataques, magias, inventário, edição avançada e personagens ativos em uma sessão, use a ficha completa.</p>
- <a href={profile+"/characters/"+encodeURIComponent(current.id)} target="_blank" rel="noopener noreferrer">Abrir no D&D Manager ↗</a>
- </article>}
- </section><footer>Permissões e persistência pertencem ao D&D Manager. Não cole tokens nem senhas na extensão.</footer>
+ <header><strong>D&D Manager</strong><span>{ready ? "Owlbear conectado" : "Pré-visualização"}</span></header>
+ <section><h1>Ficha da sessão</h1><p>Estado em tempo real do Session Server. A lista e as permissões são determinadas pelo servidor, não pelos personagens persistidos.</p>
+ <div className="toolbar"><button onClick={connectAccount}>{connected ? "Reconectar conta" : "Conectar ao D&D Manager"}</button><button disabled={!connected} onClick={() => void refreshSessions()}>Atualizar sessões</button></div>
+ {error && <p role="alert" className="error">{error}</p>}
+ <label className="field">Campanha / sessão<select value={sessionId} disabled={!connected} onChange={e => void connectSession(e.target.value)}><option value="">Selecione uma sessão...</option>{sessions.map(s => <option key={s.id} value={s.id}>{s.name} ({s.role === "MASTER" ? "Mestre" : "Jogador"})</option>)}</select></label>
+ <p>{status}{sessionId && role ? " · " + (role === "MASTER" ? "Mestre" : "Jogador") : ""}</p>
+ <label className="field">Personagem da sessão<select value={selectedId} onChange={e => setSelectedId(e.target.value)}><option value="">Selecione um personagem...</option>{list.map(c => <option key={c.characterId} value={c.characterId}>{String(asRecord(abilities[c.characterId]?.character ?? c.character).name ?? c.characterId)}</option>)}</select></label>
+ {selectedId && chosen && <article><h2>{String(raw.name ?? selectedId)}</h2><div className="stats"><CharacterSheetDerivedTile label="PV atual" value={numeric(health?.current)} /><CharacterSheetDerivedTile label="PV máximo" value={numeric(health?.currentMax ?? health?.max)} /><CharacterSheetDerivedTile label="PV temporário" value={numeric(health?.temporary)} /></div><div className="stats">{(["str","dex","con","int","wis","cha"] as const).map(k => <CharacterSheetDerivedTile key={k} label={k.toUpperCase()} value={numeric(health?.attributes?.[k] ?? attributes[k])} />)}</div><p>Visualização da sessão em tempo real. Edição de ações, magias e inventário ainda depende da implementação do workspace compartilhado.</p></article>}
+ </section><footer>O Durable Object é a fonte de verdade. O servidor da sessão determina quais personagens cada usuário pode receber.</footer>
  </main>
 }
-createRoot(document.getElementById("root")!).render(<React.StrictMode><App/></React.StrictMode>)
+createRoot(document.getElementById("root")!).render(<React.StrictMode><App /></React.StrictMode>)
