@@ -15,6 +15,9 @@ import { CharacterSheetStatGrid } from "@dnd-manager/game-ui/character-sheet-sta
 import { sendCharacterSheetOperation } from "@dnd-manager/session-client/character-sheet-operations"
 import "./style.css"
 
+const ASSOC_CHANNEL = "dnd-manager:owlbear-association-v1"
+const ASSOC_POPOVER_ID = "com.dnd-manager.owlbear/character-selector"
+const isAssociatePopover = new URLSearchParams(window.location.search).get("panel") === "associate"
 const DICE_CHANNEL = "dnd-manager:owlbear-dice-v1"
 const DICE_POPOVER_ID = "com.dnd-manager.owlbear/dice-popover"
 const isDicePopover = new URLSearchParams(window.location.search).get("panel") === "dice"
@@ -40,6 +43,12 @@ function App() {
  const [spellLibrary, setSpellLibrary] = useState<Record<string, unknown>[]>([])
  const [inventoryState, setInventoryState] = useState<Record<string, unknown> | null>(null)
  const [selectedId, setSelectedId] = useState("")
+ const [associationState, setAssociationState] = useState<{sessionId:string;connected:boolean;characters:{id:string;name:string}[]}>({sessionId:"",connected:false,characters:[]})
+ const [associationChoice,setAssociationChoice] = useState("")
+ const [associationError,setAssociationError] = useState("")
+ const [associationBusy,setAssociationBusy] = useState(false)
+ const assocChannel = useRef<BroadcastChannel|null>(null)
+ const associationSnapshot = useRef({sessionId:"",connected:false,characters:[] as {id:string;name:string}[]})
  const [selectedToken, setSelectedToken] = useState<{id:string;name:string;link:{sessionId:string;characterId:string}|null}|null>(null)
  const [tokenLinkError, setTokenLinkError] = useState("")
  const [activeArea, setActiveArea] = useState<"sheet" | "dice">(isDicePopover ? "dice" : "sheet")
@@ -96,7 +105,7 @@ function App() {
  const socket = useRef<SessionTransport | null>(null)
  useEffect(() => { let active = true; OBR.onReady(() => { if (active) setReady(true) }); return () => { active = false } }, [])
  useEffect(() => {
-   if (!ready || isDicePopover) return
+   if (!ready || isDicePopover || isAssociatePopover) return
    const id = "com.dnd-manager.owlbear/associate-character"
    void OBR.contextMenu.create({
      id,
@@ -112,8 +121,14 @@ function App() {
          id: token.id, name: token.name,
          link: readTokenCharacterLink(token.metadata),
        })
-       setActiveArea("sheet")
-       void OBR.action.open()
+       void OBR.popover.open({
+         id: ASSOC_POPOVER_ID,
+         url: "/?panel=associate&tokenId=" + encodeURIComponent(token.id),
+         width: 360, height: 340,
+         anchorReference: "ELEMENT", anchorOrigin: {horizontal:"RIGHT",vertical:"TOP"},
+         transformOrigin: {horizontal:"RIGHT",vertical:"TOP"},
+         disableClickAway: true,
+       }).catch(error=>setTokenLinkError(String(error)))
      },
    })
    return () => { void OBR.contextMenu.remove(id) }
@@ -148,6 +163,45 @@ function App() {
      setSelectedToken(prev => prev?.id===selectedToken.id ? {...prev,link: remove ? null : {sessionId,characterId:selectedId}} : prev)
    } catch (e) {setTokenLinkError("Não foi possível alterar o vínculo: " + String(e))}
  },[selectedToken,sessionId,selectedId])
+ useEffect(()=>{
+   if(isDicePopover)return
+   const channel=new BroadcastChannel(ASSOC_CHANNEL)
+   assocChannel.current=channel
+   if(isAssociatePopover)channel.postMessage({type:"request-state"})
+   channel.onmessage=event=>{
+     const message=event.data as Record<string,unknown>
+     if(isAssociatePopover){
+       if(message.type==="state"){
+         const state=message.value as typeof associationState
+         setAssociationState(state)
+       }
+     } else if(message.type==="request-state") {
+       channel.postMessage({type:"state",value:associationSnapshot.current})
+     }
+   }
+   return()=>{channel.close();if(assocChannel.current===channel)assocChannel.current=null}
+ },[])
+ useEffect(()=>{
+   if(isDicePopover||isAssociatePopover)return
+   associationSnapshot.current={
+     sessionId,connected:status==="Conectado à sessão",
+     characters:Object.values(characters)
+       .filter(c=>c.active!==false&&(c.character||abilities[c.characterId]))
+       .map(c=>({id:c.characterId,name:String(asRecord(abilities[c.characterId]?.character??c.character).name??c.characterId)})),
+   }
+   assocChannel.current?.postMessage({type:"state",value:associationSnapshot.current})
+ },[sessionId,status,characters,abilities])
+ const associationTokenId=new URLSearchParams(window.location.search).get("tokenId")??""
+ const submitAssociation=useCallback(async(remove:boolean)=>{
+   if(!associationTokenId||!associationState.connected||!associationState.sessionId)return
+   if(!remove&&!associationState.characters.some(c=>c.id===associationChoice))return
+   setAssociationBusy(true);setAssociationError("")
+   try{
+     await setTokenCharacterLink(associationTokenId,remove?null:{sessionId:associationState.sessionId,characterId:associationChoice})
+     await OBR.popover.close(ASSOC_POPOVER_ID)
+   }catch(error){setAssociationError(String(error))}
+   finally{setAssociationBusy(false)}
+ },[associationTokenId,associationState,associationChoice])
  const disconnect = useCallback(() => {
    socket.current?.disconnect()
    socket.current = null
@@ -264,6 +318,28 @@ function App() {
  const sheet = asRecord(raw.sheet)
  const health = hp[selectedId]
  const attributes = asRecord(sheet.attributes)
+ if(isAssociatePopover)return <main className="owlbear-shell">
+   <section className="grid gap-3 p-4">
+     <div className="flex items-center justify-between gap-2">
+       <h2 className="text-sm font-semibold text-textH">Associar ficha ao token</h2>
+       <button type="button" onClick={()=>void OBR.popover.close(ASSOC_POPOVER_ID)} className="rounded border border-border px-2 py-1 text-xs">Fechar</button>
+     </div>
+     {!associationState.connected?<p className="text-xs text-textMuted">Abra e conecte o painel principal do D&D Manager à sessão para associar um personagem.</p>:<>
+       <label className="grid gap-2 text-xs text-textH">Personagem da sessão
+         <select className="w-full rounded-lg border border-border bg-bg-subtle px-3 py-2" value={associationChoice}
+           onChange={event=>setAssociationChoice(event.target.value)}>
+           <option value="">Selecione um personagem...</option>
+           {associationState.characters.map(c=><option key={c.id} value={c.id}>{c.name}</option>)}
+         </select>
+       </label>
+       <button type="button" disabled={!associationChoice||associationBusy} onClick={()=>void submitAssociation(false)}
+         className="rounded-lg bg-accentBg px-3 py-2 text-xs font-semibold text-textH disabled:opacity-40">Associar personagem</button>
+       <button type="button" disabled={associationBusy} onClick={()=>void submitAssociation(true)}
+         className="rounded-lg border border-border px-3 py-2 text-xs text-textH">Desassociar token</button>
+     </>}
+     {associationError&&<p role="alert" className="text-xs text-danger">{associationError}</p>}
+   </section>
+ </main>
  if(isDicePopover)return <main className="owlbear-shell">
    <div className="flex items-center justify-between border-b border-border bg-bg px-3 py-2">
      <strong className="text-sm text-textH">Rolador de dados</strong>
