@@ -69,7 +69,7 @@ function App() {
    disconnect(); setSessionId(id); if (!id) return
    setStatus("Autorizando sessão..."); setError("")
    try {
-     const result = await api<{ token: string; baseUrl: string; role: string }>("?op=connect&sessionId=" + encodeURIComponent(id))
+     const result = await api<{ token: string; baseUrl: string; role: string; clientId: string }>("?op=connect&sessionId=" + encodeURIComponent(id))
      setRole(result.role)
      const url = new URL(result.baseUrl)
      url.protocol = url.protocol === "https:" ? "wss:" : "ws:"
@@ -86,7 +86,7 @@ function App() {
        const character = asRecord(message.character)
        if (message.type === "session.ready") {
          setStatus("Conectado à sessão")
-         heartbeat.current = setInterval(() => { if (ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify({ type: "session.heartbeat" })) }, 30000)
+         heartbeat.current = setInterval(() => { if (ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify({ type: "session.heartbeat", clientId: result.clientId })) }, 30000)
        }
        if (message.type === "session.characters.snapshot") setCharacters(Object.fromEntries(entries.map((v: unknown) => { const c = v as RuntimeCharacter; return [c.characterId, c] })))
        if (message.type === "session.character.updated") setCharacters(previous => ({ ...previous, [String(character.characterId)]: character as RuntimeCharacter }))
