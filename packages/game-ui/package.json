@@ -48,7 +48,8 @@
     "./inventory-floating-menu": "./src/InventoryFloatingMenu.tsx",
     "./inventory-item-tile": "./src/InventoryItemTile.tsx",
     "./shared-character-tabs": "./src/SharedCharacterTabs.tsx",
-    "./shared-session-hp": "./src/SharedSessionHp.tsx"
+    "./shared-session-hp": "./src/SharedSessionHp.tsx",
+    "./character-tab-strip": "./src/CharacterTabStrip.tsx"
   },
   "peerDependencies": {
     "react": "^19.0.0",
