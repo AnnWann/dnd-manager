@@ -1,4 +1,5 @@
 import type { DamageType } from "../combat/Damage"
+import { applyAbilitySelfDamage, resolveAbilitySelfDamage } from "./abilitySelfDamage"
 import type { Attribute } from "../sheet/Attribute"
 import { abilityRequiresWeaponAttributeSelection, getAbilityAttackRiderDamageChoices, resolveAttackRiderAttributeSelection, resolveAttackRiderDamageChoice } from "../combat/AttackRider"
 import { evaluateCharacterSheetFormula } from "../../lib/customSystems/CharacterSheetFormula"
@@ -132,6 +133,9 @@ export function useAbilityEffect(
   const choices = getAbilityAttackRiderDamageChoices(ability, activationOptionId)
   if (choices.length && (!selectedDamageType || !choices.includes(selectedDamageType))) return character
   if (abilityRequiresWeaponAttributeSelection(ability, activationOptionId) && !selectedWeaponAttribute) return character
+  if (ability.activationOptions?.length && !selectedOption) return character
+  const selfDamage = resolveAbilitySelfDamage(ability, activationOptionId, bonusRollValues)
+  if (selfDamage === null) return character
   const resolvedAbility: Ability = {
     ...ability,
     bonuses: {
@@ -200,7 +204,7 @@ export function useAbilityEffect(
     }
   }
 
-  return next
+  return applyAbilitySelfDamage(next, selfDamage)
 }
 
 export function endAbilityEffect(
