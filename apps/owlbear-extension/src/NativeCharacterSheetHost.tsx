@@ -118,15 +118,15 @@ export function NativeCharacterSheetHost({ characterId, raw, hp, conditions, run
       return
     }
     if (grantedUsage) {
+      if (concentration) return reject("habilidade e concentração devem ser atualizadas numa operação atômica")
       dispatch("session.abilities.operation",grantedUsage)
-      if (concentration) sendSheet(concentration)
       return
     }
     if (equipmentChanged || inventoryChanged) {
       const ops=deriveEquipmentOperations(character,next)
       if (ops.length) {
-        ops.forEach(op=>dispatch("session.equipment.operation",op))
-        if (concentration) sendSheet(concentration)
+        if (ops.length !== 1 || concentration) return reject("mudança composta de equipamento deve ser atômica")
+        dispatch("session.equipment.operation",ops[0])
         return
       }
       if (!equipmentChanged && inventoryChanged) {
@@ -151,20 +151,23 @@ export function NativeCharacterSheetHost({ characterId, raw, hp, conditions, run
     if (magicChanged) {
       const ops=deriveMagicOperations(character,next)
       if (!ops.length && !concentration) return reject("magia")
-      ops.forEach(op=>dispatch("session.magic.operation",op))
-      if (concentration) sendSheet(concentration)
+      if (ops.length > 1 || (ops.length && concentration)) return reject("mudança composta de magia deve ser atômica")
+      if (ops.length) dispatch("session.magic.operation",ops[0])
+      else if (concentration) sendSheet(concentration)
       return
     }
     if (proficiencyChanged) {
       const ops=deriveProficiencyOperations(character,next)
       if (!ops.length) return reject("proficiências")
-      ops.forEach(op=>dispatch("session.proficiency.operation",op))
+      if (ops.length !== 1) return reject("mudança composta de proficiências deve ser atômica")
+      dispatch("session.proficiency.operation",ops[0])
       return
     }
     if (customSystemsChanged) {
       const ops=deriveCustomSystemOperations(character,next)
       if (!ops.length) return reject("sistemas customizados")
-      ops.forEach(op=>dispatch("session.abilities.operation",op))
+      if (ops.length !== 1) return reject("mudança composta de sistemas deve ser atômica")
+      dispatch("session.abilities.operation",ops[0])
       return
     }
     if (concentration) {sendSheet(concentration);return}
@@ -224,10 +227,20 @@ export function NativeCharacterSheetHost({ characterId, raw, hp, conditions, run
     partyInventory:Array.isArray(inventoryState?.partyInventory) ? inventoryState.partyInventory : [],owners:[],knownPlayerKeys:[],getOwner:()=>({id:"",name:"",role:"player"}),
     createOwner:()=>{throw new Error("Não é permitido criar proprietários pelo Owlbear")},
     currentOwner:undefined,
-    deleteCharacter:()=>reject("exclusão de personagem"),
+    deleteCharacter:(id:string)=>role === "MASTER" && id===characterId ? dispatch("session.character.operation",{type:"character.session.remove",characterId:id}) : reject("exclusão sem permissão"),
     completeLongRest:()=>reject("descanso longo"),
-    stowHandOccupant:()=>reject("equipar / guardar"),
-    moveEquippedItem:()=>reject("mover equipamento"),
+    stowHandOccupant:(id:string,reference:Parameters<typeof resolveHandReference>[1])=>{
+      if(id!==characterId)return reject("personagem não autorizado")
+      const resolved=resolveHandReference(character,reference)
+      if(!resolved)return reject("item não encontrado")
+      dispatch("session.equipment.operation",{type:"character.equipment.move",characterId,reference:resolved,destination:"inventory"})
+    },
+    moveEquippedItem:(id:string,reference:unknown,destination:string)=>{
+      if(id!==characterId)return reject("personagem não autorizado")
+      if(destination==="ground")dispatch("session.inventory.operation",{type:"character.equipment.move.ground",characterId,reference})
+      else if(destination==="inventory"||destination==="pocket")dispatch("session.equipment.operation",{type:"character.equipment.move",characterId,reference,destination})
+      else reject("destino inválido")
+    },
     dispatchGameOperation:()=>reject("operação de jogo"),
   } as unknown as CharacterWorkspaceValue
 
