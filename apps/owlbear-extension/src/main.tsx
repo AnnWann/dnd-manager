@@ -7,6 +7,7 @@ import { SharedSessionHp } from "@dnd-manager/game-ui/shared-session-hp"
 import { CharacterSheetLayout } from "@dnd-manager/game-ui/character-sheet-layout"
 import { CharacterSheetHeader } from "@dnd-manager/game-ui/character-sheet-header"
 import { CharacterSheetStatGrid } from "@dnd-manager/game-ui/character-sheet-stat-grid"
+import { sendCharacterSheetOperation } from "@dnd-manager/session-client/character-sheet-operations"
 import "./style.css"
 
 const origin = (import.meta.env.VITE_DND_MANAGER_URL || "https://dnd-magic-manager.vercel.app").replace(/\/$/, "")
@@ -113,7 +114,7 @@ function App() {
  const health = hp[selectedId]
  const sendHp = (type: "character.hp.heal" | "character.hp.damage", amount: number) => {
    if (!selectedId || socket.current?.readyState !== WebSocket.OPEN) { setError("Sessão desconectada."); return }
-   socket.current.send(JSON.stringify({ type: "session.hp.operation", operation: { type, characterId: selectedId, amount } }))
+   sendCharacterSheetOperation(socket.current, { type, characterId: selectedId, amount })
  }
  const attributes = asRecord(sheet.attributes)
  return <main>
