@@ -16,7 +16,9 @@ import { CharacterRaceTab } from "../../web/src/features/characters/race/charact
 import { CharacterProfileTab } from "../../web/src/features/characters/profile/characterProfileV2"
 import { CharacterRestControls } from "../../web/src/features/characters/rest/characterRestControlsV2"
 import { PartyInventorySettingsProvider } from "../../web/src/contexts/partyInventorySettingsContext"
-import { SharedCharacterTabs } from "@dnd-manager/game-ui/shared-character-tabs"
+import { SharedCharacterTabs, STANDARD_SHEET_TABS } from "@dnd-manager/game-ui/shared-character-tabs"
+import { CustomClassConfigurationTab } from "../../web/src/features/characters/characterSheet/classes/CustomClassConfigurationTab"
+import { hasCustomClass } from "../../web/src/models/characters/customClassConfig"
 import { toSheetOperationMessage } from "../../web/src/features/session-runtime/sheetRoutes"
 import { deriveEquipmentOperations, deriveMagicOperations, deriveProficiencyOperations, deriveCustomSystemOperations, deriveConcentrationOperation, deriveGrantedSpellUsageOperation, resolveHandReference } from "../../web/src/features/characters/workspace/SessionCharacterWorkspace"
 import { ACTION_ROLL_REQUEST_EVENT, CREATURE_ROLL_REQUEST_EVENT, DICE_ROLL_REQUEST_EVENT } from "../../web/src/lib/diceRoller"
@@ -239,7 +241,7 @@ export function NativeCharacterSheetHost({ characterId, raw, hp, conditions, run
             partyInventory={Array.isArray(inventoryState?.partyInventory) ? inventoryState.partyInventory as never[] : []}
             updateCharacter={updateCharacter}
             completeLongRest={() => reject("descanso sem sessão autoritativa")} />
-          <SharedCharacterTabs key={characterId} sections={{
+          <SharedCharacterTabs key={characterId} tabs={STANDARD_SHEET_TABS.filter(tab => tab.id !== "custom-class" || hasCustomClass(character))} sections={{
             sheet:<CharacterSheetTab character={character} updateCharacter={updateCharacter}/>,
             abilities:<CharacterAbilitiesTab character={character} updateCharacter={updateCharacter}/>,
             "spells-list":<CharacterMagicTab character={character} updateCharacter={updateCharacter}/>,
@@ -248,6 +250,7 @@ export function NativeCharacterSheetHost({ characterId, raw, hp, conditions, run
             race:<CharacterRaceTab character={character} updateCharacter={updateCharacter}/>,
             profile:<CharacterProfileTab character={character} updateCharacter={updateCharacter}/>,
             proficiencies:<CharacterProficienciesTab character={character} updateCharacter={updateCharacter}/>,
+            "custom-class":<CustomClassConfigurationTab character={character} updateCharacter={updateCharacter} readOnly={!connected} onApply={(className,config)=>{ dispatch("session.custom-class.operation",{type:"character.class.custom.configure",characterId,className,config}) }}/>,
           }}/>
           </PartyInventorySettingsProvider>
         </CharacterWorkspaceProvider>
