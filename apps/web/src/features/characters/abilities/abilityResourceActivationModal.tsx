@@ -1,4 +1,7 @@
 import { useEffect, useMemo, useState } from "react"
+import { useCharacterContext } from "../../../contexts/characterContext"
+import { useOptionalSessionRuntime } from "../../session-runtime/useSessionRuntime"
+import { normalizeInitiativeSession } from "../../../models/initiative/Initiative"
 
 import { Button } from "../../../components/ui/Button"
 import { Input } from "../../../components/ui/Input"
@@ -32,9 +35,42 @@ export function AbilityResourceActivationModal({
   ability: Ability
   character: CharacterTemplate
   onClose: () => void
-  onConfirm: (optionId: string | undefined, selection: AbilityResourceSelection | undefined, bonusRollValues?: Record<string, number>, selectedWeaponId?: string) => void
+  onConfirm: (optionId: string | undefined, selection: AbilityResourceSelection | undefined, bonusRollValues?: Record<string, number>, selectedWeaponId?: string, targetRefs?: string[], pointLabel?: string) => void
   forceManualRolls?: boolean
 }) {
+  const { visibleCharacters } = useCharacterContext()
+  const runtime = useOptionalSessionRuntime()
+  const targeting = ability.targeting?.mode ?? "none"
+  const maxTargets = Math.max(1, Math.min(20, ability.targeting?.maxTargets ?? 1))
+  const [targetRefs, setTargetRefs] = useState<string[]>([])
+  const [pointLabel, setPointLabel] = useState("")
+  const availableTargets = useMemo(() => {
+    const result = new Map<string, string>()
+    result.set(`character:${character.get("id")}`, `${character.get("name")} (você)`)
+    for (const candidate of visibleCharacters) {
+      result.set(`character:${candidate.get("id")}`, candidate.get("name"))
+    }
+    if (runtime?.initiativeState?.initialized) {
+      const initiative = normalizeInitiativeSession(runtime.initiativeState.session)
+      for (const entry of initiative.entries) {
+        if (entry.sourceType === "character" && entry.sourceId) {
+          if (!result.has(`character:${entry.sourceId}`)) result.set(`character:${entry.sourceId}`, entry.name)
+        } else if (entry.sourceId?.startsWith("compendium:") &&
+          runtime.runtimeConfigSnapshot?.config.creatureCompendium.some(creature =>
+            creature.id === entry.sourceId!.slice("compendium:".length) && creature.ownerUserId)) {
+          const id = entry.sourceId.slice("compendium:".length)
+          result.set(`companion:${id}`, entry.name)
+        } else {
+          result.set(`initiative:${entry.id}`, entry.name)
+        }
+      }
+    }
+    for (const creature of runtime?.runtimeConfigSnapshot?.config.creatureCompendium ?? []) {
+      if (!creature.ownerUserId) continue
+      result.set(`companion:${creature.id}`, `${creature.name} (acompanhante)`)
+    }
+    return [...result].map(([value, label]) => ({ value, label }))
+  }, [character, visibleCharacters, runtime?.initiativeState, runtime?.runtimeConfigSnapshot])
   const baseLevel = ability.resourceUpcast?.enabled ? Math.max(1, ability.resourceUpcast.baseLevel || 1) : undefined
   const maximumLevel = ability.resourceUpcast?.enabled
     ? Math.max(baseLevel ?? 1, Math.min(9, ability.resourceUpcast.maximumLevel ?? 9))
@@ -124,7 +160,8 @@ export function AbilityResourceActivationModal({
       ? (Number.isInteger(Number(raw)) && Number(raw) >= selfCost.minimum && Number(raw) <= selfCost.maximum)
       : isValidBonusRollValue(entry.dice, Number(raw))
   })
-  const canConfirm = payment.ok && selfDamageRequirements.every(entry => entry.minimum > 0) && (!optionRequired || Boolean(optionId)) && manualRollsValid && (!damageTypeChoices.length || Boolean(effectiveDamageType)) && (!needsWeapon || Boolean(boundWeaponId || selectedWeaponId)) && (!needsAttribute || Boolean(selectedWeaponAttribute))
+  const targetSelectionValid = targeting === "none" || targeting === "self" || (targetRefs.length > 0 && targetRefs.length <= maxTargets)
+  const canConfirm = targetSelectionValid && payment.ok && selfDamageRequirements.every(entry => entry.minimum > 0) && (!optionRequired || Boolean(optionId)) && manualRollsValid && (!damageTypeChoices.length || Boolean(effectiveDamageType)) && (!needsWeapon || Boolean(boundWeaponId || selectedWeaponId)) && (!needsAttribute || Boolean(selectedWeaponAttribute))
 
   return (
     <Modal title={`Usar habilidade — ${ability.name}`} onClose={onClose} className="max-w-xl">
@@ -191,6 +228,37 @@ export function AbilityResourceActivationModal({
           )
         ) : null}
 
+        {targeting === "self" ? (
+          <div className="rounded-lg border border-border bg-bg-subtle p-3 text-xs text-textH">
+            Efeitos automáticos: somente em ${character.get("name")}.
+          </div>
+        ) : null}
+        {(targeting === "targets" || targeting === "point") ? (
+          <div className="grid gap-2 rounded-xl border border-border bg-bg-subtle p-3">
+            <div className="text-xs font-semibold text-textH">
+              {targeting === "point" ? "Ponto / área" : "Selecionar alvos"} — máximo {maxTargets}
+            </div>
+            {targeting === "point" ? (
+              <label className="grid gap-1 text-xs text-textMuted">Centro ou referência da área
+                <Input value={pointLabel} maxLength={160} placeholder="Ex.: centro da explosão no mapa" onChange={event => setPointLabel(event.target.value)} />
+                <span>Raio informado: {ability.targeting?.radiusFeet ?? 10} pés. Selecione os afetados dentro da área.</span>
+              </label>
+            ) : null}
+            <div className="grid max-h-44 gap-2 overflow-y-auto">
+              {availableTargets.map(target => (
+                <label key={target.value} className="flex items-center gap-2 text-xs text-textH">
+                  <input type="checkbox" checked={targetRefs.includes(target.value)}
+                    disabled={!targetRefs.includes(target.value) && targetRefs.length >= maxTargets}
+                    onChange={event => setTargetRefs(current => event.target.checked
+                      ? [...current, target.value].slice(0, maxTargets)
+                      : current.filter(value => value !== target.value))} />
+                  {target.label}
+                </label>
+              ))}
+              {!availableTargets.length ? <p className="text-xs text-textMuted">Não há alvos disponíveis na sessão.</p> : null}
+            </div>
+          </div>
+        ) : null}
         {(ability.resourceCosts ?? []).length > 0 ? (
           <div className="grid gap-2">
             <div>
@@ -300,6 +368,8 @@ export function AbilityResourceActivationModal({
                   )
                 : undefined,
               boundWeaponId || selectedWeaponId || undefined,
+              targeting === "self" ? [`character:${character.get("id")}`] : targeting === "none" ? undefined : targetRefs,
+              targeting === "point" ? pointLabel : undefined,
             )}
           >
             Usar habilidade
