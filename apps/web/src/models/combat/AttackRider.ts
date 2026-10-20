@@ -51,6 +51,11 @@ export function getActiveAttackRiders(character: CharacterTemplate, context: Att
     .filter(condition => condition.duration.remaining !== 0 || !["rounds", "turns", "minutes", "hours", "days"].includes(condition.duration.type))
   const equipped = getEquippedItems(character)
   const equipmentAbilities = new Set(equipped.flatMap(item => item.abilities ?? []))
+  // getActiveAbilities also contains abilities granted by conditions. Those
+  // are read again below with their source weapon, so exclude them here to
+  // avoid rolling the same on-hit rider twice.
+  const conditionGrantedIds = new Set(activeConditions.flatMap(condition =>
+    (condition.grantedAbilities ?? []).map(ability => ability.id)))
   const riders: AttackRider[] = [
     ...equipped.flatMap(item => [
       ...bindSourceWeapon(item.bonuses?.attackRiders, item.id),
@@ -58,7 +63,7 @@ export function getActiveAttackRiders(character: CharacterTemplate, context: Att
         .flatMap(ability => bindSourceWeapon(ability.bonuses?.attackRiders, item.id)),
     ]),
     ...getActiveAbilities(character)
-      .filter(ability => !equipmentAbilities.has(ability))
+      .filter(ability => !equipmentAbilities.has(ability) && !conditionGrantedIds.has(ability.id))
       .flatMap(ability => bindSourceWeapon(ability.bonuses?.attackRiders)),
     ...activeConditions.flatMap(condition => [
       ...bindSourceWeapon(condition.bonuses?.attackRiders, condition.sourceItemId),
@@ -68,7 +73,8 @@ export function getActiveAttackRiders(character: CharacterTemplate, context: Att
   ]
   return riders
     .filter(rider => rider.scope === "all" || rider.scope === context.scope)
-    .filter(rider => !rider.weaponSelection || Boolean(rider.weaponId))
+    // An activation-bound rider must only apply to the infused weapon.
+    .filter(rider => rider.weaponSelection !== "onActivation" || Boolean(rider.weaponId))
     .filter(rider => !rider.weaponId || (context.scope === "weapon" && rider.weaponId === context.weaponId))
     .filter(rider => !rider.targetEntryId || rider.targetEntryId === context.targetEntryId)
 }
