@@ -1,4 +1,4 @@
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import { createPortal } from "react-dom"
 import type { CharacterTemplate } from "../../../../models/characters/CharacterTemplate"
 
@@ -24,6 +24,25 @@ export function CharacterIdentity({
   updateCharacter,
 }: Props) {
   const [classEditorOpen, setClassEditorOpen] = useState(false)
+  const [nameDraft, setNameDraft] = useState(character.get("name"))
+  const [editingName, setEditingName] = useState(false)
+
+  useEffect(() => {
+    if (!editingName) setNameDraft(character.get("name"))
+  }, [character, editingName])
+
+  const commitName = (rawName: string) => {
+    const name = trimSingleLine(rawName).trim()
+    setEditingName(false)
+    if (!name || name.length > 120) {
+      setNameDraft(character.get("name"))
+      return
+    }
+    setNameDraft(name)
+    if (name !== character.get("name")) {
+      updateCharacter(character.get("id"), (current) => current.with("name", name))
+    }
+  }
   const classes = character.get("sheet").classes ?? []
   const totalLevel = classes.reduce(
     (total, characterClass) => total + characterClass.level,
@@ -53,17 +72,17 @@ export function CharacterIdentity({
 
           <Input
             className="h-12 text-lg font-semibold"
-            value={character.get("name")}
-            onChange={(event) =>
-              updateCharacter(character.get("id"), (current) =>
-                current.with("name", event.target.value),
-              )
-            }
-            onBlur={(event) =>
-              updateCharacter(character.get("id"), (current) =>
-                current.with("name", trimSingleLine(event.target.value)),
-              )
-            }
+            value={nameDraft}
+            onFocus={() => setEditingName(true)}
+            onChange={(event) => setNameDraft(event.target.value)}
+            onBlur={(event) => commitName(event.target.value)}
+            onKeyDown={(event) => {
+              if (event.key === "Enter") event.currentTarget.blur()
+              if (event.key === "Escape") {
+                setNameDraft(character.get("name"))
+                event.currentTarget.blur()
+              }
+            }}
           />
         </label>
 
