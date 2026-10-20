@@ -247,7 +247,7 @@ export function useAbilityEffect(
     ...(resolvedAbility.bonuses?.onUseHp ?? []),
     ...(resolvedOptionRolls.bonuses?.onUseHp ?? []),
   ]
-  for (const effect of instantHpEffects) {
+  for (const effect of (resolvedAbility.targeting?.mode === "targets" || resolvedAbility.targeting?.mode === "point" ? [] : instantHpEffects)) {
     const amount = Math.max(0, Math.trunc(resolveBonuses(character, [effect.bonus])[0].value))
     if (!Number.isFinite(amount) || amount === 0) continue
     if (effect.kind === "heal") {
