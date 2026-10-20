@@ -139,6 +139,12 @@ export function AttackRidersEditor({ riders, character, onChange, defaultScope =
                 <option value="onActivation">Escolher arma ao ativar</option>
                 <option value="sourceWeapon">Somente a arma que concede a habilidade</option>
               </Select>
+              {rider.weaponSelection === "onActivation" ? (
+                <span className="text-[11px] leading-4 text-textMuted">
+                  Esta opção define quando a arma será escolhida. Salve a habilidade e use-a pela ficha;
+                  a janela de ativação pedirá qual arma equipada receberá o efeito.
+                </span>
+              ) : null}
             </label>
             <label className="grid gap-1 text-xs text-textMuted">Atributo para ataque e dano
               <Select value={rider.weaponAttackAttribute ?? "default"} onChange={e => patch(rider.id, {
