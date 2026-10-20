@@ -15,10 +15,11 @@ type Props = {
   onRoll?: (entry: InitiativeEntry) => boolean
   rollingEnabled: boolean
   onClose?: () => void
+  onExpand?: (expanded: boolean) => void
 }
 
 export function OwlbearInitiativeStrip({
-  session, isMaster, connected, onInitialize, onOperation, resolveBonus, onRoll, rollingEnabled, onClose,
+  session, isMaster, connected, onInitialize, onOperation, resolveBonus, onRoll, rollingEnabled, onClose, onExpand,
 }: Props) {
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [initiativeDraft, setInitiativeDraft] = useState("")
@@ -28,6 +29,10 @@ export function OwlbearInitiativeStrip({
     .filter(entry => isMaster || !entry.hidden)
     .sort((a, b) => a.order - b.order)
   const selected = isMaster ? entries.find(entry => entry.id === selectedId) : undefined
+
+  useEffect(() => {
+    onExpand?.(Boolean(selected))
+  }, [Boolean(selected), onExpand])
 
   useEffect(() => {
     setInitiativeDraft(selected === undefined ? "" : String(selected.initiative))
