@@ -3,6 +3,7 @@ import { CreatureQuickSheet, quickSheetFromCompendiumCreature } from "../../web/
 import type { CompendiumCreature } from "../../web/src/models/creatures/CompendiumCreature"
 import { CreatureTokenInspector } from "./CreatureTokenInspector"
 import { findOwlbearInitiativeCreature, resolveOwlbearSpellDefinitions } from "./owlbearSpellCatalog"
+import { filterAssociationChoices } from "./associationSearch"
 import type { InitiativeEntry } from "../../web/src/models/initiative/Initiative"
 import { readSelectedToken, readTokenCharacterLink, setTokenCharacterLink, readTokenCreatureLink, setTokenCreatureLink, readTokenCompendiumCreature, TOKEN_COMPENDIUM_CREATURE_METADATA } from "./tokenCharacterLink"
 import { SessionDicePanel, type DiceHistoryEntry } from "./SessionDicePanel"
@@ -52,6 +53,7 @@ function App() {
  const [selectedId, setSelectedId] = useState("")
  const [associationState, setAssociationState] = useState<{sessionId:string;connected:boolean;characters:{id:string;name:string}[];role?:string;creatures?:{id:string;name:string;hp?:number;maxHp?:number;armorClass?:number}[];catalog?:{id:string;name:string}[]}>({sessionId:"",connected:false,characters:[],creatures:[],catalog:[]})
  const [associationChoice,setAssociationChoice] = useState("")
+ const [associationSearch,setAssociationSearch] = useState("")
  const [associationKind,setAssociationKind] = useState<"character"|"creature"|"catalog">("character")
  const [associationError,setAssociationError] = useState("")
  const [associationBusy,setAssociationBusy] = useState(false)
@@ -241,6 +243,12 @@ function App() {
    }
    assocChannel.current?.postMessage({type:"state",value:associationSnapshot.current})
  },[sessionId,status,role,initiativeState,compendiumCreatures,characters,abilities])
+ const associationChoices = associationKind === "creature"
+   ? associationState.creatures ?? []
+   : associationKind === "catalog"
+     ? associationState.catalog ?? []
+     : associationState.characters
+ const associationResults = filterAssociationChoices(associationChoices, associationSearch)
  const associationTokenId=new URLSearchParams(window.location.search).get("tokenId")??""
  const submitAssociation=useCallback(async(remove:boolean)=>{
    if(!associationTokenId||!associationState.connected||!associationState.sessionId)return
@@ -407,13 +415,22 @@ function App() {
        <button type="button" onClick={()=>void OBR.popover.close(ASSOC_POPOVER_ID)} className="rounded border border-border px-2 py-1 text-xs">Fechar</button>
      </div>
      {!associationState.connected?<p className="text-xs text-textMuted">Abra e conecte o painel principal do D&D Manager à sessão para associar um personagem.</p>:<>
-       {associationState.role==="MASTER"&&<div className="flex gap-2"><button type="button" onClick={()=>{setAssociationKind("character");setAssociationChoice("")}} className={"rounded px-3 py-2 text-xs "+(associationKind==="character"?"bg-accentBg":"border border-border")}>Personagem</button><button type="button" onClick={()=>{setAssociationKind("creature");setAssociationChoice("")}} className={"rounded px-3 py-2 text-xs "+(associationKind==="creature"?"bg-accentBg":"border border-border")}>Criatura na iniciativa</button><button type="button" onClick={()=>{setAssociationKind("catalog");setAssociationChoice("")}} className={"rounded px-3 py-2 text-xs "+(associationKind==="catalog"?"bg-accentBg":"border border-border")}>Compêndio</button></div>}
+       {associationState.role==="MASTER"&&<div className="flex gap-2"><button type="button" onClick={()=>{setAssociationKind("character");setAssociationChoice("");setAssociationSearch("")}} className={"rounded px-3 py-2 text-xs "+(associationKind==="character"?"bg-accentBg":"border border-border")}>Personagem</button><button type="button" onClick={()=>{setAssociationKind("creature");setAssociationChoice("");setAssociationSearch("")}} className={"rounded px-3 py-2 text-xs "+(associationKind==="creature"?"bg-accentBg":"border border-border")}>Criatura na iniciativa</button><button type="button" onClick={()=>{setAssociationKind("catalog");setAssociationChoice("");setAssociationSearch("")}} className={"rounded px-3 py-2 text-xs "+(associationKind==="catalog"?"bg-accentBg":"border border-border")}>Compêndio</button></div>}
+       <label className="grid gap-1 text-xs text-textH">
+         {associationKind==="catalog"?"Pesquisar criatura do compêndio":associationKind==="creature"?"Pesquisar criatura na iniciativa":"Pesquisar personagem"}
+         <input type="search" className="w-full rounded-lg border border-border bg-bg-subtle px-3 py-2 text-sm"
+           placeholder={associationKind==="catalog"?"Ex.: Medusa, dragão, goblin...":"Digite parte do nome..."}
+           value={associationSearch} onChange={event=>{setAssociationSearch(event.target.value);setAssociationChoice("")}}/>
+       </label>
        <label className="grid gap-2 text-xs text-textH">{associationKind==="creature"?"Instância da criatura":associationKind==="catalog"?"Criatura do compêndio":"Personagem da sessão"}
          <select className="w-full rounded-lg border border-border bg-bg-subtle px-3 py-2" value={associationChoice}
            onChange={event=>setAssociationChoice(event.target.value)}>
-           <option value="">Selecione...</option>
-           {(associationKind==="creature"?(associationState.creatures??[]):associationKind==="catalog"?(associationState.catalog??[]):associationState.characters).map(c=><option key={c.id} value={c.id}>{c.name}</option>)}
+           <option value="">{associationResults.total ? "Selecione uma opção..." : "Nenhum resultado"}</option>
+           {associationResults.matches.map(c=><option key={c.id} value={c.id}>{c.name}</option>)}
          </select>
+         <span className="text-[11px] text-textMuted">
+           {associationResults.total} resultado(s){associationResults.total > associationResults.matches.length ? ` · mostrando os primeiros ${associationResults.matches.length}; refine a busca` : ""}
+         </span>
        </label>
        {associationKind==="catalog" && !associationState.catalog?.length && <p className="text-xs text-textMuted">Nenhuma criatura recebida do compêndio da campanha. Verifique se o compêndio foi salvo em Criação.</p>}
        <button type="button" disabled={!associationChoice||associationBusy} onClick={()=>void submitAssociation(false)}
