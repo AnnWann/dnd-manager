@@ -3,7 +3,8 @@ import { X } from 'lucide-react'
 import { Select as SharedSelect } from '../../../components/ui/Select'
 import { FormulaVariablePicker } from '../../customSystems/FormulaVariablePicker'
 import type { CustomFormulaVariable } from '../../../lib/customSystems/CustomFormulaEngineWithCharacter'
-import { listCustomFormulaVariables, validateCustomFormula } from '../../../lib/customSystems/CustomFormulaEngineWithCharacter'
+import { listCharacterFormulaVariables } from '../../../lib/customSystems/CharacterFormulaVariables'
+import { evaluateCustomFormula, listCustomFormulaVariables, validateCustomFormula } from '../../../lib/customSystems/CustomFormulaEngineWithCharacter'
 import { formulaOverrideKey, getCustomSystemFormulaOverride, setCustomSystemFormulaOverride } from '../../../lib/customSystems/CustomSystemFormulaOverrides'
 
 import type { CharacterTemplate } from '../../../models/characters/CharacterTemplate'
@@ -46,6 +47,7 @@ export function CustomSystemAcquisitionExceptionsModal({
       label: field.name,
       description: 'Campo calculado',
       original: field.formula,
+      resultType: field.resultType,
       abilityType: undefined as CustomAbilityTypeDefinition | undefined,
     })),
     ...definition.resources.filter((resource) => Boolean(resource.maximumFormula) && resource.maximumMode !== 'manual').map((resource) => ({
@@ -53,6 +55,7 @@ export function CustomSystemAcquisitionExceptionsModal({
       label: resource.name,
       description: 'Máximo do recurso',
       original: resource.maximumFormula ?? '',
+      resultType: 'number' as const,
       abilityType: undefined as CustomAbilityTypeDefinition | undefined,
     })),
     ...definition.abilityTypes.flatMap((type) =>
@@ -61,6 +64,7 @@ export function CustomSystemAcquisitionExceptionsModal({
         label: `${type.name} — ${field.name}`,
         description: 'Campo calculado de habilidade',
         original: field.formula,
+        resultType: field.resultType,
         abilityType: type as CustomAbilityTypeDefinition | undefined,
       })),
     ),
@@ -374,6 +378,8 @@ export function CustomSystemAcquisitionExceptionsModal({
                       label={entry.label}
                       description={entry.description}
                       original={entry.original}
+                      resultType={entry.resultType}
+                      state={state}
                       value={getCustomSystemFormulaOverride(state, entry.key) ?? ''}
                       definition={definition}
                       abilityType={entry.abilityType}
@@ -392,11 +398,13 @@ export function CustomSystemAcquisitionExceptionsModal({
 }
 
 function FormulaOverrideEditor({
-  label, description, original, value, definition, abilityType, character, onChange,
+  label, description, original, resultType, state, value, definition, abilityType, character, onChange,
 }: {
   label: string
   description: string
   original: string
+  resultType: 'number' | 'text' | 'boolean' | 'dice'
+  state: CharacterCustomSystemState
   value: string
   definition: CustomSystemDefinition
   abilityType?: CustomAbilityTypeDefinition
@@ -409,9 +417,12 @@ function FormulaOverrideEditor({
     setDraft(value)
     setError('')
   }, [value])
-  const variables: CustomFormulaVariable[] = listCustomFormulaVariables(definition, abilityType)
-  // Character-aware variables include values from other installed systems.
-  void character
+  const variables: CustomFormulaVariable[] = Array.from(
+    new Map(
+      [...listCustomFormulaVariables(definition, abilityType), ...listCharacterFormulaVariables(character)]
+        .map((variable) => [variable.path, variable] as const),
+    ).values(),
+  )
 
   function save() {
     if (!draft.trim()) {
@@ -419,9 +430,20 @@ function FormulaOverrideEditor({
       onChange('')
       return
     }
-    const issue = validateCustomFormula(draft, definition, abilityType)
+    const issue = validateCustomFormula(draft, definition, abilityType, character)
     if (issue) {
       setError(issue)
+      return
+    }
+    const preview = evaluateCustomFormula(draft, definition, state, character,
+      abilityType ? { type: abilityType } : undefined)
+    if (!preview.ok) {
+      setError(preview.error)
+      return
+    }
+    const expected = resultType === 'dice' ? 'string' : resultType
+    if (typeof preview.value !== expected) {
+      setError(`Esta fórmula precisa retornar um valor do tipo ${resultType}.`)
       return
     }
     setError('')
