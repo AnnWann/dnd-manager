@@ -191,14 +191,14 @@ export function CharacterAbilitiesTab({ character, updateCharacter }: Props) {
       Boolean(sessionRuntime)
       && !digitalDiceEnabled
       && listBonusRollRequirements(ability.bonuses).length > 0
-    if (abilityRequiresWeaponAttributeSelection(ability) || getAbilityAttackRiderDamageChoices(ability).length > 0 || (ability.activationOptions ?? []).some(option => getAbilityAttackRiderDamageChoices(ability, option.id).length > 0) || (ability.activationOptions?.length ?? 0) > 0 || hasAbilityResourceCosts(ability) || abilityHasSelfDamage(ability) || ability.resourceUpcast?.enabled || hasManualBonusRolls(ability.bonuses) || requiresPhysicalRollInput) {
+    if (abilityRequiresWeaponAttributeSelection(ability) || getAbilityAttackRiderDamageChoices(ability).length > 0 || (ability.activationOptions ?? []).some(option => getAbilityAttackRiderDamageChoices(ability, option.id).length > 0) || (ability.activationOptions?.length ?? 0) > 0 || hasAbilityResourceCosts(ability) || abilityHasSelfDamage(ability) || ability.resourceUpcast?.enabled || hasManualBonusRolls(ability.bonuses) || requiresPhysicalRollInput || (ability.targeting?.mode === "targets" || ability.targeting?.mode === "point")) {
       setActivationChoice(ability)
       return
     }
     useAbility(ability.id)
   }
 
-  function useAbility(id: string, optionId?: string, resourceSelection?: AbilityResourceSelection, bonusRollValues?: Record<string, number>, selectedWeaponId?: string) {
+  function useAbility(id: string, optionId?: string, resourceSelection?: AbilityResourceSelection, bonusRollValues?: Record<string, number>, selectedWeaponId?: string, targetRefs?: string[], pointLabel?: string) {
     const ability = abilities.find((entry) => entry.id === id)
     if (ability) {
       const source = toSessionAbilitySource(ability)
@@ -208,6 +208,8 @@ export function CharacterAbilitiesTab({ character, updateCharacter }: Props) {
         source,
         abilityName: ability.name,
         activationOptionId: optionId,
+        targetRefs: ability.targeting?.mode === "self" ? [`character:${displayCharacter.get("id")}`] : targetRefs,
+        pointLabel,
         resourceSelection,
         bonusRollValues,
         selectedWeaponId,
@@ -220,6 +222,8 @@ export function CharacterAbilitiesTab({ character, updateCharacter }: Props) {
           },
           mode: ability.roll?.d20Mode ?? "normal",
           targetEntryId: getInitiativeRollSelection()?.entryId,
+          targetRefs: ability.targeting?.mode === "self" ? [`character:${displayCharacter.get("id")}`] : targetRefs,
+          pointLabel,
         })
         setActivationChoice(null)
         return
@@ -433,7 +437,7 @@ export function CharacterAbilitiesTab({ character, updateCharacter }: Props) {
           character={displayCharacter}
           forceManualRolls={Boolean(sessionRuntime) && !digitalDiceEnabled}
           onClose={() => setActivationChoice(null)}
-          onConfirm={(optionId, resourceSelection, bonusRollValues, selectedWeaponId) => useAbility(activationChoice.id, optionId, resourceSelection, bonusRollValues, selectedWeaponId)}
+          onConfirm={(optionId, resourceSelection, bonusRollValues, selectedWeaponId, targetRefs, pointLabel) => useAbility(activationChoice.id, optionId, resourceSelection, bonusRollValues, selectedWeaponId, targetRefs, pointLabel)}
         />
       ) : null}
     </>
