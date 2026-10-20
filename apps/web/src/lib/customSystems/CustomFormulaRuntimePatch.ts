@@ -38,6 +38,7 @@ export function recalculateCustomSystemState(
     const mode = resource.maximumMode ?? 'formula'
     const currentState = next.resources[resource.id]
     const hasManualOverride = mode === 'formulaWithOverride' && currentState?.maximum !== undefined
+      && !getCustomSystemFormulaOverride(next, formulaOverrideKey('resourceMaximum', resource.id))
     if (mode === 'manual' || hasManualOverride) continue
 
     const result = evaluateCustomFormula(
