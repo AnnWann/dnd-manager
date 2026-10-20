@@ -28,5 +28,14 @@ export function setCustomSystemFormulaOverride(
   const values = { ...(state.formulaOverrides ?? {}) }
   if (expression.trim()) values[key] = expression.trim()
   else delete values[key]
-  return { ...state, formulaOverrides: Object.keys(values).length ? values : undefined }
+  const resourceId = key.startsWith('resourceMaximum:') ? key.slice('resourceMaximum:'.length) : undefined
+  const resettingResource = resourceId && !expression.trim() && Boolean(state.formulaOverrides?.[key])
+  const currentResource = resourceId ? state.resources[resourceId] : undefined
+  return {
+    ...state,
+    formulaOverrides: Object.keys(values).length ? values : undefined,
+    ...(resettingResource && currentResource
+      ? { resources: { ...state.resources, [resourceId]: { ...currentResource, maximum: undefined } } }
+      : {}),
+  }
 }
