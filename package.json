@@ -12,6 +12,7 @@
     "dev:link": "vercel link",
     "dev:session-server": "npm --workspace @dnd-manager/session-server-app run dev",
     "deploy:session-server": "npm --workspace @dnd-manager/session-server-app run deploy",
+    "deploy:session-server:keep-vars": "npm --workspace @dnd-manager/session-server-app run deploy:keep-vars",
     "deploy:session-server-qa": "npm --workspace @dnd-manager/session-server-app run deploy:qa",
     "typecheck:session-server": "npm --workspace @dnd-manager/session-server-app run typecheck",
     "check:user-workspace-boundaries": "node scripts/check-user-workspace-boundaries.mjs",
