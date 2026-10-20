@@ -330,7 +330,6 @@ export function MinimalCharacterActions({
     }
 
     let resolvedBonusRollValues = bonusRollValues
-    let hasResolvedRolls = false
     if (action === "use" && entry.ability) {
       const requirements = listBonusRollRequirements(entry.ability.bonuses)
       if (
@@ -343,31 +342,22 @@ export function MinimalCharacterActions({
         setAbilityResourceEntry(entry)
         return
       }
-      try {
-        const resolved = resolveBonusCollectionRolls(
-          character,
-          entry.ability.bonuses,
-          bonusRollValues,
-        )
-        if (resolved.results.length > 0) {
-          hasResolvedRolls = true
-          resolvedBonusRollValues = {
-            ...(bonusRollValues ?? {}),
-            ...Object.fromEntries(
-              resolved.results.map((result) => [result.key, result.diceValue]),
-            ),
+
+      // In a session the server owns the roll. Rolling again here produces
+      // a different number in the character dialog and the Dice panel.
+      if (!sessionRuntime) {
+        try {
+          const resolved = resolveBonusCollectionRolls(character, entry.ability.bonuses, bonusRollValues)
+          if (resolved.results.length > 0) {
+            resolvedBonusRollValues = {
+              ...(bonusRollValues ?? {}),
+              ...Object.fromEntries(resolved.results.map((result) => [result.key, result.diceValue])),
+            }
           }
-          setRollFeedback(resolved.results.map((result) => ({
-            label: result.label,
-            dice: result.dice,
-            diceValue: result.diceValue,
-            formulaBonus: result.formulaBonus,
-            total: result.total,
-          })))
+        } catch (caught) {
+          setError(caught instanceof Error ? caught.message : "Não foi possível resolver a rolagem da habilidade.")
+          return
         }
-      } catch (caught) {
-        setError(caught instanceof Error ? caught.message : "Não foi possível resolver a rolagem da habilidade.")
-        return
       }
     }
 
@@ -401,9 +391,18 @@ export function MinimalCharacterActions({
         return
       }
 
-      if (action === "use") announce(entry)
+      // Bonus/HP dice already belong to the authoritative ability-use log.
+      // Only request a separate action roll for abilities that actually
+      // configure an attack/check and have no activation bonus dice.
+      const chosenOption = entry.ability?.activationOptions?.find(option => option.id === optionId)
+      const hasActivationDice = Boolean(entry.ability && (
+        listBonusRollRequirements(entry.ability.bonuses).length > 0
+        || listBonusRollRequirements(chosenOption?.bonuses).length > 0
+        || abilityHasSelfDamage(entry.ability)
+      ))
+      if (action === "use" && entry.ability?.roll && !hasActivationDice) announce(entry)
       setAbilityResourceEntry(null)
-      if (!hasResolvedRolls) setSelected(null)
+      setSelected(null)
       return
     }
 
@@ -434,7 +433,7 @@ export function MinimalCharacterActions({
         : current.deactivateAbility(source.abilityId)
     })
     setAbilityResourceEntry(null)
-    if (!hasResolvedRolls) setSelected(null)
+    setSelected(null)
   }
 
   function useCustomSystemAction(entry: ActionEntry) {
@@ -745,7 +744,7 @@ export function MinimalCharacterActions({
               ))}
             </div>
             <p className="whitespace-pre-wrap text-sm leading-6 text-text">{selected.description}</p>
-            <ActionRollFeedback results={rollFeedback} />
+            {selected.customAbilitySource || selected.customSystemActionSource ? <ActionRollFeedback results={rollFeedback} /> : null}
             {selected.activationLevelBase !== undefined ? (
               <AbilityActivationLevelField
                 label={selected.activationLevelLabel?.trim() || "Nível de uso"}
