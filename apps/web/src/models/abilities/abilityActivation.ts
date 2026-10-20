@@ -267,7 +267,7 @@ export function useAbilityEffect(
     if (selectedOption) {
       const optionAbilities = getActivationOptionAbilities(selectedOption)
       if (optionAbilities.length > 0 || boundRiders.length > 0) {
-        const grant = optionAbilities.length > 0
+        const grant: CharacterConditionGrant = optionAbilities.length > 0
           ? optionAbilitiesGrant(selectedOption, resolvedAbility, optionAbilities, activeWeaponId, selectedDamageType, selectedWeaponAttribute)
           : {
               name: selectedOption.name,
