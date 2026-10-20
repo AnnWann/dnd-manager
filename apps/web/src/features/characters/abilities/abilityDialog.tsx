@@ -123,7 +123,7 @@ export function AbilityDialog({
   onSave,
 }: Props) {
   const [draft, setDraft] = useState<Ability>(() =>
-    withFixedCategory(ability ?? createEmptyAbility(), fixedCategory),
+    withFixedCategory(normalizeAbilityActivation(ability ?? createEmptyAbility()), fixedCategory),
   )
   const [tab, setTab] = useState<EditorTab>("basic")
 
@@ -618,6 +618,7 @@ export function AbilityDialog({
                 <BonusesFields
                   bonuses={draft.bonuses ?? {}}
                   character={character}
+                  allowOnUseHp
                   onChange={(bonuses) => setDraft({ ...draft, bonuses })}
                 />
                 <div className="mt-3">
