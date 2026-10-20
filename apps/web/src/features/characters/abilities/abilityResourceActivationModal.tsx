@@ -78,8 +78,12 @@ export function AbilityResourceActivationModal({
     [ability.bonuses, forceManualRolls],
   )
   const selfDamageRequirements = getAbilitySelfDamageRollRequirements(ability, optionId)
+  const optionBonusRollRequirements = listBonusRollRequirements(ability.activationOptions?.find(option => option.id === optionId)?.bonuses)
+    .filter(entry => forceManualRolls || entry.mode === "manual")
+    .map(entry => ({ ...entry, key: `option:${optionId}:${entry.key}` }))
   const manualRollRequirements = [
     ...bonusRollRequirements,
+    ...optionBonusRollRequirements,
     ...(forceManualRolls ? selfDamageRequirements.map(entry => ({
       key: entry.key, label: entry.label, dice: entry.dice, formula: undefined,
     })) : []),
