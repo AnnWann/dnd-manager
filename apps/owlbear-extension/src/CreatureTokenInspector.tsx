@@ -2,7 +2,9 @@ import { MagicProvider } from "../../web/src/contexts/magicContext"
 import { listMissingCreatureSpells } from "./owlbearSpellCatalog"
 import type { Spell } from "../../web/src/models/magic/spells/Spell"
 import { CreatureQuickSheet, quickSheetFromInitiativeEntry, quickSheetFromCompendiumCreature } from "../../web/src/features/creatures/CreatureQuickSheet"
-import { useState } from "react"
+import { useEffect, useState } from "react"
+import { DAMAGE_TYPE_OPTIONS, type DamageType } from "../../web/src/models/combat/Damage"
+import { CreatureCombatConditions } from "./CreatureCombatConditions"
 import type { CompendiumCreature } from "../../web/src/models/creatures/CompendiumCreature"
 import type { InitiativeEntry } from "../../web/src/models/initiative/Initiative"
 
@@ -16,7 +18,7 @@ export function CreatureTokenInspector({ entry, creature, spells, serverSpellInd
   onOperation: (operation: Record<string, unknown>) => boolean
 }) {
   const [amount,setAmount]=useState("1")
-  const [condition,setCondition]=useState("")
+  const [damageParts,setDamageParts]=useState<Array<{id:string;amount:string;damageType:DamageType|"";magical:boolean}>>([{id:crypto.randomUUID(),amount:"1",damageType:"",magical:false}])
   const [initiative,setInitiative]=useState(String(entry.initiative))
   const [error,setError]=useState("")
   const send=(operation:Record<string,unknown>)=>{
@@ -24,6 +26,9 @@ export function CreatureTokenInspector({ entry, creature, spells, serverSpellInd
     else setError("")
   }
   const numericAmount=Number(amount)
+  const damageValid = damageParts.length > 0 && damageParts.every(part=>Number.isSafeInteger(Number(part.amount))&&Number(part.amount)>0)
+  useEffect(()=>setInitiative(String(entry.initiative)),[entry.initiative,entry.id])
+  const applyDamage=()=>send({type:"initiative.hp.apply",characterId:"session",entryIds:[entry.id],mode:"damage",parts:damageParts.map(part=>({amount:Number(part.amount),damageType:part.damageType||undefined,magical:part.magical}))})
   const unavailableSpells = listMissingCreatureSpells(creature, spells)
   const unsyncedSpells = creature?.spellcasting?.spells.filter(spell => !serverSpellIndexes.has(spell.spellIndex)) ?? []
   return <article className="grid gap-3 rounded-xl border border-border bg-bg p-4 text-textH">
@@ -56,14 +61,34 @@ export function CreatureTokenInspector({ entry, creature, spells, serverSpellInd
         <div className="h-full bg-accent" style={{width:`${Math.min(100,Math.max(0,100*(entry.currentHp??0)/(entry.maxHp??1)))}%`}}/>
       </div>}
       {Boolean(entry.temporaryHp)&&<p className="mt-1 text-xs text-textMuted">{entry.temporaryHp} PV temporários</p>}
-      <div className="mt-3 flex gap-2">
-        <input aria-label="Quantidade de PV" type="number" min={1} max={100000} className="w-20 rounded-lg border border-border bg-bg px-2 py-1" value={amount} onChange={e=>setAmount(e.target.value)}/>
-        <button type="button" disabled={!connected||!Number.isSafeInteger(numericAmount)||numericAmount<=0}
-          className="rounded-lg border border-border px-3 py-1 disabled:opacity-40"
-          onClick={()=>send({type:"initiative.hp.apply",characterId:"session",entryIds:[entry.id],mode:"damage",parts:[{amount:numericAmount}]})}>Dano</button>
-        <button type="button" disabled={!connected||!Number.isSafeInteger(numericAmount)||numericAmount<=0}
-          className="rounded-lg border border-border px-3 py-1 disabled:opacity-40"
-          onClick={()=>send({type:"initiative.hp.apply",characterId:"session",entryIds:[entry.id],mode:"heal",amount:numericAmount})}>Curar</button>
+      <div className="mt-3 grid gap-2">
+        <div className="flex items-center justify-between">
+          <span className="text-xs font-semibold">Componentes de dano</span>
+          <button type="button" className="rounded-lg border border-border px-2 py-1 text-xs" onClick={()=>setDamageParts(current=>[...current,{id:crypto.randomUUID(),amount:"1",damageType:"",magical:false}])}>+ Componente</button>
+        </div>
+        {damageParts.map(part=><div key={part.id} className="grid grid-cols-[65px_minmax(0,1fr)_auto_auto] items-center gap-2">
+          <input aria-label="Quantidade de dano" type="number" min={1} value={part.amount} className="min-w-0 rounded-lg border border-border bg-bg px-2 py-2 text-xs"
+            onChange={e=>setDamageParts(parts=>parts.map(p=>p.id===part.id?{...p,amount:e.target.value}:p))}/>
+          <select aria-label="Tipo de dano" value={part.damageType} className="min-w-0 rounded-lg border border-border bg-bg px-2 py-2 text-xs"
+            onChange={e=>setDamageParts(parts=>parts.map(p=>p.id===part.id?{...p,damageType:e.target.value as DamageType|""}:p))}>
+            <option value="">Sem tipo</option>
+            {DAMAGE_TYPE_OPTIONS.map(option=><option key={option.value} value={option.value}>{option.label}</option>)}
+          </select>
+          <label className="flex items-center gap-1 text-[11px]" title="Dano mágico">
+            <input type="checkbox" checked={part.magical} onChange={e=>setDamageParts(parts=>parts.map(p=>p.id===part.id?{...p,magical:e.target.checked}:p))}/> Mágico
+          </label>
+          <button type="button" aria-label="Remover componente" disabled={damageParts.length===1} className="rounded-lg border border-border px-2 py-1 disabled:opacity-40" onClick={()=>setDamageParts(parts=>parts.filter(p=>p.id!==part.id))}>×</button>
+        </div>)}
+        <p className="text-[11px] text-textMuted">O servidor calcula resistências, vulnerabilidades e imunidades por tipo.</p>
+        <div className="flex gap-2">
+          <button type="button" disabled={!connected||!damageValid}
+            className="rounded-lg border border-border px-3 py-2 text-xs disabled:opacity-40"
+            onClick={applyDamage}>Aplicar dano</button>
+          <input aria-label="Quantidade de cura" type="number" min={1} max={100000} className="w-20 rounded-lg border border-border bg-bg px-2 py-1" value={amount} onChange={e=>setAmount(e.target.value)}/>
+          <button type="button" disabled={!connected||!Number.isSafeInteger(numericAmount)||numericAmount<=0}
+            className="rounded-lg border border-border px-3 py-2 text-xs disabled:opacity-40"
+            onClick={()=>send({type:"initiative.hp.apply",characterId:"session",entryIds:[entry.id],mode:"heal",amount:numericAmount})}>Curar</button>
+        </div>
       </div>
     </div>
     <div className="grid gap-2">
@@ -74,17 +99,7 @@ export function CreatureTokenInspector({ entry, creature, spells, serverSpellInd
       <button type="button" className="rounded-lg border border-border px-3 py-2 text-xs" disabled={!connected||!Number.isFinite(Number(initiative))}
         onClick={()=>send({type:"initiative.entry.update",characterId:"session",entryId:entry.id,patch:{initiative:Number(initiative)}})}>Atualizar iniciativa</button>
     </div>
-    <div className="grid gap-2 text-xs">
-      <strong>Condições</strong>
-      {entry.conditions.length===0&&<span className="text-textMuted">Nenhuma condição ativa.</span>}
-      {entry.conditions.map(c=><div key={c.id} className="flex items-center justify-between rounded-lg border border-border p-2">
-        <span>{c.name}</span><button type="button" disabled={!connected} onClick={()=>send({type:"initiative.conditions.bulk",characterId:"session",entryIds:[entry.id],mode:"remove",conditionName:c.name})}>Remover</button>
-      </div>)}
-      <div className="flex gap-2">
-        <input value={condition} onChange={e=>setCondition(e.target.value)} placeholder="Adicionar condição" className="min-w-0 flex-1 rounded-lg border border-border bg-bg-subtle px-2 py-1"/>
-        <button type="button" disabled={!connected||!condition.trim()} onClick={()=>{send({type:"initiative.conditions.bulk",characterId:"session",entryIds:[entry.id],mode:"add",condition:{id:crypto.randomUUID(),name:condition.trim(),duration:{type:"manual"}}});setCondition("")}}>Adicionar</button>
-      </div>
-    </div>
+    <CreatureCombatConditions entry={entry} connected={connected} onOperation={onOperation}/>
     {error&&<p role="alert" className="text-xs text-danger">{error}</p>}
   </article>
 }
