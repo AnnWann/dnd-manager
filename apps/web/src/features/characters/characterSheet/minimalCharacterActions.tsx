@@ -351,9 +351,12 @@ export function MinimalCharacterActions({
         )
         if (resolved.results.length > 0) {
           hasResolvedRolls = true
-          resolvedBonusRollValues = Object.fromEntries(
-            resolved.results.map((result) => [result.key, result.diceValue]),
-          )
+          resolvedBonusRollValues = {
+            ...(bonusRollValues ?? {}),
+            ...Object.fromEntries(
+              resolved.results.map((result) => [result.key, result.diceValue]),
+            ),
+          }
           setRollFeedback(resolved.results.map((result) => ({
             label: result.label,
             dice: result.dice,
