@@ -68,7 +68,7 @@ export function getActiveAttackRiderEntries(
     .filter(condition => condition.duration.remaining !== 0 || !["rounds", "turns", "minutes", "hours", "days"].includes(condition.duration.type))
   const equipped = getEquippedItems(character)
   const equipmentAbilities = new Set(equipped.flatMap(item => item.abilities ?? []))
-  const grantedAbilities = new Set(activeConditions.flatMap(condition => condition.grantedAbilities ?? []))
+  const grantedAbilityIds = new Set(activeConditions.flatMap(condition => (condition.grantedAbilities ?? []).map(ability => ability.id)))
   const entries: ActiveAttackRiderEntry[] = []
 
   for (const item of equipped) {
@@ -86,7 +86,7 @@ export function getActiveAttackRiderEntries(
   for (const ability of getActiveAbilities(character)) {
     // The same ability object is already collected with its granting item or
     // condition. Reference identity is preserved by getActiveAbilities.
-    if (equipmentAbilities.has(ability) || grantedAbilities.has(ability)) continue
+    if (equipmentAbilities.has(ability) || grantedAbilityIds.has(ability.id)) continue
     for (const rider of bindSourceWeapon(ability.bonuses?.attackRiders)) {
       entries.push({ rider, origin: { type: "ability", abilityId: ability.id, label: ability.name } })
     }
