@@ -40,6 +40,8 @@ export type CreatureQuickSheetRollContext = {
   creatureId: string
   initiativeEntryId?: string
   canSpendOutsideInitiative?: boolean
+  /** Present when the consumer can verify server-side spell definitions. */
+  serverSpellIndexes?: ReadonlySet<string>
 }
 
 export type CombatQuickSheetData = {
@@ -412,6 +414,7 @@ function CreatureSpellcastingSection({
         <div className="mt-3 grid gap-2">
           {spellcasting.spells.map((entry) => {
             const spell = getSpellByIndex(entry.spellIndex)
+            const serverHasSpell = !rollContext?.serverSpellIndexes || rollContext.serverSpellIndexes.has(entry.spellIndex)
             const isExpanded = expanded.has(entry.spellIndex)
             const usage =
               entry.usage.type === "atWill"
@@ -462,7 +465,7 @@ function CreatureSpellcastingSection({
                   )
                 : entry.castLevel ?? spell?.slotLevel ?? 0
             const canCast =
-              Boolean(rollContext && spell) &&
+              Boolean(rollContext && spell && serverHasSpell) &&
               (
                 entry.usage.type === "atWill" ||
                 (entry.usage.type === "perDay" && (remainingDaily ?? 0) > 0) ||
@@ -480,14 +483,14 @@ function CreatureSpellcastingSection({
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0">
                     <div className="text-sm font-semibold text-textH">
-                      {spell?.displayName || spell?.name || entry.spellIndex}
+                      {spell?.displayName || spell?.name || "Magia sem definição"}
                     </div>
                     <div className="mt-0.5 text-[11px] text-textMuted">
                       {spell
                         ? spell.slotLevel === 0
                           ? "Truque"
                           : `${spell.slotLevel}º círculo`
-                        : "Magia do compêndio"}
+                        : `Referência indisponível (${entry.spellIndex})`}
                       {" · "}
                       {usage}
                       {entry.usage.type === "perDay" && remainingDaily !== undefined
@@ -547,7 +550,7 @@ function CreatureSpellcastingSection({
                       type="button"
                       disabled={!canCast}
                       className="h-10 rounded-lg border border-accentBorder bg-accentBg px-3 text-xs font-semibold text-accent transition-colors hover:bg-bg-subtle disabled:cursor-not-allowed disabled:opacity-50"
-                      title={canCast ? rollModifierHint() : "Sem usos disponíveis."}
+                      title={canCast ? rollModifierHint() : !spell ? "Definição da magia indisponível." : !serverHasSpell ? "Magia ausente da configuração do servidor. Atualize a campanha." : "Sem usos disponíveis."}
                       onClick={(event) =>
                         requestCreatureRoll({
                           ...rollContext,
@@ -561,11 +564,13 @@ function CreatureSpellcastingSection({
                         })
                       }
                     >
-                      Conjurar
+                      {rollContext?.initiativeEntryId || rollContext?.canSpendOutsideInitiative ? "Conjurar" : "Rolar magia (prévia)"}
                     </button>
                   </div>
                 ) : null}
 
+                {!serverHasSpell && spell ? <p className="mt-2 text-xs text-danger">Magia ainda não sincronizada com o servidor. Atualize a configuração da sessão no site.</p> : null}
+                {rollContext && !rollContext.initiativeEntryId && !rollContext.canSpendOutsideInitiative ? <p className="mt-2 text-[11px] text-textMuted">Prévia fora da iniciativa: a rolagem não consome espaços nem usos diários. Adicione a criatura à iniciativa para controlar recursos.</p> : null}
                 {isExpanded ? (
                   spell ? (
                     <div className="mt-3 grid gap-2 border-t border-border pt-3 text-xs leading-5 text-text">
@@ -937,7 +942,7 @@ function InfoBlock({
 export function quickSheetFromCompendiumCreature(
   creature: CompendiumCreature,
   entry?: InitiativeEntry,
-  options: { enableRolls?: boolean } = {},
+  options: { enableRolls?: boolean; serverSpellIndexes?: ReadonlySet<string> } = {},
 ): CombatQuickSheetData {
   const conditions = entry?.conditions ?? []
   const enrich = (features: CreatureFeature[]): QuickSheetFeature[] =>
@@ -998,7 +1003,7 @@ export function quickSheetFromCompendiumCreature(
     skills: creature.skills,
     skillRolls,
     rollContext: options.enableRolls
-      ? { creatureId: creature.id, initiativeEntryId: entry?.id }
+      ? { creatureId: creature.id, initiativeEntryId: entry?.id, serverSpellIndexes: options.serverSpellIndexes }
       : undefined,
     vulnerabilities: creature.vulnerabilities,
     resistances: creature.resistances,
