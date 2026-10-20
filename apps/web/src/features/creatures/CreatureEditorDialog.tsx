@@ -19,7 +19,7 @@ import { uploadImage } from "../../lib/uploadImage"
 import { DamageAffinityEditor } from "../combat/DamageAffinityEditor"
 import { CreatureSpellcastingEditor } from "./CreatureSpellcastingEditor"
 import { getCreatureJsonTemplate } from "./creatureCompendiumIO"
-import { DAMAGE_TYPE_OPTIONS, type DamageType } from "../../models/combat/Damage"
+import { HP_EFFECT_TYPE_OPTIONS, type HpEffectType } from "../../models/combat/Damage"
 import {
   createCreatureFeature,
   normalizeCompendiumCreature,
@@ -875,9 +875,8 @@ function CreatureFeatureMechanicsEditor({
                 <div key={index} className="grid gap-2 rounded-lg border border-border bg-bg-subtle p-2">
                   <div className="grid gap-2 sm:grid-cols-[1fr_1fr_auto]">
                   <Input value={part.formula} placeholder="1d6+2" onChange={event => patch({ damage: current.damage.map((item, currentIndex) => currentIndex === index ? { ...item, formula: event.target.value } : item) })} />
-                  <SharedSelect className={selectClassName} value={part.damageType} onChange={event => patch({ damage: current.damage.map((item, currentIndex) => currentIndex === index ? { ...item, damageType: event.target.value as DamageType | "healing" } : item) })}>
-                    <option value="healing">Cura (PV recuperados)</option>
-                    {DAMAGE_TYPE_OPTIONS.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}
+                  <SharedSelect className={selectClassName} value={part.damageType} onChange={event => patch({ damage: current.damage.map((item, currentIndex) => currentIndex === index ? { ...item, damageType: event.target.value as HpEffectType } : item) })}>
+                    {HP_EFFECT_TYPE_OPTIONS.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}
                   </SharedSelect>
                   <Button size="icon" variant="ghost" title="Remover dano" onClick={() => patch({ damage: current.damage.filter((_, currentIndex) => currentIndex !== index) })}>
                     <Trash2 className="h-4 w-4 text-danger" />
