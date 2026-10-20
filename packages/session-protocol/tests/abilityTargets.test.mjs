@@ -107,3 +107,65 @@ test("target effects can be reverted using the pre-operation snapshot", () => {
   assert.deepEqual(state.hp, before.hp)
   assert.deepEqual(state.conditions, before.conditions)
 })
+
+test("temporary HP is granted once and resistance buffs on companions change damage", () => {
+  const state = emptyTargets()
+  assert.equal(applyHpToReferences(state, ["character:b", "companion:owl"], { kind: "temporary" }, 7), true)
+  assert.equal(state.hp.b.temporary, 7)
+  assert.equal(state.companions.owl.temporaryHp, 7)
+  assert.equal(applyHpToReferences(state, ["character:b"], { kind: "temporary" }, 3), true)
+  assert.equal(state.hp.b.temporary, 7)
+  state.companions.owl.conditions = [{ id: "resist", name: "Resistente", duration: { type: "manual" },
+    bonuses: { damageAffinities: [{ damageType: "fire", kind: "resistance" }] } }]
+  // Fire resistance and vulnerability cancel, so 4 is absorbed instead of 8.
+  assert.equal(applyHpToReferences(state, ["companion:owl"], { kind: "damage", damageType: "fire" }, 4), true)
+  assert.equal(state.companions.owl.temporaryHp, 3)
+  assert.equal(state.companions.owl.currentHp, 14)
+})
+
+test("reapplying a targeted grant refreshes the effect rather than duplicating it", () => {
+  const state = emptyTargets()
+  const ability = { id: "shield", name: "Escudo", conditionOnUse: { name: "Protegido" } }
+  const condition = createTargetCondition("caster", ability, abilityTargetGrants(ability)[0])
+  applyConditionToReferences(state, ["character:a", "companion:owl"], condition)
+  applyConditionToReferences(state, ["character:a", "companion:owl"], condition)
+  assert.equal(state.conditions.a.conditions.length, 1)
+  assert.equal(state.companions.owl.conditions.length, 1)
+})
+
+test("companion daily spells and conditions are persisted even when no HP or slots changed", async () => {
+  const { synchronizeCompanionInitiative } = await loadProductionModule("../../../apps/session-server/src/routes/initiative/companionInitiativeSync.ts")
+  const creature = {
+    id: "owl", ownerUserId: "p", name: "Coruja", maxHp: 10,
+    spellcasting: { slots: { 1: 2 }, spells: [{ spellIndex: "healing", usage: { type: "perDay", uses: 3 } }] },
+    traits: [], actions: [], bonusActions: [], reactions: [], legendaryActions: [],
+  }
+  const existingCondition = { id: "buff", name: "Abençoado", duration: { type: "manual" } }
+  const current = {
+    id: "owl-turn", sourceType: "monster", sourceId: "compendium:owl",
+    currentHp: 9, maxHp: 10, temporaryHp: 0, conditions: [],
+    creatureFeatureResources: {}, creatureSpellResources: {
+      slots: { 1: { current: 1, max: 2 } },
+      perDay: { healing: { used: 0, max: 3 } },
+    },
+  }
+  const before = { entries: [current] }
+  const after = { entries: [{ ...current, conditions: [existingCondition], creatureSpellResources: {
+    ...current.creatureSpellResources, perDay: { healing: { used: 1, max: 3 } },
+  } }] }
+  const state = { owl: {
+    creatureId: "owl", currentHp: 9, maxHp: 10, temporaryHp: 0,
+    featureUses: {}, spellSlots: { 1: 1 }, spellPerDay: { healing: 0 },
+    conditions: [], revision: 2,
+  } }
+  const result = synchronizeCompanionInitiative(before, after, { config: { creatureCompendium: [creature] } }, state)
+  assert.deepEqual(result.changedIds, ["owl"])
+  assert.equal(result.companions.owl.spellPerDay.healing, 1)
+  assert.deepEqual(result.companions.owl.conditions, [existingCondition])
+  assert.equal(result.companions.owl.currentHp, 9)
+
+  const removed = synchronizeCompanionInitiative({ entries: [] }, { entries: [current] },
+    { config: { creatureCompendium: [creature] } }, result.companions)
+  assert.equal(removed.session.entries[0].creatureSpellResources.perDay.healing.used, 1)
+  assert.deepEqual(removed.session.entries[0].conditions, [existingCondition])
+})
