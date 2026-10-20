@@ -19,7 +19,7 @@ import {
   resolveAbilityResourceCostPreview,
 } from "../../../models/abilities/abilityResourceCosts"
 import type { CharacterTemplate } from "../../../models/characters/CharacterTemplate"
-import { listBonusRollRequirements } from "../../../models/bonuses/BonusRoll"
+import { isValidBonusRollValue, listBonusRollRequirements } from "../../../models/bonuses/BonusRoll"
 import { getAbilitySelfDamageRollRequirements } from "../../../models/abilities/abilitySelfDamage"
 
 export function AbilityResourceActivationModal({
@@ -120,7 +120,9 @@ export function AbilityResourceActivationModal({
     const raw = manualRollValues[entry.key]?.trim() ?? ""
     if (raw === "" || !Number.isFinite(Number(raw))) return false
     const selfCost = selfDamageRequirements.find(cost => cost.key === entry.key)
-    return !selfCost || (Number.isInteger(Number(raw)) && Number(raw) >= selfCost.minimum && Number(raw) <= selfCost.maximum)
+    return selfCost
+      ? (Number.isInteger(Number(raw)) && Number(raw) >= selfCost.minimum && Number(raw) <= selfCost.maximum)
+      : isValidBonusRollValue(entry.dice, Number(raw))
   })
   const canConfirm = payment.ok && selfDamageRequirements.every(entry => entry.minimum > 0) && (!optionRequired || Boolean(optionId)) && manualRollsValid && (!damageTypeChoices.length || Boolean(effectiveDamageType)) && (!needsWeapon || Boolean(boundWeaponId || selectedWeaponId)) && (!needsAttribute || Boolean(selectedWeaponAttribute))
 
