@@ -219,6 +219,8 @@ export interface CharacterCustomSystemState {
   abilities: CustomAbilityInstance[]
   /** Exceções de aquisição/preparo definidas pelo mestre para este personagem. */
   abilityAcquisitionExceptions?: Record<string, CustomAbilityAcquisitionExceptionState>
+  /** Sobrescritas de fórmulas calculadas, locais a este personagem. */
+  formulaOverrides?: Record<string, FormulaExpression>
   installationSource?: "master" | "automatic"
   /** Runtime records grouped by collection definition id. */
   collections?: Record<string, CustomCollectionEntry[]>
