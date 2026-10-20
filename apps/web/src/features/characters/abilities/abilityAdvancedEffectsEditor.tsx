@@ -179,6 +179,7 @@ export function AbilityAdvancedEffectsEditor({ ability, character, onChange }: {
                       bonuses={option.bonuses ?? {}}
                       character={character}
                       allowOnUseHp
+                      onlyOnUseHp
                       description="Cura e dano instantâneos aplicados somente quando esta opção é escolhida."
                       onChange={(bonuses) => updateOption(option.id, { bonuses })}
                     />
