@@ -1,3 +1,4 @@
+import type { InitiativeCondition } from "../../models/initiative/Initiative"
 import type { DamageType } from "../../models/combat/Damage"
 import type { CompendiumCreature, CreatureFeature } from "../../models/creatures/CompendiumCreature"
 
@@ -7,6 +8,7 @@ export type CompanionState = {
   maxHp: number
   temporaryHp: number
   /** Feature uses survive exiting initiative and reconnecting to the session. */
+  conditions?: InitiativeCondition[]
   featureUses: Record<string, number>
   /** Remaining spell slots survive exiting initiative. */
   spellSlots: Record<string, number>
@@ -31,6 +33,7 @@ export function defaultCompanionState(creature: CompendiumCreature): CompanionSt
     currentHp: maxHp,
     maxHp,
     temporaryHp: 0,
+    conditions: [],
     featureUses: {},
     spellPerDay: {},
     spellSlots: Object.fromEntries(Object.entries(creature.spellcasting?.slots ?? {})
