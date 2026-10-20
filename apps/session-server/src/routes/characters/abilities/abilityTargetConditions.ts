@@ -11,7 +11,7 @@ export type TargetEffectGrant = { suffix: string; grant: CharacterConditionGrant
 /** Ignore the instantaneous HP costs when granting an ongoing buff to another recipient. */
 export function persistentTargetBonuses(bonuses: BonusCollection | undefined): BonusCollection | undefined {
   if (!bonuses) return undefined
-  const { onUseHp: _instant, ...ongoing } = bonuses
+  const { onUseHp: _instant, temporaryHp: _instantTemporaryHp, ...ongoing } = bonuses
   return Object.values(ongoing).some(value => Array.isArray(value) && value.length > 0)
     ? ongoing as BonusCollection : undefined
 }
