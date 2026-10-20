@@ -8,6 +8,8 @@
     "dev": "wrangler dev --var SESSION_AUTH_MODE:development",
     "predeploy": "node ../../scripts/build-game-core-runtime.mjs",
     "deploy": "wrangler deploy --secrets-file ../../.env.session",
+    "predeploy:keep-vars": "node ../../scripts/build-game-core-runtime.mjs",
+    "deploy:keep-vars": "wrangler deploy --env=\"\" --keep-vars",
     "predeploy:qa": "node ../../scripts/build-game-core-runtime.mjs",
     "deploy:qa": "wrangler deploy --env qa --secrets-file ../../.env.session.qa",
     "generate-types": "wrangler types",
