@@ -37,6 +37,7 @@ export function synchronizeCompanionInitiative(
         currentHp: existing.currentHp,
         maxHp: existing.maxHp,
         temporaryHp: existing.temporaryHp,
+        conditions: existing.conditions ?? [],
         creatureFeatureResources: Object.fromEntries(allCreatureFeatures(creature)
           .filter(feature => feature.usage)
           .map(feature => [feature.id, { max: feature.usage!.max, used: existing.featureUses[feature.id] ?? 0 }])),
@@ -56,7 +57,8 @@ export function synchronizeCompanionInitiative(
         },
       }
     }
-    const updated = entry.currentHp !== previousEntry.currentHp
+    const updated = JSON.stringify(entry.conditions) !== JSON.stringify(previousEntry.conditions)
+      || entry.currentHp !== previousEntry.currentHp
       || entry.maxHp !== previousEntry.maxHp
       || entry.temporaryHp !== previousEntry.temporaryHp
       || JSON.stringify(entry.creatureFeatureResources) !== JSON.stringify(previousEntry.creatureFeatureResources)
@@ -74,6 +76,7 @@ export function synchronizeCompanionInitiative(
       currentHp: Math.max(0, Math.min(entry.currentHp ?? existing.currentHp, entry.maxHp ?? existing.maxHp)),
       maxHp: Math.max(1, entry.maxHp ?? existing.maxHp),
       temporaryHp: Math.max(0, entry.temporaryHp ?? existing.temporaryHp),
+      conditions: entry.conditions,
       featureUses: { ...existing.featureUses, ...featureUses },
       spellSlots: { ...existing.spellSlots, ...spellSlots },
       spellPerDay: { ...existing.spellPerDay, ...spellPerDay },
