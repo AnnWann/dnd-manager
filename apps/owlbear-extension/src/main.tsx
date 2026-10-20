@@ -522,7 +522,7 @@ function App() {
  // A unique boss has multiple turns but a single combatantId. Resolve the
  // catalog token to that combatant automatically instead of showing spell previews.
  const catalogEntries=catalogCreature
-  ? initiativeEntries.filter(entry=>entry.sourceId==="compendium:"+catalogCreature.id):[]
+  ? initiativeEntries.filter(entry=>entry.sourceId==="compendium:"+catalogCreature.id)
   : []
  const matchingCombatants=new Set(catalogEntries.map(entry=>entry.combatantId||entry.id))
  const inferredCreature=!linkedCreature&&catalogCreature&&matchingCombatants.size===1
