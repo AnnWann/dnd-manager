@@ -1,7 +1,7 @@
 import { resolveDamage, type DamageType } from "../combat/Damage"
 import { applyAbilitySelfDamage, resolveAbilitySelfDamage } from "./abilitySelfDamage"
 import type { Attribute } from "../sheet/Attribute"
-import { abilityRequiresWeaponAttributeSelection, getAbilityAttackRiderDamageChoices, resolveAttackRiderAttributeSelection, resolveAttackRiderDamageChoice } from "../combat/AttackRider"
+import { abilityRequiresWeaponAttributeSelection, getAbilityAttackRiderDamageChoices, optionRequiresWeaponSelection, resolveAttackRiderAttributeSelection, resolveAttackRiderDamageChoice } from "../combat/AttackRider"
 import { evaluateCharacterSheetFormula } from "../../lib/customSystems/CharacterSheetFormula"
 import type { Bonus, OnUseHpEffect } from "../bonuses/Bonus"
 import { resolveBonusCollectionRolls } from "../bonuses/BonusRoll"
@@ -100,9 +100,10 @@ export function getAbilityWeaponInfusions(character: CharacterTemplate, abilityI
     if (condition.sourceAbilityId !== abilityId || !condition.sourceAbilityOptionId) continue
     const match = /^(.+):abilities(?::(.+))?$/.exec(condition.sourceAbilityOptionId)
     if (!match) continue
-    const weaponId = (condition.grantedAbilities ?? [])
-      .flatMap(granted => granted.bonuses?.attackRiders ?? [])
-      .find(rider => rider.weaponSelection === "onActivation" && rider.weaponId)?.weaponId ?? match[2]
+    const weaponId = [
+      ...(condition.bonuses?.attackRiders ?? []),
+      ...(condition.grantedAbilities ?? []).flatMap(granted => granted.bonuses?.attackRiders ?? []),
+    ].find(rider => rider.weaponSelection === "onActivation" && rider.weaponId)?.weaponId ?? match[2]
     if (weaponId) infusions.push({ conditionId: condition.id, optionId: match[1], weaponId })
   }
   return infusions
@@ -155,14 +156,6 @@ export function useAbilityEffect(
 ): CharacterTemplate {
   if (!abilityRequiresActivation(ability) || !canActivateAbility(character, ability)) return character
   const infusions = getAbilityWeaponInfusions(character, ability.id)
-  if (ability.allowMultipleWeaponActivations && activationOptionId && selectedWeaponId) {
-    const activeOnWeapon = infusions.find(infusion => infusion.weaponId === selectedWeaponId)
-    // An infusion is unique to the weapon: another use may switch the option,
-    // but may not stack the same or a different rite unless switching is allowed.
-    if (activeOnWeapon && (!ability.allowOptionSwitching || activeOnWeapon.optionId === activationOptionId)) {
-      return character
-    }
-  }
   const switchingOption = Boolean(ability.allowOptionSwitching && isAbilityBenefitsActive(ability) && (activationOptionId || selectedDamageType))
   if (ability.allowOptionSwitching && isAbilityBenefitsActive(ability) && !activationOptionId && !selectedDamageType) return character
   // The weapon initially infused by the ability cannot change when only the element changes.
@@ -174,6 +167,13 @@ export function useAbilityEffect(
       .find(rider => rider.weaponSelection === "onActivation" && rider.weaponId)?.weaponId
     : undefined
   const activeWeaponId = originalWeaponId ?? selectedWeaponId
+  if (optionRequiresWeaponSelection(ability, activationOptionId)) {
+    // Selecting this mode in the editor is not enough: the activation must
+    // name a real weapon, and it must not be already infused by this ability.
+    if (!activeWeaponId || !character.get("equipment").weapons.some(weapon => weapon.id === activeWeaponId)) return character
+    const previous = infusions.find(infusion => infusion.weaponId === activeWeaponId)
+    if (previous && (!ability.allowOptionSwitching || previous.optionId === (activationOptionId ?? "base"))) return character
+  }
 
   const resolvedRolls = resolveBonusCollectionRolls(
     character,
@@ -251,27 +251,61 @@ export function useAbilityEffect(
     next = upsertGrantedCondition(next, resolvedAbility, source, resolvedAbility.conditionOnUse, "base")
   }
 
-  if (selectedOption && !directedToOtherTargets) {
-    const optionAbilities = getActivationOptionAbilities(selectedOption)
-    if (optionAbilities.length > 0) {
+  if (!directedToOtherTargets) {
+    // A configured "Choose weapon on activation" rider cannot live on the
+    // source ability: an unbound rider is deliberately ignored by the attack
+    // roller. Persist it in a condition scoped to the selected weapon instead.
+    const selectedRiders = [
+      ...(resolvedAbility.bonuses?.attackRiders ?? []),
+      ...(resolvedOptionRolls.bonuses?.attackRiders ?? []),
+    ].filter(rider => rider.scope === "weapon" && rider.weaponSelection === "onActivation")
+    const boundRiders = resolveAttackRiderAttributeSelection(
+      resolveAttackRiderDamageChoice(selectedRiders, selectedDamageType),
+      selectedWeaponAttribute,
+    ).map(rider => ({ ...rider, weaponId: activeWeaponId }))
+
+    if (selectedOption) {
+      const optionAbilities = getActivationOptionAbilities(selectedOption)
+      if (optionAbilities.length > 0 || boundRiders.length > 0) {
+        const grant = optionAbilities.length > 0
+          ? optionAbilitiesGrant(selectedOption, resolvedAbility, optionAbilities, activeWeaponId, selectedDamageType, selectedWeaponAttribute)
+          : {
+              name: selectedOption.name,
+              description: selectedOption.description,
+              duration: selectedOption.duration ?? defaultOptionDuration(resolvedAbility),
+            }
+        next = upsertGrantedCondition(
+          next,
+          resolvedAbility,
+          source,
+          boundRiders.length > 0 ? {
+            ...grant,
+            bonuses: { ...(grant.bonuses ?? {}), attackRiders: boundRiders },
+          } : grant,
+          resolvedAbility.allowMultipleWeaponActivations && activeWeaponId
+            ? `${selectedOption.id}:abilities:${activeWeaponId}`
+            : `${selectedOption.id}:abilities`,
+          selectedOption.name,
+        )
+      }
+      if (selectedOption.condition && optionAbilities.length === 0) {
+        next = upsertGrantedCondition(
+          next, resolvedAbility, source, selectedOption.condition, selectedOption.id, selectedOption.name,
+        )
+      }
+    } else if (boundRiders.length > 0 && activeWeaponId) {
       next = upsertGrantedCondition(
         next,
         resolvedAbility,
         source,
-        optionAbilitiesGrant(selectedOption, resolvedAbility, optionAbilities, activeWeaponId, selectedDamageType, selectedWeaponAttribute),
-        resolvedAbility.allowMultipleWeaponActivations && activeWeaponId
-          ? `${selectedOption.id}:abilities:${activeWeaponId}`
-          : `${selectedOption.id}:abilities`,
-        selectedOption.name,
-      )
-    } else if (selectedOption.condition) {
-      next = upsertGrantedCondition(
-        next,
-        resolvedAbility,
-        source,
-        selectedOption.condition,
-        selectedOption.id,
-        selectedOption.name,
+        {
+          name: resolvedAbility.name,
+          description: resolvedAbility.description,
+          bonuses: { attackRiders: boundRiders },
+          duration: defaultOptionDuration(resolvedAbility),
+        },
+        `base:abilities:${activeWeaponId}`,
+        resolvedAbility.name,
       )
     }
   }
