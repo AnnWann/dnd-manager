@@ -337,7 +337,7 @@ export class SessionActor extends DurableObject<Env> {
       }
       next = { ...next, featureUses: { ...current.featureUses, [feature.id]: updated } };
     } else {
-      const maximum = creature.spellcasting?.slots[operation.level as keyof typeof creature.spellcasting.slots] ?? 0;
+      const maximum = creature.spellcasting?.slots[operation.level as 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9] ?? 0;
       const available = current.spellSlots[String(operation.level)] ?? maximum;
       const updated = available + operation.delta;
       if (updated < 0 || updated > maximum) {
@@ -373,7 +373,7 @@ export class SessionActor extends DurableObject<Env> {
           session: { ...initiative, entries, updatedAt: Date.now() } as unknown as Record<string, unknown>,
           revision: initiativeState.revision + 1 };
         await this.ctx.storage.put("initiative-state", updated);
-        this.broadcast({ type: "session.initiative.updated", state: updated });
+        broadcastVisibilityFiltered(this.ctx.getWebSockets(), { type: "session.initiative.updated", state: updated });
       }
     }
     await this.ctx.storage.put(COMPANIONS_STATE_KEY, states);
