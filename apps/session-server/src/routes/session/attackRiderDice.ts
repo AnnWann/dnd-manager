@@ -7,8 +7,15 @@ export function rollAttackRiderDamages(
   critical: boolean,
   inheritedDamageType?: string,
 ): SessionResolvedDamageRoll[] {
+  const seen = new Set<string>()
   return riders.flatMap(rider => {
     if (!rider.damage) return []
+    // Protect the authoritative dice roller even when the caller or an
+    // older persisted session projects the same effect more than once.
+    // Do not merge genuinely separate riders with different IDs.
+    const key = `${rider.id}:${rider.weaponId ?? "*"}:${rider.targetEntryId ?? "*"}`
+    if (seen.has(key)) return []
+    seen.add(key)
     const parsed = parseAttackRiderDice(rider.damage.dice)
     if (!parsed) return []
     const quantity = parsed.quantity * (critical ? 2 : 1)
