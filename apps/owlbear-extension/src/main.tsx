@@ -2,13 +2,14 @@ import { MagicProvider } from "../../web/src/contexts/magicContext"
 import { CreatureQuickSheet, quickSheetFromCompendiumCreature } from "../../web/src/features/creatures/CreatureQuickSheet"
 import type { CompendiumCreature } from "../../web/src/models/creatures/CompendiumCreature"
 import { CreatureTokenInspector } from "./CreatureTokenInspector"
+import { findOwlbearInitiativeCreature, resolveOwlbearSpellDefinitions } from "./owlbearSpellCatalog"
 import type { InitiativeEntry } from "../../web/src/models/initiative/Initiative"
 import { readSelectedToken, readTokenCharacterLink, setTokenCharacterLink, readTokenCreatureLink, setTokenCreatureLink, readTokenCompendiumCreature, TOKEN_COMPENDIUM_CREATURE_METADATA } from "./tokenCharacterLink"
 import { SessionDicePanel, type DiceHistoryEntry } from "./SessionDicePanel"
 import { SessionTransport } from "@dnd-manager/session-client/transport"
 import { NativeCharacterSheetHost } from "./NativeCharacterSheetHost"
 import { publishServerDiceRoll, publishServerActionRoll, CREATURE_ROLL_REQUEST_EVENT } from "../../web/src/lib/diceRoller"
-import React, { useCallback, useEffect, useRef, useState } from "react"
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { createRoot } from "react-dom/client"
 import OBR from "@owlbear-rodeo/sdk"
 import { CharacterSheetDerivedTile } from "@dnd-manager/game-ui/character-sheet-fields"
@@ -46,6 +47,7 @@ function App() {
  const [conditions, setConditions] = useState<Record<string, Record<string, unknown>>>({})
  const [runtimeConfig, setRuntimeConfig] = useState<Record<string, unknown> | null>(null)
  const [spellLibrary, setSpellLibrary] = useState<Record<string, unknown>[]>([])
+ const [creatureRollError, setCreatureRollError] = useState("")
  const [inventoryState, setInventoryState] = useState<Record<string, unknown> | null>(null)
  const [selectedId, setSelectedId] = useState("")
  const [associationState, setAssociationState] = useState<{sessionId:string;connected:boolean;characters:{id:string;name:string}[];role?:string;creatures?:{id:string;name:string;hp?:number;maxHp?:number;armorClass?:number}[];catalog?:{id:string;name:string}[]}>({sessionId:"",connected:false,characters:[],creatures:[],catalog:[]})
@@ -58,6 +60,16 @@ function App() {
  const [compendiumCreatures,setCompendiumCreatures] = useState<CompendiumCreature[]>([])
  const [pendingCreatureAdd,setPendingCreatureAdd] = useState<{tokenId:string;entryId:string;sessionId:string}|null>(null)
  const [initiativeState,setInitiativeState] = useState<Record<string,unknown>|null>(null)
+ const sessionSpells = useMemo(() => resolveOwlbearSpellDefinitions(runtimeConfig, spellLibrary), [runtimeConfig, spellLibrary])
+ const serverSpellIndexes = useMemo(() => new Set(
+   (Array.isArray(asRecord(runtimeConfig?.config).spells) ? asRecord(runtimeConfig?.config).spells : [])
+     .map(spell => asRecord(spell).index).filter((index): index is string => typeof index === "string")
+ ), [runtimeConfig])
+ const availableCreatures = useMemo(() => {
+   const official = Array.isArray(asRecord(runtimeConfig?.config).creatureCompendium)
+     ? asRecord(runtimeConfig?.config).creatureCompendium as CompendiumCreature[] : []
+   return [...new Map([...compendiumCreatures, ...official].map(creature => [creature.id, creature])).values()]
+ }, [compendiumCreatures, runtimeConfig])
  const [selectedToken, setSelectedToken] = useState<{id:string;name:string;link:{sessionId:string;characterId:string}|null;creatureLink:{sessionId:string;entryId:string}|null;catalogId:string|null;catalogSessionId:string|null}|null>(null)
  const [tokenLinkError, setTokenLinkError] = useState("")
  const [activeArea, setActiveArea] = useState<"sheet" | "dice">(isDicePopover ? "dice" : "sheet")
@@ -117,11 +129,12 @@ function App() {
    const forward=(event:Event)=>{
      const request=(event as CustomEvent).detail
      if(!request || status!=="Conectado à sessão" || role!=="MASTER"){
-       setError("Rolagem de criatura exige sessão conectada como mestre.")
+       setCreatureRollError("Conjuração indisponível: conecte-se como mestre à sessão.")
        return
      }
+     setCreatureRollError("")
      if(!socket.current?.sendRaw(JSON.stringify({type:"session.creature.roll",request})))
-       setError("Não foi possível enviar a rolagem da criatura.")
+       setCreatureRollError("Não foi possível enviar a rolagem da criatura.")
    }
    window.addEventListener(CREATURE_ROLL_REQUEST_EVENT,forward)
    return()=>window.removeEventListener(CREATURE_ROLL_REQUEST_EVENT,forward)
@@ -241,7 +254,7 @@ function App() {
  const disconnect = useCallback(() => {
    socket.current?.disconnect()
    socket.current = null
-   setCharacters({}); setAbilities({}); setHp({}); setConditions({}); setRuntimeConfig(null); setSpellLibrary([]); setInventoryState(null);setInitiativeState(null);setCompendiumCreatures([]); setSelectedId(""); setRollHistory([]); setStatus("Desconectado")
+   setCharacters({}); setAbilities({}); setHp({}); setConditions({}); setRuntimeConfig(null); setSpellLibrary([]); setCreatureRollError(""); setInventoryState(null);setInitiativeState(null);setCompendiumCreatures([]); setSelectedId(""); setRollHistory([]); setStatus("Desconectado")
  }, [])
  useEffect(() => () => { socket.current?.disconnect() }, [])
  const api = useCallback(async <T,>(path: string): Promise<T> => {
@@ -329,7 +342,11 @@ function App() {
          const result = message.result as DiceHistoryEntry["result"]
          if (result && typeof result.id === "string") setRollHistory(previous => previous.some(entry=>entry.result.id===result.id)?previous:[{kind:"action" as const,result:result as Extract<DiceHistoryEntry,{kind:"action"}>["result"]},...previous].slice(0,60))
        }
-       if (message.type === "session.error") setError(String(message.message ?? "Erro na sessão."))
+       if (message.type === "session.error") {
+         const messageText = String(message.message ?? "Erro na sessão.")
+         setError(messageText)
+         if (String(message.code ?? "").startsWith("CREATURE_")) setCreatureRollError(messageText)
+       }
        if (message.type === "session.ready") {
          setError("")
          setStatus("Conectado à sessão")
@@ -357,7 +374,7 @@ function App() {
   ? asRecord(initiativeState?.session).entries : []) as InitiativeEntry[]
  const boundCreature=role==="MASTER" && selectedToken?.creatureLink?.sessionId===sessionId
   ? initiativeEntries.find(entry=>entry.id===selectedToken.creatureLink?.entryId) : undefined
- const catalogCreature=role==="MASTER"&&selectedToken?.catalogSessionId===sessionId&&selectedToken?.catalogId?compendiumCreatures.find(c=>c.id===selectedToken.catalogId):undefined
+ const catalogCreature=role==="MASTER"&&selectedToken?.catalogSessionId===sessionId&&selectedToken?.catalogId?availableCreatures.find(c=>c.id===selectedToken.catalogId):undefined
  const addCatalogToInitiative=()=>{
    if(!catalogCreature||status!=="Conectado à sessão"||role!=="MASTER"||!selectedToken||pendingCreatureAdd)return
    const entryId=crypto.randomUUID()
@@ -444,7 +461,7 @@ function App() {
  </div>}
  <div role="tabpanel" hidden={activeArea!=="dice"}><SessionDicePanel connected={status==="Conectado à sessão"} selectedCharacterId={selectedId || undefined} history={rollHistory} onRoll={request=>socket.current?.sendRaw(JSON.stringify({type:"session.dice.roll",request}))??false}/></div>
  {!isDicePopover && <div role="tabpanel" hidden={activeArea!=="sheet"}>
- {catalogCreature && !boundCreature ? <MagicProvider spells={[]}><div className="grid gap-3"><CreatureQuickSheet data={quickSheetFromCompendiumCreature(catalogCreature,undefined,{enableRolls:true})} compact/><button type="button" disabled={Boolean(pendingCreatureAdd)} onClick={addCatalogToInitiative} className="rounded-lg border border-accentBorder bg-accentBg px-3 py-2 text-sm font-semibold disabled:opacity-40">{pendingCreatureAdd?"Aguardando confirmação...":"Adicionar à iniciativa"}</button></div></MagicProvider> : boundCreature ? <CreatureTokenInspector key={boundCreature.id} entry={boundCreature} creature={compendiumCreatures.find(c=>c.id===boundCreature.sourceId)} connected={status==="Conectado à sessão"} onOperation={operation=>socket.current?.sendRaw(JSON.stringify({type:"session.initiative.operation",operation}))??false}/> : selectedId && chosen && <article className="character-panel">
+ {catalogCreature && !boundCreature ? <MagicProvider spells={sessionSpells}><div className="grid gap-3"><CreatureQuickSheet data={quickSheetFromCompendiumCreature(catalogCreature,undefined,{enableRolls:true})} compact/>{creatureRollError ? <p role="alert" className="text-xs text-danger">{creatureRollError}</p> : null}<button type="button" disabled={Boolean(pendingCreatureAdd)} onClick={addCatalogToInitiative} className="rounded-lg border border-accentBorder bg-accentBg px-3 py-2 text-sm font-semibold disabled:opacity-40">{pendingCreatureAdd?"Aguardando confirmação...":"Adicionar à iniciativa"}</button></div></MagicProvider> : boundCreature ? <CreatureTokenInspector key={boundCreature.id} entry={boundCreature} creature={findOwlbearInitiativeCreature(availableCreatures,boundCreature)} spells={sessionSpells} serverSpellIndexes={serverSpellIndexes} creatureRollError={creatureRollError} connected={status==="Conectado à sessão"} onOperation={operation=>socket.current?.sendRaw(JSON.stringify({type:"session.initiative.operation",operation}))??false}/> : selectedId && chosen && <article className="character-panel">
  <CharacterSheetHeader name={String(raw.name ?? selectedId)} id={selectedId} />
  <NativeCharacterSheetHost
    characterId={selectedId} raw={raw} hp={health as unknown as Record<string, unknown>} conditions={conditions[selectedId]} runtimeConfig={runtimeConfig} inventoryState={inventoryState} spells={spellLibrary} role={role === "MASTER" ? "MASTER" : "PLAYER"}
