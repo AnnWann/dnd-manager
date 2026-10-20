@@ -16,7 +16,7 @@ export function rollAttackRiderDamages(
     return [{
       label: rider.label || "Dano adicional",
       damageType: rider.damage.damageType ?? inheritedDamageType,
-      magical: rider.damage.magical,
+      magical: rider.damage.magical ?? riders.some(entry => entry.treatWeaponAsMagical),
       ignoreResistance: rider.damage.ignoreResistance,
       groups: [{ quantity, sides: parsed.sides, rolls }],
       modifier: parsed.flat,
