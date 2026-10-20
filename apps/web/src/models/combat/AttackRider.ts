@@ -45,38 +45,92 @@ export function getCharacterWeaponAttackAttribute(character: CharacterTemplate, 
       ? attribute : best)
 }
 
-/** No target supplied means a target-specific mark cannot trigger. */
-export function getActiveAttackRiders(character: CharacterTemplate, context: AttackRiderContext): AttackRider[] {
+export type ActiveAttackRiderOrigin =
+  | { type: "equipment"; itemId: string; label: string }
+  | { type: "equipment-ability"; itemId: string; abilityId: string; label: string }
+  | { type: "ability"; abilityId: string; label: string }
+  | { type: "condition"; conditionId: string; label: string; sourceAbilityId?: string; sourceAbilityLocation?: "character" | "race" | "equipment" | "condition"; sourceItemId?: string }
+
+export type ActiveAttackRiderEntry = {
+  rider: AttackRider
+  origin: ActiveAttackRiderOrigin
+}
+
+/**
+ * Resolve each weapon effect together with its owner. The weapon panel and the
+ * authoritative attack roller must consume the same projection.
+ */
+export function getActiveAttackRiderEntries(
+  character: CharacterTemplate,
+  context: AttackRiderContext,
+): ActiveAttackRiderEntry[] {
   const activeConditions = getCharacterConditions(character)
     .filter(condition => condition.duration.remaining !== 0 || !["rounds", "turns", "minutes", "hours", "days"].includes(condition.duration.type))
   const equipped = getEquippedItems(character)
   const equipmentAbilities = new Set(equipped.flatMap(item => item.abilities ?? []))
-  // getActiveAbilities also contains abilities granted by conditions. Those
-  // are read again below with their source weapon, so exclude them here to
-  // avoid rolling the same on-hit rider twice.
-  const conditionGrantedIds = new Set(activeConditions.flatMap(condition =>
-    (condition.grantedAbilities ?? []).map(ability => ability.id)))
-  const riders: AttackRider[] = [
-    ...equipped.flatMap(item => [
-      ...bindSourceWeapon(item.bonuses?.attackRiders, item.id),
-      ...(item.abilities ?? []).filter(isAbilityBenefitsActive)
-        .flatMap(ability => bindSourceWeapon(ability.bonuses?.attackRiders, item.id)),
-    ]),
-    ...getActiveAbilities(character)
-      .filter(ability => !equipmentAbilities.has(ability) && !conditionGrantedIds.has(ability.id))
-      .flatMap(ability => bindSourceWeapon(ability.bonuses?.attackRiders)),
-    ...activeConditions.flatMap(condition => [
-      ...bindSourceWeapon(condition.bonuses?.attackRiders, condition.sourceItemId),
-      ...(condition.grantedAbilities ?? []).filter(isAbilityBenefitsActive)
-        .flatMap(ability => bindSourceWeapon(ability.bonuses?.attackRiders, condition.sourceItemId)),
-    ]),
-  ]
-  return riders
-    .filter(rider => rider.scope === "all" || rider.scope === context.scope)
-    // An activation-bound rider must only apply to the infused weapon.
-    .filter(rider => !rider.weaponSelection || Boolean(rider.weaponId))
-    .filter(rider => !rider.weaponId || (context.scope === "weapon" && rider.weaponId === context.weaponId))
-    .filter(rider => !rider.targetEntryId || rider.targetEntryId === context.targetEntryId)
+  const grantedAbilities = new Set(activeConditions.flatMap(condition => condition.grantedAbilities ?? []))
+  const entries: ActiveAttackRiderEntry[] = []
+
+  for (const item of equipped) {
+    for (const rider of bindSourceWeapon(item.bonuses?.attackRiders, item.id)) {
+      entries.push({ rider, origin: { type: "equipment", itemId: item.id, label: item.name } })
+    }
+    for (const ability of item.abilities ?? []) {
+      if (!isAbilityBenefitsActive(ability)) continue
+      for (const rider of bindSourceWeapon(ability.bonuses?.attackRiders, item.id)) {
+        entries.push({ rider, origin: { type: "equipment-ability", itemId: item.id, abilityId: ability.id, label: ability.name } })
+      }
+    }
+  }
+
+  for (const ability of getActiveAbilities(character)) {
+    // The same ability object is already collected with its granting item or
+    // condition. Reference identity is preserved by getActiveAbilities.
+    if (equipmentAbilities.has(ability) || grantedAbilities.has(ability)) continue
+    for (const rider of bindSourceWeapon(ability.bonuses?.attackRiders)) {
+      entries.push({ rider, origin: { type: "ability", abilityId: ability.id, label: ability.name } })
+    }
+  }
+
+  for (const condition of activeConditions) {
+    const origin: ActiveAttackRiderOrigin = {
+      type: "condition",
+      conditionId: condition.id,
+      label: condition.name,
+      sourceAbilityId: condition.sourceAbilityId,
+      sourceAbilityLocation: condition.sourceAbilityLocation,
+      sourceItemId: condition.sourceItemId,
+    }
+    for (const rider of bindSourceWeapon(condition.bonuses?.attackRiders, condition.sourceItemId)) {
+      entries.push({ rider, origin })
+    }
+    for (const ability of condition.grantedAbilities ?? []) {
+      if (!isAbilityBenefitsActive(ability)) continue
+      for (const rider of bindSourceWeapon(ability.bonuses?.attackRiders, condition.sourceItemId)) {
+        entries.push({ rider, origin })
+      }
+    }
+  }
+
+  const seen = new Set<string>()
+  return entries
+    .filter(({ rider }) => rider.scope === "all" || rider.scope === context.scope)
+    .filter(({ rider }) => !rider.weaponSelection || Boolean(rider.weaponId))
+    .filter(({ rider }) => !rider.weaponId || (context.scope === "weapon" && rider.weaponId === context.weaponId))
+    .filter(({ rider }) => !rider.targetEntryId || rider.targetEntryId === context.targetEntryId)
+    .filter(({ rider }) => {
+      // A persistent rite has one stable rider ID. Do not roll it twice when
+      // legacy state contains the same granted ability under two projections.
+      const key = `${rider.id}:${rider.weaponId ?? "*"}:${rider.targetEntryId ?? "*"}`
+      if (seen.has(key)) return false
+      seen.add(key)
+      return true
+    })
+}
+
+/** No target supplied means a target-specific mark cannot trigger. */
+export function getActiveAttackRiders(character: CharacterTemplate, context: AttackRiderContext): AttackRider[] {
+  return getActiveAttackRiderEntries(character, context).map(entry => entry.rider)
 }
 
 /** Selection is requested for the active option only, not unrelated choices. */
