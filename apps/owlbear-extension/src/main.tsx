@@ -112,6 +112,7 @@ function App() {
      await OBR.popover.open({
        id:INITIATIVE_POPOVER_ID,url:"/?panel=initiative&bridge="+encodeURIComponent(initiativeBridgeId),
        width:560,height:158,
+       hidePaper:true,
        anchorReference:"POSITION",
        anchorPosition:{left:window.screen.availWidth/2,top:10},
        anchorOrigin:{horizontal:"CENTER",vertical:"TOP"},
@@ -553,6 +554,7 @@ function App() {
      onOperation={operation=>{initiativeChannel.current?.postMessage({type:"operation",operation});return initiativeChannel.current!==null}}
      onRoll={entry=>{initiativeChannel.current?.postMessage({type:"roll",entryId:entry.id});return initiativeChannel.current!==null}}
      onClose={()=>void OBR.popover.close(INITIATIVE_POPOVER_ID)}
+     onExpand={expanded=>{void OBR.popover.setHeight(INITIATIVE_POPOVER_ID,expanded?212:158).catch(()=>{})}}
    />
  </main>
  if(isAssociatePopover)return <main className="owlbear-shell">
