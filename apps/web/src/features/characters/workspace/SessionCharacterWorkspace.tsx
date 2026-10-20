@@ -148,6 +148,7 @@ export function SessionCharacterWorkspace({ children }: { children: ReactNode })
     if (!current) return
     const next = updater(current)
 
+    const nameChanged = current.get("name") !== next.get("name")
     const ownerChanged = JSON.stringify(current.get("owner")) !== JSON.stringify(next.get("owner"))
     const magicChanged = JSON.stringify(current.get("magic")) !== JSON.stringify(next.get("magic"))
     const equipmentChanged = JSON.stringify(current.get("equipment")) !== JSON.stringify(next.get("equipment"))
@@ -156,6 +157,17 @@ export function SessionCharacterWorkspace({ children }: { children: ReactNode })
     const customSystemsChanged = JSON.stringify(current.get("sheet").customSystems ?? []) !== JSON.stringify(next.get("sheet").customSystems ?? [])
     const concentrationOperation = deriveConcentrationOperation(current, next)
     const grantedSpellUsageOperation = deriveGrantedSpellUsageOperation(current, next)
+
+    if (nameChanged) {
+      const nameOnly = current.with("name", next.get("name"))
+      if (JSON.stringify(nameOnly.toJSON()) !== JSON.stringify(next.toJSON())) {
+        console.warn("[session-runtime] blocked composite character rename", { characterId })
+        return
+      }
+      const name = next.get("name").trim()
+      if (name && name.length <= 120) sessionRuntime.dispatchCharacterLifecycleOperation({ type: "character.session.rename", characterId, name })
+      return
+    }
 
     if (ownerChanged) {
       const ownerOnly = current.withPatch({ owner: next.get("owner") })

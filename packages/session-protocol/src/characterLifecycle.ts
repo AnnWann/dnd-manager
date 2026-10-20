@@ -23,6 +23,11 @@ export type SessionCharacterLifecycleOperation<TOwner> =
       characterId: string
     }
   | {
+      type: "character.session.rename"
+      characterId: string
+      name: string
+    }
+  | {
       type: "character.session.owner.set"
       characterId: string
       owner: TOwner
