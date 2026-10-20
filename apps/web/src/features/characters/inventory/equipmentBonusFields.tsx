@@ -135,6 +135,7 @@ export function BonusesFields({
   character,
   owningWeapon,
   allowOnUseHp = false,
+  onlyOnUseHp = false,
 }: {
   bonuses: BonusCollection
   onChange: (bonuses: BonusCollection) => void
@@ -142,6 +143,7 @@ export function BonusesFields({
   character?: CharacterTemplate
   owningWeapon?: { id: string; name: string }
   allowOnUseHp?: boolean
+  onlyOnUseHp?: boolean
 }) {
   const [dialogOpen, setDialogOpen] = useState(false)
   const entries = flattenBonuses(bonuses)
@@ -187,16 +189,17 @@ export function BonusesFields({
         </div>
       )}
 
-      <AttackRidersEditor
+      {!onlyOnUseHp ? <AttackRidersEditor
         riders={bonuses.attackRiders ?? []}
         character={character}
         onChange={attackRiders => onChange({ ...bonuses, attackRiders })}
-      />
+      /> : null}
       <AddBonusDialog
         open={dialogOpen}
         character={character}
         owningWeapon={owningWeapon}
         allowOnUseHp={allowOnUseHp}
+        onlyOnUseHp={onlyOnUseHp}
         onClose={() => setDialogOpen(false)}
         onAdd={(entry) => {
           if (entry.target === "damageAffinity") {
@@ -401,6 +404,7 @@ function AddBonusDialog({
   character,
   owningWeapon,
   allowOnUseHp = false,
+  onlyOnUseHp = false,
   onClose,
   onAdd,
 }: {
@@ -408,10 +412,11 @@ function AddBonusDialog({
   character?: CharacterTemplate
   owningWeapon?: { id: string; name: string }
   allowOnUseHp?: boolean
+  onlyOnUseHp?: boolean
   onClose: () => void
   onAdd: (entry: AddBonusEntry) => void
 }) {
-  const [target, setTarget] = useState<BonusDialogTarget>("armorClass")
+  const [target, setTarget] = useState<BonusDialogTarget>(onlyOnUseHp ? "onUseDamage" : "armorClass")
   const [attribute, setAttribute] = useState<Attribute>("str")
   const [scopeAttribute, setScopeAttribute] = useState<"all" | Attribute>("all")
   const [scopeSkill, setScopeSkill] = useState<"all" | Skill>("all")
@@ -442,7 +447,7 @@ function AddBonusDialog({
     : undefined
 
   function close() {
-    setTarget("armorClass")
+    setTarget(onlyOnUseHp ? "onUseDamage" : "armorClass")
     setAttribute("str")
     setScopeAttribute("all")
     setScopeSkill("all")
@@ -493,9 +498,9 @@ function AddBonusDialog({
           <label className="grid gap-1">
             <span className="text-xs font-medium text-textH">Afeta</span>
             <Select value={target} onChange={(event) => setTarget(event.target.value as BonusDialogTarget)}>
-              {TARGET_OPTIONS.map((option) => (
+              {!onlyOnUseHp ? TARGET_OPTIONS.map((option) => (
                 <option key={option.value} value={option.value}>{option.label}</option>
-              ))}
+              )) : null}
               {allowOnUseHp ? <option value="onUseDamage">Dano (ao usar a habilidade)</option> : null}
               {allowOnUseHp ? <option value="onUseHeal">Cura (ao usar a habilidade)</option> : null}
             </Select>
