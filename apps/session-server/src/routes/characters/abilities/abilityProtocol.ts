@@ -79,6 +79,8 @@ function isAbilityOperation(value: unknown): value is SessionAbilityOperation {
     case "character.ability.restore":
     case "character.ability.deactivate":
       return isAbilitySource(value.source) && hasValidOptionalName;
+    case "character.ability.effect.remove":
+      return typeof value.conditionId === "string" && value.conditionId.trim().length > 0 && value.conditionId.length <= 250;
     case "character.ability.save":
       return isRecord(value.ability) && typeof value.ability.id === "string" && typeof value.ability.name === "string";
     case "character.ability.remove":
