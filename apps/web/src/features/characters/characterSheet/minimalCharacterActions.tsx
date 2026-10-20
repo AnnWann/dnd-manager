@@ -868,26 +868,17 @@ export function MinimalCharacterActions({
               </div>
             ) : selected.ability && abilityRequiresActivation(selected.ability) ? (
               <div className="grid gap-2 border-t border-border pt-3">
-                {(selected.ability.activationOptions ?? []).some(option => optionRequiresWeaponSelection(selected.ability!, option.id)) ? (
-                  <label className="grid gap-1 text-xs text-textMuted">
-                    Arma a infundir
-                    <Select value={getCharacterConditions(character)
-                      .filter(condition => condition.sourceAbilityId === selected.ability?.id && condition.sourceAbilityOptionId?.endsWith(":abilities"))
-                      .flatMap(condition => condition.grantedAbilities ?? [])
-                      .flatMap(granted => granted.bonuses?.attackRiders ?? [])
-                      .find(rider => rider.weaponSelection === "onActivation" && rider.weaponId)?.weaponId || selectedWeaponId}
-                      disabled={isAbilityBenefitsActive(selected.ability)}
-                      onChange={event => setSelectedWeaponId(event.target.value)}>
-                      <option value="">Escolha uma arma equipada</option>
-                      {character.get("equipment").weapons.map(weapon => <option key={weapon.id} value={weapon.id}>{weapon.name}</option>)}
-                    </Select>
-                  </label>
-                ) : null}
-                {isAbilityBenefitsActive(selected.ability) && !selected.ability.allowOptionSwitching ? (
+                {isAbilityBenefitsActive(selected.ability)
+                  && !selected.ability.allowOptionSwitching
+                  && !selected.ability.allowMultipleWeaponActivations ? (
                   <div className="flex justify-end">
                     <Button variant="ghost" onClick={() => changeAbilityState(selected, "deactivate")}>Encerrar efeito</Button>
                   </div>
-                ) : abilityRequiresWeaponAttributeSelection(selected.ability) || (selected.ability.activationOptions ?? []).some(option => abilityRequiresWeaponAttributeSelection(selected.ability!, option.id)) || getAbilityAttackRiderDamageChoices(selected.ability).length > 0
+                ) : optionRequiresWeaponSelection(selected.ability)
+                    || (selected.ability.activationOptions ?? []).some(option => optionRequiresWeaponSelection(selected.ability!, option.id))
+                    || abilityRequiresWeaponAttributeSelection(selected.ability)
+                    || (selected.ability.activationOptions ?? []).some(option => abilityRequiresWeaponAttributeSelection(selected.ability!, option.id))
+                    || getAbilityAttackRiderDamageChoices(selected.ability).length > 0
                     || (selected.ability.activationOptions ?? []).some(option => getAbilityAttackRiderDamageChoices(selected.ability!, option.id).length > 0)
                     || hasAbilityResourceCosts(selected.ability)
                     || abilityHasSelfDamage(selected.ability)
