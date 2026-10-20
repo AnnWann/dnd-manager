@@ -916,6 +916,17 @@ function readCreationCharacterCustomSystemConfiguration(
       exceptions as CreationCharacterCustomSystemConfiguration["abilityAcquisitionExceptions"]
   }
 
+  if (state.formulaOverrides !== undefined) {
+    const formulas = asRecord(state.formulaOverrides)
+    if (!formulas || Object.keys(formulas).length > 200 || Object.entries(formulas).some(
+      ([key, value]) => !/^(?:field:[^:]+|resourceMaximum:[^:]+|abilityField:[^:]+:[^:]+)$/.test(key)
+        || key.length > 500 || typeof value !== "string" || value.length > 2048,
+    )) {
+      throw new ApiError(400, "CREATION_CHARACTER_SYSTEM_FORMULAS_INVALID", "As exceções de fórmulas são inválidas.")
+    }
+    configuration.formulaOverrides = formulas as Record<string, string>
+  }
+
   if (state.installationSource !== undefined) {
     if (
       state.installationSource !== "master" &&
@@ -1171,6 +1182,10 @@ function toCustomSystemConfiguration(
   ) {
     configuration.abilityAcquisitionExceptions =
       state.abilityAcquisitionExceptions as CreationCharacterCustomSystemConfiguration["abilityAcquisitionExceptions"]
+  }
+
+  if (state.formulaOverrides && typeof state.formulaOverrides === "object" && !Array.isArray(state.formulaOverrides)) {
+    configuration.formulaOverrides = state.formulaOverrides as Record<string, string>
   }
 
   if (

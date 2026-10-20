@@ -14,6 +14,7 @@ import {
   type CustomFormulaResult,
   type CustomFormulaVariable,
 } from './CustomFormulaEngine'
+import { getCustomSystemFormulaOverride, formulaOverrideKey } from './CustomSystemFormulaOverrides'
 import {
   getCharacterFormulaValues,
   listCharacterFormulaVariables,
@@ -214,7 +215,7 @@ export function evaluateCustomFormula(
     state,
     getCharacterFormulaValues(
       character,
-      collectReferencedCharacterPaths(formula, definition, ability?.type),
+      collectReferencedCharacterPaths(formula, definition, ability?.type, state),
     ),
     character,
     ability,
@@ -232,16 +233,17 @@ export function validateCustomFormula(
   formula: string,
   definition: CustomSystemDefinition,
   abilityType?: CustomAbilityTypeDefinition,
+  character?: CharacterTemplate,
 ): string | undefined {
   const transformed = transformFormulaContext(
     formula,
     definition,
     createMockState(definition),
     getCharacterFormulaValues(
-      undefined,
+      character,
       collectReferencedCharacterPaths(formula, definition, abilityType),
     ),
-    undefined,
+    character,
     abilityType ? { type: abilityType } : undefined,
     {
       level: abilityType?.activation?.level?.baseLevel ?? 1,
@@ -418,7 +420,7 @@ function transformFormulaContext(
         id: fieldId,
         name: path,
         type: 'formula',
-        formula: translate(field.formula) ?? '',
+        formula: translate(getCustomSystemFormulaOverride(state, formulaOverrideKey('abilityField', ability!.type.id, field.id)) ?? field.formula) ?? '',
         resultType: field.resultType,
         editPermission: 'automaticOnly',
       }
@@ -487,7 +489,7 @@ function transformFormulaContext(
       fields: [
         ...definition.fields.map((field) =>
           field.type === 'formula'
-            ? { ...field, formula: translate(field.formula) ?? '' }
+            ? { ...field, formula: translate(getCustomSystemFormulaOverride(state, formulaOverrideKey('field', field.id)) ?? field.formula) ?? '' }
             : field,
         ),
         ...characterVirtualFields,
@@ -498,7 +500,7 @@ function transformFormulaContext(
       ],
       resources: definition.resources.map((resource) => ({
         ...resource,
-        maximumFormula: translate(resource.maximumFormula),
+        maximumFormula: translate(getCustomSystemFormulaOverride(state, formulaOverrideKey('resourceMaximum', resource.id)) ?? resource.maximumFormula),
       })),
     },
     state: {
@@ -629,8 +631,10 @@ function collectReferencedCharacterPaths(
   formula: string,
   definition: CustomSystemDefinition,
   abilityType?: CustomAbilityTypeDefinition,
+  state?: CharacterCustomSystemState,
 ): string[] {
   const expressions = [
+    ...Object.values(state?.formulaOverrides ?? {}),
     formula,
     ...definition.fields.flatMap((field) =>
       field.type === 'formula' ? [field.formula] : [],

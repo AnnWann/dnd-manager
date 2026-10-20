@@ -1,5 +1,11 @@
+import { useEffect, useState } from 'react'
 import { X } from 'lucide-react'
 import { Select as SharedSelect } from '../../../components/ui/Select'
+import { FormulaVariablePicker } from '../../customSystems/FormulaVariablePicker'
+import type { CustomFormulaVariable } from '../../../lib/customSystems/CustomFormulaEngineWithCharacter'
+import { listCharacterFormulaVariables } from '../../../lib/customSystems/CharacterFormulaVariables'
+import { evaluateCustomFormula, listCustomFormulaVariables, validateCustomFormula } from '../../../lib/customSystems/CustomFormulaEngineWithCharacter'
+import { formulaOverrideKey, getCustomSystemFormulaOverride, setCustomSystemFormulaOverride } from '../../../lib/customSystems/CustomSystemFormulaOverrides'
 
 import type { CharacterTemplate } from '../../../models/characters/CharacterTemplate'
 import type { CustomAbilityTypeDefinition } from '../../../models/customSystems/CustomAbilityDefinition'
@@ -35,6 +41,34 @@ export function CustomSystemAcquisitionExceptionsModal({
   const configurableTypes = definition.abilityTypes.filter((type) =>
     usesLearned(type) || usesPrepared(type),
   )
+  const formulaTargets = [
+    ...definition.fields.filter((field) => field.type === 'formula').map((field) => ({
+      key: formulaOverrideKey('field', field.id),
+      label: field.name,
+      description: 'Campo calculado',
+      original: field.formula,
+      resultType: field.resultType,
+      abilityType: undefined as CustomAbilityTypeDefinition | undefined,
+    })),
+    ...definition.resources.filter((resource) => Boolean(resource.maximumFormula) && resource.maximumMode !== 'manual').map((resource) => ({
+      key: formulaOverrideKey('resourceMaximum', resource.id),
+      label: resource.name,
+      description: 'Máximo do recurso',
+      original: resource.maximumFormula ?? '',
+      resultType: 'number' as const,
+      abilityType: undefined as CustomAbilityTypeDefinition | undefined,
+    })),
+    ...definition.abilityTypes.flatMap((type) =>
+      type.fields.filter((field) => field.type === 'formula').map((field) => ({
+        key: formulaOverrideKey('abilityField', type.id, field.id),
+        label: `${type.name} — ${field.name}`,
+        description: 'Campo calculado de habilidade',
+        original: field.formula,
+        resultType: field.resultType,
+        abilityType: type as CustomAbilityTypeDefinition | undefined,
+      })),
+    ),
+  ]
 
   function updateException(
     typeId: string,
@@ -121,7 +155,7 @@ export function CustomSystemAcquisitionExceptionsModal({
               Exceções — {definition.name}
             </h2>
             <p className="mt-1 text-sm text-text">
-              Sobrescreva limites e marque habilidades que não consomem os limites normais deste personagem.
+              Personalize fórmulas de campos e recursos, limites e habilidades isentas para este personagem.
             </p>
           </div>
           <button
@@ -322,14 +356,136 @@ export function CustomSystemAcquisitionExceptionsModal({
               )
             })}
 
-            {!configurableTypes.length ? (
+            {!configurableTypes.length && !formulaTargets.length ? (
               <div className="rounded-xl border border-dashed border-border px-4 py-8 text-center text-sm text-text">
-                Este sistema não possui tipos de habilidade com aprendizagem ou preparo configuráveis.
+                Este sistema não possui fórmulas nem limites configuráveis.
               </div>
+            ) : null}
+
+            {formulaTargets.length ? (
+              <details className="rounded-xl border border-border bg-bg p-4" open={!configurableTypes.length}>
+                <summary className="cursor-pointer text-sm font-semibold text-textH">
+                  Campos e recursos — fórmulas personalizadas ({Object.keys(state.formulaOverrides ?? {}).length} alteradas)
+                </summary>
+                <p className="mt-2 text-xs text-textMuted">
+                  Altere apenas o cálculo deste personagem. Deixe vazio para utilizar a fórmula original do sistema.
+                  A alteração é aplicada após sair do campo, se a fórmula for válida.
+                </p>
+                <div className="mt-4 grid gap-3">
+                  {formulaTargets.map((entry) => (
+                    <FormulaOverrideEditor
+                      key={entry.key}
+                      label={entry.label}
+                      description={entry.description}
+                      original={entry.original}
+                      resultType={entry.resultType}
+                      state={state}
+                      value={getCustomSystemFormulaOverride(state, entry.key) ?? ''}
+                      definition={definition}
+                      abilityType={entry.abilityType}
+                      character={character}
+                      onChange={(formula) => onChange(setCustomSystemFormulaOverride(definition, state, entry.key, formula))}
+                    />
+                  ))}
+                </div>
+              </details>
             ) : null}
           </div>
         </div>
       </section>
+    </div>
+  )
+}
+
+function FormulaOverrideEditor({
+  label, description, original, resultType, state, value, definition, abilityType, character, onChange,
+}: {
+  label: string
+  description: string
+  original: string
+  resultType: 'number' | 'text' | 'boolean' | 'dice'
+  state: CharacterCustomSystemState
+  value: string
+  definition: CustomSystemDefinition
+  abilityType?: CustomAbilityTypeDefinition
+  character: CharacterTemplate
+  onChange: (formula: string) => void
+}) {
+  const [draft, setDraft] = useState(value)
+  const [error, setError] = useState('')
+  useEffect(() => {
+    setDraft(value)
+    setError('')
+  }, [value])
+  const variables: CustomFormulaVariable[] = Array.from(
+    new Map(
+      [...listCustomFormulaVariables(definition, abilityType), ...listCharacterFormulaVariables(character)]
+        .map((variable) => [variable.path, variable] as const),
+    ).values(),
+  )
+
+  function save() {
+    if (!draft.trim()) {
+      setError('')
+      onChange('')
+      return
+    }
+    const issue = validateCustomFormula(draft, definition, abilityType, character)
+    if (issue) {
+      setError(issue)
+      return
+    }
+    const preview = evaluateCustomFormula(draft, definition, state, character,
+      abilityType ? { type: abilityType } : undefined)
+    if (!preview.ok) {
+      setError(preview.error)
+      return
+    }
+    const expected = resultType === 'dice' ? 'string' : resultType
+    if (typeof preview.value !== expected) {
+      setError(`Esta fórmula precisa retornar um valor do tipo ${resultType}.`)
+      return
+    }
+    setError('')
+    onChange(draft.trim())
+  }
+
+  return (
+    <div className="rounded-lg border border-border bg-bg-subtle p-3">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div className="min-w-0">
+          <div className="text-sm font-medium text-textH">{label}</div>
+          <div className="text-xs text-textMuted">{description}</div>
+        </div>
+        {value ? (
+          <button type="button" className="rounded-lg border border-border px-2 py-1 text-xs text-text hover:bg-accentBg"
+            onClick={() => { setDraft(''); setError(''); onChange('') }}>
+            Restaurar padrão
+          </button>
+        ) : null}
+      </div>
+      <label className="mt-2 block text-xs text-text">
+        Fórmula para este personagem
+        <input
+          type="text"
+          value={draft}
+          placeholder={original}
+          onChange={(event) => { setDraft(event.target.value); setError('') }}
+          onBlur={save}
+          onKeyDown={(event) => { if (event.key === 'Enter') event.currentTarget.blur() }}
+          aria-invalid={Boolean(error)}
+          className="mt-1 w-full rounded-lg border border-border bg-bg px-3 py-2 text-sm text-textH outline-none"
+        />
+      </label>
+      {error ? <p role="alert" className="mt-1 text-xs text-danger">{error}</p> : null}
+      <div className="mt-2 flex flex-wrap items-center justify-between gap-2">
+        <span className="min-w-0 break-all text-[11px] text-textMuted">Padrão: {original}</span>
+        <FormulaVariablePicker
+          variables={variables}
+          buttonLabel="Inserir variável"
+          onSelect={(path) => { setDraft((current) => current ? `${current} ${path}` : path); setError('') }}
+        />
+      </div>
     </div>
   )
 }

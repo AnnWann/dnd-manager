@@ -74,6 +74,14 @@ export function listCharacterFormulaVariables(character?: CharacterTemplate): Cu
     },
   ])
 
+  const customClasses = (character?.get('sheet').classes ?? [])
+    .filter(({ className }) => !CLASSES.some((entry) => entry.id === className))
+    .filter(({ className }) => /^[A-Za-z0-9_-]+$/.test(className))
+    .flatMap(({ className }) => [
+      variable(`character.class.${className}.level`, `${className} — nível`),
+      { path: `character.class.${className}.present`, label: `${className} — possui a classe`, valueType: 'boolean' as const },
+    ])
+
   const skills = SKILLS.map(({ id, label }) =>
     variable(`character.skill.${id}`, `${label} — bônus`),
   )
@@ -123,6 +131,7 @@ export function listCharacterFormulaVariables(character?: CharacterTemplate): Cu
     },
     ...attributes,
     ...classes,
+    ...customClasses,
     ...skills,
     ...customSystemVariables,
   ]
@@ -227,16 +236,13 @@ export function getCharacterFormulaValues(
       continue
     }
 
-    const classDefinition = CLASSES.find(({ id }) =>
-      path === `character.class.${id}.level` ||
-      path === `character.class.${id}.present`
-    )
-    if (classDefinition) {
-      const level = Math.max(
+    const classMatch = path.match(/^character\.class\.([A-Za-z0-9_-]+)\.(level|present)$/)
+    if (classMatch) {
+      const level = (sheet.classes ?? []).reduce(
+        (sum, entry) => sum + (entry.className === classMatch[1] ? Math.max(0, Number(entry.level) || 0) : 0),
         0,
-        Number(character.getClassLevel(classDefinition.id)) || 0,
       )
-      values[path] = path.endsWith('.present') ? level > 0 : level
+      values[path] = classMatch[2] === 'present' ? level > 0 : level
       continue
     }
 
