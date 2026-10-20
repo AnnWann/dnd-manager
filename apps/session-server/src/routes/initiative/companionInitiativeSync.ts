@@ -47,7 +47,12 @@ export function synchronizeCompanionInitiative(
               max: max ?? 0,
               current: existing.spellSlots[level] ?? max ?? 0,
             }])) as NonNullable<InitiativeEntry["creatureSpellResources"]>["slots"],
-          perDay: entry.creatureSpellResources?.perDay ?? {},
+          perDay: Object.fromEntries((creature.spellcasting?.spells ?? [])
+            .filter(spell => spell.usage.type === "perDay")
+            .map(spell => [spell.spellIndex, {
+              used: existing.spellPerDay?.[spell.spellIndex] ?? 0,
+              max: spell.usage.type === "perDay" ? spell.usage.uses : 0,
+            }])),
         },
       }
     }
@@ -59,6 +64,8 @@ export function synchronizeCompanionInitiative(
     if (!updated) return entry
     const featureUses = Object.fromEntries(Object.entries(entry.creatureFeatureResources ?? {})
       .map(([id, resource]) => [id, resource.used]))
+    const spellPerDay = Object.fromEntries(Object.entries(entry.creatureSpellResources?.perDay ?? {})
+      .map(([index, resource]) => [index, resource?.used ?? 0]))
     const spellSlots = Object.fromEntries(Object.entries(entry.creatureSpellResources?.slots ?? {})
       .map(([level, resource]) => [level, resource?.current ?? 0]))
     nextStates[creature.id] = {
@@ -68,6 +75,7 @@ export function synchronizeCompanionInitiative(
       temporaryHp: Math.max(0, entry.temporaryHp ?? existing.temporaryHp),
       featureUses: { ...existing.featureUses, ...featureUses },
       spellSlots: { ...existing.spellSlots, ...spellSlots },
+      spellPerDay: { ...existing.spellPerDay, ...spellPerDay },
       revision: existing.revision + 1,
     }
     changed.add(creature.id)
