@@ -508,8 +508,12 @@ export class SessionActor extends DurableObject<Env> {
       }
 
       const announcing = request.source.intent === "announce";
-      if (!announcing && !entry) {
-        this.sendError(webSocket, "CREATURE_ENTRY_REQUIRED", "Creature spell resources can only be spent from an initiative combatant.");
+      // A master may preview spell dice straight from the creature catalog,
+      // even before adding it to initiative. These previews deliberately do
+      // not spend any spell slots or daily uses; only combatants and owned
+      // companions have a persistent resource pool to spend.
+      if (!announcing && !entry && connection.role !== "MASTER") {
+        this.sendError(webSocket, "CREATURE_ENTRY_REQUIRED", "Creature spell resources require an initiative combatant or a controlled companion.");
         return;
       }
 
