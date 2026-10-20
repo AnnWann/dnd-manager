@@ -20,7 +20,7 @@ export function setCustomSystemFormulaOverride(
   if (state.systemId !== definition.id) throw new Error('O sistema não corresponde ao personagem.')
   const allowed = new Set([
     ...definition.fields.filter((field) => field.type === 'formula').map((field) => formulaOverrideKey('field', field.id)),
-    ...definition.resources.filter((resource) => Boolean(resource.maximumFormula)).map((resource) => formulaOverrideKey('resourceMaximum', resource.id)),
+    ...definition.resources.filter((resource) => Boolean(resource.maximumFormula) && resource.maximumMode !== 'manual').map((resource) => formulaOverrideKey('resourceMaximum', resource.id)),
     ...definition.abilityTypes.flatMap((type) => type.fields.filter((field) => field.type === 'formula').map((field) => formulaOverrideKey('abilityField', type.id, field.id))),
   ])
   if (!allowed.has(key)) throw new Error('Esta fórmula não permite uma exceção.')
