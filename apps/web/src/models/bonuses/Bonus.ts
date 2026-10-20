@@ -1,4 +1,4 @@
-import type { DamageAffinity } from "../combat/Damage"
+import type { DamageAffinity, DamageType } from "../combat/Damage"
 import type { AttackRider } from "../combat/AttackRider"
 import type { Attribute } from "../sheet/Attribute"
 import type { Skill } from "../sheet/Skills"
@@ -38,6 +38,17 @@ export type Bonus = {
   label?: string
 }
 
+/** An instant HP change to the ability user, applied once per activation. */
+export type OnUseHpEffect = {
+  kind: "damage" | "heal"
+  bonus: Bonus
+  damageType?: DamageType
+  /** When true, bypass resistance, immunity and vulnerability. */
+  ignoreResistance?: boolean
+  /** Damage paid directly from current HP, without using temporary HP. */
+  bypassTemporaryHp?: boolean
+}
+
 export type AttributeScopedBonus = {
   /** Ausente significa todos os atributos válidos para o escopo. */
   attribute?: Attribute
@@ -53,6 +64,8 @@ export type SkillScopedBonus = {
 }
 
 export type BonusCollection = {
+  /** Instant healing or damage applied only when the ability is activated. */
+  onUseHp?: OnUseHpEffect[]
   /** Typed on-hit dice and temporary attack/weapon transformations. */
   attackRiders?: AttackRider[]
   armorClass?: Bonus[]
