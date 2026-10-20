@@ -1,6 +1,7 @@
 import { useEffect, useRef, type ReactNode } from "react"
 import { LockKeyhole, PauseCircle } from "lucide-react"
 
+import { shouldBlockPlayerSessionUI } from "../../shared/session-runtime/sessionPause"
 import { useOptionalSessionRuntime } from "../session-runtime/useSessionRuntime"
 
 /**
@@ -10,7 +11,7 @@ import { useOptionalSessionRuntime } from "../session-runtime/useSessionRuntime"
  */
 export function SessionPauseGate({ children }: { children: ReactNode }) {
   const runtime = useOptionalSessionRuntime()
-  const pausedForPlayer = runtime?.role === "PLAYER" && runtime.pauseState?.paused === true
+  const pausedForPlayer = shouldBlockPlayerSessionUI(runtime?.role, runtime?.pauseState)
   const dialogRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
