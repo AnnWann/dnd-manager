@@ -314,7 +314,17 @@ export class SessionActor extends BaseSessionActor {
 
     const currentJson = current.toJSON();
     const nextJson = next.toJSON();
-    if (JSON.stringify(currentJson) === JSON.stringify(nextJson)) {
+    const selectedBefore = operation.type === "character.ability.use"
+      ? abilityBeforeUse?.activationOptions?.find(option => option.id === operation.activationOptionId) : undefined;
+    const hasRecipientEffects = operation.type === "character.ability.use"
+      && targetRefs.length > 0 && Boolean(abilityBeforeUse)
+      && (abilityBeforeUse!.targeting?.mode === "targets" || abilityBeforeUse!.targeting?.mode === "point")
+      && Boolean(
+        abilityBeforeUse!.bonuses?.onUseHp?.length || selectedBefore?.bonuses?.onUseHp?.length
+        || abilityBeforeUse!.bonuses?.temporaryHp?.length || selectedBefore?.bonuses?.temporaryHp?.length
+        || abilityTargetGrants(abilityBeforeUse!, selectedBefore).length
+      );
+    if (JSON.stringify(currentJson) === JSON.stringify(nextJson) && !hasRecipientEffects) {
       this.sendAbilityError(webSocket, "ABILITY_OPERATION_REJECTED", "The ability could not be changed in its current state.");
       return;
     }
