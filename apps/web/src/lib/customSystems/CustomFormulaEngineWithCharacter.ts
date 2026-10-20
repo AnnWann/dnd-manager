@@ -419,7 +419,7 @@ function transformFormulaContext(
         id: fieldId,
         name: path,
         type: 'formula',
-        formula: translate(getCustomSystemFormulaOverride(state, formulaOverrideKey('abilityField', ability.type.id, field.id)) ?? field.formula) ?? '',
+        formula: translate(getCustomSystemFormulaOverride(state, formulaOverrideKey('abilityField', ability!.type.id, field.id)) ?? field.formula) ?? '',
         resultType: field.resultType,
         editPermission: 'automaticOnly',
       }
