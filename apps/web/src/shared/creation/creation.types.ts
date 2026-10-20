@@ -67,6 +67,8 @@ export type CreationCharacterCustomSystemConfiguration = {
     string,
     CustomAbilityAcquisitionExceptionState
   >
+  /** Fórmulas substituídas pelo mestre apenas para este personagem. */
+  formulaOverrides?: Record<string, string>
   installationSource?: "master" | "automatic"
 }
 
