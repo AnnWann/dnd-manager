@@ -129,7 +129,7 @@ export function AbilityDialog({
 
   useEffect(() => {
     if (!open) return
-    setDraft(withFixedCategory(ability ?? createEmptyAbility(), fixedCategory))
+    setDraft(withFixedCategory(normalizeAbilityActivation(ability ?? createEmptyAbility()), fixedCategory))
     setTab("basic")
   }, [open, ability, fixedCategory])
 
@@ -164,9 +164,9 @@ export function AbilityDialog({
     (draft.grantedSpells?.length ?? 0) + (draft.grantedProficiencies?.length ?? 0)
   const hasAdvancedEffects =
     Boolean(draft.conditionOnUse) ||
-    Boolean(draft.selfDamageOnUse) ||
+    Boolean(draft.bonuses?.onUseHp?.length) ||
     Boolean(draft.allowMultipleWeaponActivations) ||
-    Boolean(draft.activationOptions?.some(option => option.selfDamageOnUse)) ||
+    Boolean(draft.activationOptions?.some(option => option.bonuses?.onUseHp?.length)) ||
     (draft.activationOptions?.length ?? 0) > 0 ||
     Object.values(draft.bonuses ?? {}).some((value) => Array.isArray(value) && value.length > 0)
   const hasConfiguredResource =
