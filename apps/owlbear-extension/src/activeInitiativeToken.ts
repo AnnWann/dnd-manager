@@ -142,15 +142,16 @@ export function useActiveInitiativeTokenMarker({
       if (markerIds.length && signature === nextSignature) return
       await clear()
       if (disposed) return
-      // World-space shape (not attached to another item): using attachedTo
-      // together with world coordinates double-translates the marker off-screen.
-      // The scene-items subscription keeps these non-interactive shapes aligned.
+      // Shape positions are their CENTER in Owlbear, whereas bounds.min is
+      // the upper-left. Do not subtract half the width from bounds.center:
+      // that shifted the indicator diagonally off the token.
+      // Reconcile on item changes to keep these local markers aligned.
       const outline = buildShape()
         .name("Turno atual · D&D Manager")
         .shapeType("CIRCLE")
         .width(size)
         .height(size)
-        .position({ x: bounds.center.x - size / 2, y: bounds.center.y - size / 2 })
+        .position({ x: bounds.center.x, y: bounds.center.y })
         .layer("ATTACHMENT")
         .disableHit(true)
         .locked(true)
@@ -167,7 +168,7 @@ export function useActiveInitiativeTokenMarker({
         .width(arrowSize)
         .height(arrowSize)
         .rotation(180)
-        .position({ x: bounds.center.x - arrowSize / 2, y: bounds.center.y - size / 2 - arrowSize + 3 })
+        .position({ x: bounds.center.x, y: bounds.min.y - margin - arrowSize / 2 - 3 })
         .layer("ATTACHMENT")
         .disableHit(true)
         .locked(true)
