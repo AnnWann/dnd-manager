@@ -10,7 +10,7 @@ async function loadProductionModule(relative) {
   const built = await build({ entryPoints: [entry], bundle: true, platform: "node", format: "esm", target: "node24", write: false })
   return import("data:text/javascript;base64," + Buffer.from(built.outputFiles[0].contents).toString("base64"))
 }
-const [{ applyHpToReferences, validateAbilityTargets }, { abilityTargetGrants, createTargetCondition, applyConditionToReferences }] = await Promise.all([
+const [{ areSelectedTargetsDistinct, applyHpToReferences, validateAbilityTargets }, { abilityTargetGrants, createTargetCondition, applyConditionToReferences }] = await Promise.all([
   loadProductionModule("../../../apps/session-server/src/routes/characters/abilities/abilityTargeting.ts"),
   loadProductionModule("../../../apps/session-server/src/routes/characters/abilities/abilityTargetConditions.ts"),
 ])
@@ -168,4 +168,14 @@ test("companion daily spells and conditions are persisted even when no HP or slo
     { config: { creatureCompendium: [creature] } }, result.companions)
   assert.equal(removed.session.entries[0].creatureSpellResources.perDay.healing.used, 1)
   assert.deepEqual(removed.session.entries[0].conditions, [existingCondition])
+})
+
+test("selected targets cannot apply one effect twice through character and initiative aliases", () => {
+  const combat = { initialized: true, session: { entries: [
+    { id: "slot-a", sourceType: "character", sourceId: "a", name: "A", initiative: 10 },
+    { id: "turn-owl", sourceType: "monster", sourceId: "compendium:owl", name: "Coruja" },
+  ] } }
+  assert.equal(areSelectedTargetsDistinct(["character:a", "initiative:slot-a"], combat, []), false)
+  assert.equal(areSelectedTargetsDistinct(["companion:owl", "initiative:turn-owl"], combat, [{ id: "owl", ownerUserId: "p" }]), false)
+  assert.equal(areSelectedTargetsDistinct(["character:a", "companion:owl"], combat, [{ id: "owl", ownerUserId: "p" }]), true)
 })
