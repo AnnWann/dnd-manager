@@ -2,7 +2,7 @@ import type { SessionHpOperation as SharedSessionHpOperation, SessionRestOperati
 import type { SessionDieSides as SharedSessionDieSides, SessionHitDicePool as SharedSessionHitDicePool, SessionHitDiceState as SharedSessionHitDiceState, SessionAttribute as SharedSessionAttribute, SessionAttributesState as SharedSessionAttributesState, SessionSavingThrowsState as SharedSessionSavingThrowsState, SessionSkill as SharedSessionSkill, SessionSkillProficiency as SharedSessionSkillProficiency, SessionSkillsState as SharedSessionSkillsState, SessionStatsState as SharedSessionStatsState, SessionConditionDuration as SharedSessionConditionDuration, SessionCondition as SharedSessionCondition, SessionConditionsState as SharedSessionConditionsState, SessionConditionSeed as SharedSessionConditionSeed, SessionHpState as SharedSessionHpState, SessionHpSeed as SharedSessionHpSeed, SessionHitDiceOperation as SharedSessionHitDiceOperation, SessionCalculatedStatOperation as SharedSessionCalculatedStatOperation, SessionSimpleStatOperation as SharedSessionSimpleStatOperation, SessionStatOperation as SharedSessionStatOperation, SessionAttributeOperation as SharedSessionAttributeOperation, SessionSavingThrowOperation as SharedSessionSavingThrowOperation, SessionSkillOperation as SharedSessionSkillOperation, SessionConditionOperation as SharedSessionConditionOperation, SessionConcentrationOperation as SharedSessionConcentrationOperation, SessionLoggedOperation as SharedSessionLoggedOperation } from "../../../../../packages/session-protocol/src/sessionCore"
 import { routeForSheetOperation, type CharacterSheetRoute } from "../characters/sheet";
 import type { SessionActionRollRequest, SessionActionRollResult, SessionCreatureRollRequest, SessionDiceRollRequest, SessionDiceRollResult } from "../../../../web/src/shared/session-runtime/diceRollProtocol";
-import type { CompanionOperation } from "../../../../web/src/shared/session-runtime/companionRuntime";
+import type { CompanionOperation, CompanionServerMessage } from "../../../../web/src/shared/session-runtime/companionRuntime";
 import { parseManualDiceExpression } from "../../../../web/src/shared/session-runtime/manualDiceExpression";
 
 export type SessionRole = "MASTER" | "PLAYER";
@@ -154,6 +154,7 @@ export type ServerSessionMessage =
   | { type: "session.hp.log"; records: SessionHpLogRecord[] }
   | { type: "session.dice.result"; result: SessionDiceRollResult }
   | { type: "session.action.result"; result: SessionActionRollResult }
+  | CompanionServerMessage
   | { type: "session.customSystem.notice"; characterId: string; title: string; message: string }
   | { type: "session.error"; code: string; message: string };
 
