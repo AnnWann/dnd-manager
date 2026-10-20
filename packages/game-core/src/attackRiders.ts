@@ -28,6 +28,8 @@ export type AttackRider = {
   selectedWeaponAttribute?: Attribute
   /** Optional spellcasting class; otherwise uses the character's best casting attribute. */
   weaponSpellcastingClass?: string
+  /** Infused weapon attacks count as magical, including the base damage. */
+  treatWeaponAsMagical?: boolean
   /** Temporary weapon properties, without mutating the saved inventory item. */
   addThrown?: boolean
   thrownNormalRange?: number
@@ -60,11 +62,13 @@ export function getWeaponRiderTransformation(riders: readonly AttackRider[]) {
       ? rider.damage?.damageType
       : rider.replaceWeaponDamageType)
     .find((type): type is DamageType => Boolean(type))
+  const magical = riders.some(rider => rider.treatWeaponAsMagical)
   const thrown = riders.some(rider => rider.addThrown)
   const returnAfterThrow = riders.some(rider => rider.returnsAfterThrow)
   const throwing = riders.find(rider => rider.addThrown && rider.thrownNormalRange && rider.thrownLongRange)
   return {
     damageType: replacement,
+    magical,
     thrown,
     thrownNormalRange: throwing?.thrownNormalRange,
     thrownLongRange: throwing?.thrownLongRange,
