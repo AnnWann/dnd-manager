@@ -48,6 +48,7 @@ import type { Skill } from "../../../../web/src/models/sheet/Skills";
 import {
   initiativeEntryDisplayName,
   createInitiativeEntry,
+  createInitiativeSession,
   normalizeInitiativeSession,
   synchronizeSharedCombatantState,
   updateInitiativeEntry,
@@ -290,6 +291,27 @@ export class SessionActor extends DurableObject<Env> {
       if (!connection || (connection.role !== "MASTER" && connection.userId !== ownerUserId)) continue;
       this.send(socket, { type: "session.companions.updated", companion });
     }
+  }
+
+  private async persistCompanionResources(creature: CompendiumCreature, entry: InitiativeEntry): Promise<void> {
+    if (!creature.ownerUserId) return;
+    const stored = (await this.ctx.storage.get<Record<string, CompanionState>>(COMPANIONS_STATE_KEY)) ?? {};
+    const previous = stored[creature.id] ?? defaultCompanionState(creature);
+    const featureUses = Object.fromEntries(Object.entries(entry.creatureFeatureResources ?? {})
+      .map(([id, resource]) => [id, resource.used]));
+    const spellSlots = Object.fromEntries(Object.entries(entry.creatureSpellResources?.slots ?? {})
+      .map(([level, resource]) => [level, resource?.current ?? 0]));
+    const spellPerDay = Object.fromEntries(Object.entries(entry.creatureSpellResources?.perDay ?? {})
+      .map(([index, resource]) => [index, resource?.used ?? 0]));
+    const next: CompanionState = {
+      ...previous, featureUses: { ...previous.featureUses, ...featureUses },
+      spellSlots: { ...previous.spellSlots, ...spellSlots },
+      spellPerDay: { ...previous.spellPerDay, ...spellPerDay },
+      revision: previous.revision + 1,
+    };
+    stored[creature.id] = next;
+    await this.ctx.storage.put(COMPANIONS_STATE_KEY, stored);
+    this.broadcastCompanionState(next, creature.ownerUserId);
   }
 
   private async handleCompanionOperation(
@@ -556,7 +578,16 @@ export class SessionActor extends DurableObject<Env> {
             type: "session.initiative.updated",
             state: nextState,
           });
+          const updatedEntry = nextInitiative.entries.find(candidate => candidate.id === entry.id);
+          if (updatedEntry) await this.persistCompanionResources(creature, updatedEntry);
         }
+      } else if (!announcing && entry && creature.ownerUserId) {
+        const virtual = { ...createInitiativeSession(), entries: [entry] };
+        const updated = consumeCreatureSpellResource(
+          virtual, entry.id, creature, configuredSpell, castLevel,
+          spell.displayName || spell.name, spell.concentration, spell.index,
+        ).entries[0];
+        if (updated) await this.persistCompanionResources(creature, updated);
       }
 
       this.broadcast({
