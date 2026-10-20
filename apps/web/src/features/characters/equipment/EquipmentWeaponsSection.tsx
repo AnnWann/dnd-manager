@@ -4,8 +4,7 @@ import { Crosshair, Hand, Scale, Sparkles, Swords } from "lucide-react"
 import { Button } from "../../../components/ui/Button"
 import { Select } from "../../../components/ui/Select"
 import { useOptionalSessionRuntime } from "../../session-runtime/useSessionRuntime"
-import { getActiveAttackRiders, getCharacterWeaponAttackAttribute, getWeaponRiderTransformation } from "../../../models/combat/AttackRider"
-import { damageTypeLabel } from "../../../models/combat/Damage"
+import { getCharacterWeaponAttackAttribute } from "../../../models/combat/AttackRider"
 import { attributeShort } from "../../../lib/attributeShorts"
 import { formatBonusName, formatBonusValue, formatSkillName } from "../../../lib/formatBonus"
 import { formatSigned } from "../../../lib/formatSigned"
@@ -22,6 +21,7 @@ import {
 } from "../../../models/items/equipment/Weapon"
 import { useCharacterWorkspace } from "../workspace/CharacterWorkspaceContext"
 import { EquipmentFeaturesList } from "./equipmentFeaturesList"
+import { WeaponAppliedEffects } from "./WeaponAppliedEffects"
 import {
   HandItemActionsDialog,
   type HandItemActionsDialogState,
@@ -196,8 +196,6 @@ export function EquipmentWeaponsSection({
               const attackBonus = weaponAttackBonus(character, weapon)
               const damageBonus = weaponDamageBonus(character, weapon)
               const damageText = formatDie(getWeaponDamageDie(weapon))
-              const activeRiders = getActiveAttackRiders(character, { scope: "weapon", weaponId: weapon.id, targetEntryId: targetEntryId || undefined })
-              const transformation = getWeaponRiderTransformation(activeRiders)
               const handUsage = getWeaponHandsUsed(weapon)
               const versatile = isVersatileWeapon(weapon)
               const improvised = isWeaponImprovisedGrip(weapon)
@@ -348,13 +346,13 @@ export function EquipmentWeaponsSection({
                       </div>
                     ) : null}
 
-                    {activeRiders.length ? <div className="mb-3 text-xs text-textMuted">
-                      <span className="font-semibold text-textH">Efeitos ativos: </span>
-                      {activeRiders.map(rider => rider.label).join(", ")}
-                      {transformation.damageType ? ` · Dano: ${damageTypeLabel(transformation.damageType)}` : ""}
-                      {transformation.thrown ? ` · Arremesso ${transformation.thrownNormalRange ?? 20}/${transformation.thrownLongRange ?? 60} pés` : ""}
-                      {transformation.returnsAfterThrow ? " · Retorna após o arremesso" : ""}
-                    </div> : null}
+                    <WeaponAppliedEffects
+                      character={character}
+                      weapon={weapon}
+                      targetEntryId={targetEntryId || undefined}
+                      canEditEquipment={canChangeLoadout}
+                      updateCharacter={updateCharacter}
+                    />
                     <WeaponBonusList weapon={weapon} />
 
                     <EquipmentFeaturesList
