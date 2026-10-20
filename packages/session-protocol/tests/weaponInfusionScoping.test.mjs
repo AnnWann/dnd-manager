@@ -6,6 +6,11 @@ import { build } from "esbuild"
 async function production(relative) {
   const built = await build({
     entryPoints: [fileURLToPath(new URL(relative, import.meta.url))],
+    alias: {
+      "@dnd-manager/game-core/long-rest-settings": fileURLToPath(new URL("../../../packages/game-core/src/longRestSupplySettings.ts", import.meta.url)),
+      "@dnd-manager/game-core/campaign-progression": fileURLToPath(new URL("../../../packages/game-core/src/campaignProgression.ts", import.meta.url)),
+      "@dnd-manager/game-core/manual-dice": fileURLToPath(new URL("../../../packages/game-core/src/manualDiceExpression.ts", import.meta.url)),
+    },
     bundle: true, platform: "node", format: "esm", target: "node24", write: false,
   })
   return import("data:text/javascript;base64," + Buffer.from(built.outputFiles[0].contents).toString("base64"))
