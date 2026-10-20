@@ -209,7 +209,11 @@ export class SessionActor extends BaseSessionActor {
       && !digitalDiceEnabled
     ) {
       const ability = findAbilityForSource(current, operation.source);
-      const requirements = listBonusRollRequirements(ability?.bonuses);
+      const requirements = [
+        ...listBonusRollRequirements(ability?.bonuses),
+        ...listBonusRollRequirements(ability?.activationOptions?.find(entry => entry.id === operation.activationOptionId)?.bonuses)
+          .map(entry => ({ ...entry, key: `option:${operation.activationOptionId}:${entry.key}` })),
+      ];
       const missing = requirements.filter((requirement) => {
         const value = operation.bonusRollValues?.[requirement.key];
         return typeof value !== "number" || !Number.isFinite(value);
@@ -232,6 +236,17 @@ export class SessionActor extends BaseSessionActor {
       const ability = findAbilityForSource(current, operation.source)!;
       const requirements = getAbilitySelfDamageRollRequirements(ability, operation.activationOptionId);
       const values = { ...(operation.bonusRollValues ?? {}) };
+      if (digitalDiceEnabled) {
+        const bonusRequirements = [
+          ...listBonusRollRequirements(ability.bonuses),
+          ...listBonusRollRequirements(ability.activationOptions?.find(entry => entry.id === operation.activationOptionId)?.bonuses)
+            .map(entry => ({ ...entry, key: `option:${operation.activationOptionId}:${entry.key}` })),
+        ];
+        // The client may provide manual rolls, but never override digital automatic dice.
+        for (const requirement of bonusRequirements) {
+          if (requirement.mode === "automatic") delete values[requirement.key];
+        }
+      }
       for (const requirement of requirements) {
         if (digitalDiceEnabled) {
           const match = /^(\\d{1,2})d(4|6|8|10|12|20)$/i.exec(requirement.dice.trim())!;
@@ -286,7 +301,15 @@ export class SessionActor extends BaseSessionActor {
     let loggedOperation = operationForApply;
     if (operation.type === "character.ability.use") {
       const resolvedAbility = findAbilityForSource(next, operation.source);
-      const bonusRollResults = listResolvedBonusRolls(resolvedAbility?.bonuses);
+      const selectedOption = resolvedAbility?.activationOptions?.find(entry => entry.id === operation.activationOptionId);
+      const bonusRollResults = [
+        ...listResolvedBonusRolls(resolvedAbility?.bonuses),
+        ...listResolvedBonusRolls(selectedOption?.bonuses).map(result => ({
+          ...result,
+          key: `option:${selectedOption!.id}:${result.key}`,
+          label: `${selectedOption!.name} — ${result.label}`,
+        })),
+      ];
       if (bonusRollResults.length > 0 || selfDamageResults.length > 0) {
         loggedOperation = { ...operation, bonusRollValues: operationForApply.type === "character.ability.use" ? operationForApply.bonusRollValues : operation.bonusRollValues, bonusRollResults: [...bonusRollResults, ...selfDamageResults] };
       }
