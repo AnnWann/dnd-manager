@@ -78,6 +78,10 @@ export function listBonusRollRequirements(
     )
   })
 
+  ;(bonuses.onUseHp ?? []).forEach((entry, index) => {
+    pushRequirement(result, `onUseHp:${index}`, entry.kind === "heal" ? "Cura ao usar" : "Dano ao usar", entry.bonus)
+  })
+
   if (bonuses.attack?.bonus) {
     pushRequirement(result, "legacy:attack", "attack", bonuses.attack.bonus)
   }
@@ -187,6 +191,12 @@ export function resolveBonusCollectionRolls(
       ),
     }))
   }
+  if (bonuses.onUseHp) {
+    next.onUseHp = bonuses.onUseHp.map((entry, index) => ({
+      ...entry,
+      bonus: resolve(`onUseHp:${index}`, entry.kind === "heal" ? "Cura ao usar" : "Dano ao usar", entry.bonus),
+    }))
+  }
   if (bonuses.attack?.bonus) {
     next.attack = {
       ...bonuses.attack,
@@ -218,6 +228,7 @@ export function listResolvedBonusRolls(
   ;(bonuses.skillCheckBonus ?? []).forEach((entry) => collect(entry.bonus))
   ;(bonuses.attribute ?? []).forEach((entry) => collect(entry.bonus))
   ;(bonuses.attributeModifier ?? []).forEach((entry) => collect(entry.bonus))
+  ;(bonuses.onUseHp ?? []).forEach((entry) => collect(entry.bonus))
   if (bonuses.attack?.bonus) collect(bonuses.attack.bonus)
   if (bonuses.damage?.bonus) collect(bonuses.damage.bonus)
 
