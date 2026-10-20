@@ -288,7 +288,7 @@ export class SessionActor extends BaseSessionActor {
       const resolvedAbility = findAbilityForSource(next, operation.source);
       const bonusRollResults = listResolvedBonusRolls(resolvedAbility?.bonuses);
       if (bonusRollResults.length > 0 || selfDamageResults.length > 0) {
-        loggedOperation = { ...operationForApply, bonusRollResults: [...bonusRollResults, ...selfDamageResults] };
+        loggedOperation = { ...operation, bonusRollValues: operationForApply.type === "character.ability.use" ? operationForApply.bonusRollValues : operation.bonusRollValues, bonusRollResults: [...bonusRollResults, ...selfDamageResults] };
       }
     }
 
