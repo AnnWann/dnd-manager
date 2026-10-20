@@ -40,6 +40,7 @@ import { SyncProvider } from "../contexts/syncContext"
 import { MasterConcentrationAlerts } from "../features/characters/characterSheet/masterConcentrationAlerts"
 import { SessionActionLog } from "../features/session/SessionActionLog"
 import { SessionPresenceIndicator } from "../features/session/SessionPresenceIndicator"
+import { SessionPauseGate } from "../features/session/SessionPauseGate"
 import { RelationalMigrationBridge } from "../features/sync/RelationalMigrationBridge"
 import {
   clearActiveSession,
@@ -579,6 +580,7 @@ export function CampaignLayout() {
                   spells={appState.spells ?? []}
                   setAppState={setAppState}
                 >
+                  <SessionPauseGate>
                   <div className="fixed inset-0 flex w-full max-w-full flex-col overflow-hidden bg-[color:var(--surface-app)] text-text">
                     <AppHeader
                       rightContent={
@@ -606,6 +608,7 @@ export function CampaignLayout() {
                       ) : null}
                     </div>
                   </div>
+                  </SessionPauseGate>
                 </MagicProvider>
               </CharacterProvider>
             </CreatureCompendiumProvider>
