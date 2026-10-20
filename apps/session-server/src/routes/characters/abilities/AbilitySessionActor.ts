@@ -352,7 +352,8 @@ export class SessionActor extends BaseSessionActor {
       const afterOption = afterAbility?.activationOptions?.find(entry => entry.id === operation.activationOptionId);
       const effects = [...(afterAbility?.bonuses?.onUseHp ?? []), ...(afterOption?.bonuses?.onUseHp ?? [])];
       const grants = afterAbility ? abilityTargetGrants(afterAbility, afterOption) : [];
-      if ((effects.length || grants.length) && targetRefs.length) {
+      const temporaryBonuses = [...(afterAbility?.bonuses?.temporaryHp ?? []), ...(afterOption?.bonuses?.temporaryHp ?? [])];
+      if ((effects.length || grants.length || temporaryBonuses.length) && targetRefs.length) {
         const storedCompanions = (await this.ctx.storage.get<Record<string, CompanionState>>(COMPANIONS_STATE_KEY)) ?? {};
         const storedInitiative = await this.ctx.storage.get<SessionInitiativeState>(INITIATIVE_STATE_KEY);
         targetReverse = {
@@ -387,6 +388,18 @@ export class SessionActor extends BaseSessionActor {
             return;
           }
           if (!applyHpToReferences(mutatedTargets, targetRefs, effect, amount)) {
+            this.sendAbilityError(webSocket, "ABILITY_TARGET_UNAVAILABLE", "Um dos alvos não existe mais.");
+            return;
+          }
+        }
+        for (const bonus of temporaryBonuses) {
+          const amount = bonus.rollResult?.total
+            ?? (bonus.formula?.trim() ? evaluateCharacterSheetFormula(bonus.formula, current) : bonus.value);
+          if (amount === undefined || !Number.isFinite(amount)) {
+            this.sendAbilityError(webSocket, "TARGET_EFFECT_INVALID", "Bônus de PV temporários inválido.");
+            return;
+          }
+          if (!applyHpToReferences(mutatedTargets, targetRefs, { kind: "temporary" }, amount)) {
             this.sendAbilityError(webSocket, "ABILITY_TARGET_UNAVAILABLE", "Um dos alvos não existe mais.");
             return;
           }
