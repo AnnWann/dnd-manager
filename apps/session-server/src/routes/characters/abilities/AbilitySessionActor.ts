@@ -189,6 +189,34 @@ export class SessionActor extends BaseSessionActor {
     }
 
     const digitalDiceEnabled = isDigitalDiceRollingEnabled(runtimeConfig);
+    const abilityBeforeUse = operation.type === "character.ability.use"
+      ? findAbilityForSource(current, operation.source) : undefined;
+    const targetRefs = operation.type === "character.ability.use"
+      ? validateAbilityTargets(abilityBeforeUse?.targeting, operation.targetRefs, operation.characterId) : [];
+    if (targetRefs === null) {
+      this.sendAbilityError(webSocket, "ABILITY_TARGETS_INVALID", "A seleção de alvos não corresponde à configuração da habilidade.");
+      return;
+    }
+    if (operation.type === "character.ability.use" && targetRefs.length) {
+      const storedInitiative = await this.ctx.storage.get<SessionInitiativeState>(INITIATIVE_STATE_KEY);
+      const initiative = storedInitiative?.initialized ? normalizeInitiativeSession(storedInitiative.session as any) : undefined;
+      const invalidTarget = targetRefs.find(ref => {
+        const [kind, id] = [ref.slice(0, ref.indexOf(":")), ref.slice(ref.indexOf(":") + 1)];
+        if (kind === "character") return !hpState[id] || (connection.role !== "MASTER" &&
+          !connection.visibleCharacterIds?.includes(id) && hpState[id].ownerUserId !== connection.userId);
+        if (kind === "companion") return !(runtimeConfig?.config.creatureCompendium.some(creature =>
+          creature.id === id && creature.ownerUserId && (connection.role === "MASTER" || creature.ownerUserId === connection.userId)));
+        if (kind === "initiative") {
+          const entry = initiative?.entries.find(entry => entry.id === id);
+          return !entry || (connection.role !== "MASTER" && entry.hidden);
+        }
+        return true;
+      });
+      if (invalidTarget) {
+        this.sendAbilityError(webSocket, "ABILITY_TARGET_UNAVAILABLE", "Um dos alvos selecionados não está disponível nesta sessão.");
+        return;
+      }
+    }
     if (operation.type === "character.ability.use") {
       const ability = findAbilityForSource(current, operation.source);
       if (!ability) {
