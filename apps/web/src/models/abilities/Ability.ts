@@ -15,6 +15,8 @@ export interface AbilitySelfDamageCost {
   /** Dice notation, e.g. 1d6 (the blood hunter's hemocraft die at level 5). */
   dice: string
   damageType: DamageType
+  /** Ignore damage affinities (resistance, immunity, vulnerability). Defaults to true for legacy costs. */
+  ignoreResistance?: boolean
 }
 
 export type AbilityActivationOption = {

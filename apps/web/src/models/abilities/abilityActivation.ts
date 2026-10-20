@@ -156,7 +156,7 @@ export function useAbilityEffect(
   if (choices.length && (!selectedDamageType || !choices.includes(selectedDamageType))) return character
   if (abilityRequiresWeaponAttributeSelection(ability, activationOptionId) && !selectedWeaponAttribute) return character
   if (ability.activationOptions?.length && !selectedOption) return character
-  const selfDamage = resolveAbilitySelfDamage(ability, activationOptionId, bonusRollValues)
+  const selfDamage = resolveAbilitySelfDamage(ability, activationOptionId, bonusRollValues, character)
   if (selfDamage === null) return character
   const resolvedAbility: Ability = {
     ...ability,

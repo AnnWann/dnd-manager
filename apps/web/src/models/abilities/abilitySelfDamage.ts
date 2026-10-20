@@ -1,5 +1,6 @@
 import type { Ability, AbilitySelfDamageCost } from "./Ability"
 import type { CharacterTemplate } from "../characters/CharacterTemplate"
+import { resolveDamage } from "../combat/Damage"
 
 export type SelfDamageRollRequirement = {
   key: string
@@ -8,6 +9,7 @@ export type SelfDamageRollRequirement = {
   minimum: number
   maximum: number
   damageType: string
+  ignoreResistance: boolean
 }
 
 const DICE_PATTERN = /^(\d{1,2})d(4|6|8|10|12|20)$/i
@@ -39,6 +41,7 @@ export function getAbilitySelfDamageRollRequirements(
       minimum: bounds?.count ?? 0,
       maximum: bounds ? bounds.count * bounds.sides : 0,
       damageType: cost.damageType,
+      ignoreResistance: cost.ignoreResistance !== false,
     }
   })
 }
@@ -56,6 +59,7 @@ export function resolveAbilitySelfDamage(
   ability: Ability,
   optionId?: string,
   rollValues?: Record<string, number>,
+  character?: CharacterTemplate,
 ): number | null {
   let total = 0
   for (const requirement of getAbilitySelfDamageRollRequirements(ability, optionId)) {
@@ -63,13 +67,15 @@ export function resolveAbilitySelfDamage(
     const submitted = rollValues?.[requirement.key]
     if (submitted !== undefined) {
       if (!Number.isInteger(submitted) || submitted < requirement.minimum || submitted > requirement.maximum) return null
-      total += submitted
+      total += requirement.ignoreResistance ? submitted : resolveDamage(submitted, requirement.damageType as import("../combat/Damage").DamageType, character?.get("sheet").damageAffinities).applied
       continue
     }
     const bounds = diceBounds(requirement.dice)!
+    let rolled = 0
     for (let index = 0; index < bounds.count; index += 1) {
-      total += 1 + Math.floor(Math.random() * bounds.sides)
+      rolled += 1 + Math.floor(Math.random() * bounds.sides)
     }
+    total += requirement.ignoreResistance ? rolled : resolveDamage(rolled, requirement.damageType as import("../combat/Damage").DamageType, character?.get("sheet").damageAffinities).applied
   }
   return total
 }

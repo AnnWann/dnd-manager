@@ -224,15 +224,36 @@ export class SessionActor extends BaseSessionActor {
       }
     }
 
-    // Digital dice are rolled by the authoritative actor, not supplied by clients.
-    const operationForApply: SessionAbilityOperation = operation.type === "character.ability.use" && digitalDiceEnabled
-      ? {
-          ...operation,
-          bonusRollValues: Object.fromEntries(
-            Object.entries(operation.bonusRollValues ?? {}).filter(([key]) => !key.startsWith("self-damage:")),
-          ),
+    // Resolve self-damage once on the authoritative server. The same result is
+    // used to change HP and to record the roll; never roll independently twice.
+    const selfDamageResults: import("../../../../../web/src/models/bonuses/Bonus").BonusRollResolution[] = [];
+    let operationForApply: SessionAbilityOperation = operation;
+    if (operation.type === "character.ability.use") {
+      const ability = findAbilityForSource(current, operation.source)!;
+      const requirements = getAbilitySelfDamageRollRequirements(ability, operation.activationOptionId);
+      const values = { ...(operation.bonusRollValues ?? {}) };
+      for (const requirement of requirements) {
+        if (digitalDiceEnabled) {
+          const match = /^(\\d{1,2})d(4|6|8|10|12|20)$/i.exec(requirement.dice.trim())!;
+          const count = Number(match[1]);
+          const sides = Number(match[2]);
+          let rolled = 0;
+          for (let i = 0; i < count; i += 1) rolled += 1 + Math.floor(Math.random() * sides);
+          values[requirement.key] = rolled;
         }
-      : operation;
+        const rolled = values[requirement.key];
+        selfDamageResults.push({
+          key: requirement.key,
+          label: `${ability.name} — dano próprio (${requirement.damageType})`,
+          mode: digitalDiceEnabled ? "automatic" : "manual",
+          dice: requirement.dice,
+          diceValue: rolled,
+          formulaBonus: 0,
+          total: rolled,
+        });
+      }
+      operationForApply = { ...operation, bonusRollValues: values };
+    }
     const next = applyAbilityOperation(current, operationForApply);
     if (!next) {
       this.sendAbilityError(webSocket, "ABILITY_OPERATION_INVALID", "The requested ability operation is invalid for the current character state.");
@@ -266,8 +287,8 @@ export class SessionActor extends BaseSessionActor {
     if (operation.type === "character.ability.use") {
       const resolvedAbility = findAbilityForSource(next, operation.source);
       const bonusRollResults = listResolvedBonusRolls(resolvedAbility?.bonuses);
-      if (bonusRollResults.length > 0) {
-        loggedOperation = { ...operation, bonusRollResults };
+      if (bonusRollResults.length > 0 || selfDamageResults.length > 0) {
+        loggedOperation = { ...operation, bonusRollValues: operationForApply.type === "character.ability.use" ? operationForApply.bonusRollValues : operation.bonusRollValues, bonusRollResults: [...bonusRollResults, ...selfDamageResults] };
       }
     }
 
