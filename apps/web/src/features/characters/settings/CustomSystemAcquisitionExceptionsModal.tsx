@@ -48,7 +48,7 @@ export function CustomSystemAcquisitionExceptionsModal({
       original: field.formula,
       abilityType: undefined as CustomAbilityTypeDefinition | undefined,
     })),
-    ...definition.resources.filter((resource) => Boolean(resource.maximumFormula)).map((resource) => ({
+    ...definition.resources.filter((resource) => Boolean(resource.maximumFormula) && resource.maximumMode !== 'manual').map((resource) => ({
       key: formulaOverrideKey('resourceMaximum', resource.id),
       label: resource.name,
       description: 'Máximo do recurso',
