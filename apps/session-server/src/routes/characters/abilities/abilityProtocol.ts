@@ -69,6 +69,9 @@ function isAbilityOperation(value: unknown): value is SessionAbilityOperation {
       return isAbilitySource(value.source) &&
         hasValidOptionalName &&
         (value.activationOptionId === undefined || typeof value.activationOptionId === "string") &&
+        (value.targetRefs === undefined || (Array.isArray(value.targetRefs) && value.targetRefs.length <= 20
+          && value.targetRefs.every((id: unknown) => typeof id === "string" && /^(character|initiative|companion):[^:]{1,200}$/.test(id)))) &&
+        (value.pointLabel === undefined || (typeof value.pointLabel === "string" && value.pointLabel.length <= 160)) &&
         (value.selectedWeaponId === undefined || (typeof value.selectedWeaponId === "string" && value.selectedWeaponId.length > 0 && value.selectedWeaponId.length <= 160)) &&
         (value.resourceSelection === undefined || isResourceSelection(value.resourceSelection)) &&
         (value.bonusRollValues === undefined || isFiniteNumberRecord(value.bonusRollValues));
