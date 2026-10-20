@@ -40,7 +40,7 @@ const SESSION_PANEL_COLLAPSED_STORAGE_KEY = "dnd-manager:session-right-panel:col
 
 type PanelView = "logs" | "dice"
 type RollFeedEntry =
-  | { type: "self-damage"; id: string; characterId: string; title: string; dice: string; result: number; createdAt: string }
+  | { type: "bonus"; id: string; characterId: string; title: string; dice: string; result: number; description: string; createdAt: string }
   | { type: "dice"; result: SessionDiceRollResult }
   | { type: "action"; result: SessionActionRollResult }
 
@@ -57,6 +57,7 @@ export function SessionActionLog() {
   const [page, setPage] = useState(0)
   const [panelView, setPanelView] = useState<PanelView>("logs")
   const [rollFeed, setRollFeed] = useState<RollFeedEntry[]>([])
+  const [clearedBonusRollBefore, setClearedBonusRollBefore] = useState(0)
   const [collapsed, setCollapsed] = useState(() => {
     if (typeof window === "undefined") return false
     return window.localStorage.getItem(SESSION_PANEL_COLLAPSED_STORAGE_KEY) === "1"
@@ -103,18 +104,21 @@ export function SessionActionLog() {
     })
   }, [operationLog, runtime, sessionLog])
 
-  const selfDamageRolls = useMemo<RollFeedEntry[]>(() => sessionLog.flatMap((record) => {
-    if (record.operation.type !== "character.ability.use") return []
-    return (record.operation.bonusRollResults ?? []).filter((roll) => roll.key.startsWith("self-damage:")).map((roll) => ({
-      type: "self-damage" as const,
+  const abilityBonusRolls = useMemo<RollFeedEntry[]>(() => sessionLog.flatMap((record) => {
+    if (record.operation.type !== "character.ability.use" || Date.parse(record.createdAt) <= clearedBonusRollBefore) return []
+    return (record.operation.bonusRollResults ?? []).map((roll) => ({
+      type: "bonus" as const,
       id: `${record.id}:${roll.key}`,
       characterId: record.operation.characterId,
       title: roll.label,
       dice: roll.dice,
       result: roll.total,
+      description: roll.key.startsWith("self-damage:") || roll.key.includes("onUseHp:")
+        ? "Rolagem de cura/dano"
+        : "Rolagem de bônus",
       createdAt: record.createdAt,
     }))
-  }), [sessionLog])
+  }), [sessionLog, clearedBonusRollBefore])
 
   const records = useMemo<DisplayRecord[]>(() => [
     ...visibleLegacyRecords.map((record) => ({ source: "legacy" as const, record })),
@@ -137,7 +141,7 @@ export function SessionActionLog() {
       setRollFeed((current) => [
         entry,
         ...current.filter((candidate) => {
-          if (candidate.type === "self-damage" || entry.type === "self-damage") return true
+          if (candidate.type === "bonus" || entry.type === "bonus") return true
           return candidate.result.id !== entry.result.id
         }),
       ].slice(0, MAX_DICE_ROLLS))
@@ -240,14 +244,14 @@ export function SessionActionLog() {
       </>
     ) : (
       <DiceRollPanel
-        entries={[...selfDamageRolls, ...rollFeed]}
+        entries={[...abilityBonusRolls, ...rollFeed]}
         characterNames={characterNames}
         manualTarget={manualRollTarget}
         allowAnonymous={isMaster}
         privateRolls={privateRolls}
         digitalDiceEnabled={digitalDiceEnabled}
         onPrivateRollsChange={changePrivateRolls}
-        onClear={() => setRollFeed([])}
+        onClear={() => { setRollFeed([]); setClearedBonusRollBefore(Date.now()) }}
       />
     )
   }
@@ -540,11 +544,11 @@ function DiceRollPanel({
       <div className="min-h-0 flex-1 overflow-y-auto p-3">
         {entries.length ? (
           <div className="flex flex-col gap-2">
-            {entries.map((entry) => entry.type === "self-damage" ? (
+            {entries.map((entry) => entry.type === "bonus" ? (
               <div key={entry.id} className="rounded-xl border border-border bg-bg-subtle p-3">
                 <div className="text-xs font-semibold text-textH">{entry.title}</div>
                 <div className="mt-1 text-[11px] text-textMuted">{characterNames.get(entry.characterId) ?? entry.characterId} · {entry.dice}</div>
-                <div className="mt-2 text-lg font-bold text-textH">{entry.result} de dano próprio</div>
+                <div className="mt-2 text-lg font-bold text-textH">{entry.result} · {entry.description}</div>
               </div>
             ) : entry.type === "action" ? (
               <ActionRollEntry
