@@ -42,6 +42,7 @@ import {
   type SessionRuntimeConfigClientMessage,
   type SessionRuntimeConfigServerMessage,
 } from "./runtimeConfigSessionProtocol"
+import type { CompanionClientMessage, CompanionServerMessage } from "../../shared/session-runtime/companionRuntime"
 import { setRuntimeCustomSystemOverride } from "../../lib/customSystems/creationCustomSystemsBridge"
 import type { SessionSheetOperationMessage } from "./sheetRoutes"
 
@@ -63,6 +64,7 @@ export type SessionSocketOptions = {
       | SessionMissionServerMessage
       | SessionInitiativeServerMessage
       | SessionRuntimeConfigServerMessage
+      | CompanionServerMessage
   ) => void
 }
 
@@ -81,6 +83,7 @@ type SessionOutgoingMessage = | ClientSessionMessage
     | SessionCustomSystemClientMessage
     | { type: "session.magic.operation"; operation: SessionMagicOperation }
     | { type: "session.equipment.operation"; operation: SessionEquipmentOperation }
+    | CompanionClientMessage
 type SessionIncomingMessage = Parameters<SessionSocketOptions["onMessage"]>[0]
 type DecodedSessionMessage = {
   message: SessionIncomingMessage
@@ -96,7 +99,8 @@ function decodeSessionMessage(raw: string): DecodedSessionMessage | null {
   const missionMessage = parseMissionServerMessage(raw)
   const initiativeMessage = parseInitiativeServerMessage(raw)
   const abilityMessage = parseAbilityServerMessage(raw)
-  const message = runtimeConfigMessage ?? lifecycleMessage ?? inventoryMessage ?? missionMessage ?? initiativeMessage ?? abilityMessage ?? parseServerSessionMessage(raw)
+  const companionMessage = parseCompanionServerMessage(raw)
+  const message = runtimeConfigMessage ?? lifecycleMessage ?? inventoryMessage ?? missionMessage ?? initiativeMessage ?? abilityMessage ?? companionMessage ?? parseServerSessionMessage(raw)
   return message ? { message, abilityMessage, lifecycleMessage, runtimeConfigMessage } : null
 }
 
@@ -233,4 +237,17 @@ function parseInventoryServerMessage(raw: string): SessionInventoryServerMessage
   } catch {
     return null
   }
+}
+
+function parseCompanionServerMessage(raw: string): CompanionServerMessage | null {
+  try {
+    const message = JSON.parse(raw) as Record<string, unknown>
+    if (message?.type === "session.companions.snapshot" && Array.isArray(message.companions)) {
+      return message as CompanionServerMessage
+    }
+    if (message?.type === "session.companions.updated" && message.companion && typeof message.companion === "object") {
+      return message as CompanionServerMessage
+    }
+  } catch { /* another protocol */ }
+  return null
 }
