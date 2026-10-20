@@ -39,6 +39,7 @@ export type QuickSheetSection = {
 export type CreatureQuickSheetRollContext = {
   creatureId: string
   initiativeEntryId?: string
+  canSpendOutsideInitiative?: boolean
 }
 
 export type CombatQuickSheetData = {
@@ -724,7 +725,7 @@ function FeatureSection({
                   Mostrar
                 </button>
               ) : null}
-              {entry.usage && !entry.mechanics && rollContext?.initiativeEntryId ? (
+              {entry.usage && !entry.mechanics && (rollContext?.initiativeEntryId || rollContext?.canSpendOutsideInitiative) ? (
                 <Button size="sm" variant="secondary"
                   disabled={(featureResources?.[entry.id]?.used ?? 0) >= entry.usage.max}
                   onClick={() => requestCreatureRoll({
@@ -746,7 +747,7 @@ function FeatureSection({
                   {remaining < max && runtime?.role === "MASTER" && rollContext?.initiativeEntryId ? (
                     <Button size="sm" variant="ghost" onClick={() => restoreFeature(entry)}>Recuperar usos</Button>
                   ) : null}
-                  {!rollContext?.initiativeEntryId ? <span>Sem rastreamento fora da iniciativa</span> : null}
+                  {!rollContext?.initiativeEntryId && !rollContext?.canSpendOutsideInitiative ? <span>Sem rastreamento fora da iniciativa</span> : null}
                 </div>
               )
             })() : null}
@@ -771,8 +772,8 @@ function FeatureSection({
                     <button
                       type="button"
                       className="rounded-full border border-accentBorder bg-accentBg px-2 py-1 font-semibold text-accent transition-colors hover:bg-bg-subtle"
-                      title={entry.usage && !rollContext?.initiativeEntryId ? "Inicie a criatura na iniciativa para consumir usos." : rollModifierHint()}
-                      disabled={Boolean(entry.usage && (!rollContext?.initiativeEntryId || (featureResources?.[entry.id]?.used ?? 0) >= entry.usage.max))}
+                      title={entry.usage && !rollContext?.initiativeEntryId && !rollContext?.canSpendOutsideInitiative ? "Inicie a criatura na iniciativa para consumir usos." : rollModifierHint()}
+                      disabled={Boolean(entry.usage && (!(rollContext?.initiativeEntryId || rollContext?.canSpendOutsideInitiative) || (featureResources?.[entry.id]?.used ?? 0) >= entry.usage.max))}
                       onClick={event => requestCreatureRoll({
                         ...rollContext,
                         source: { type: "feature", featureId: entry.id, intent: "resolve", enabledOptionalDamageIndices: enabledFor(entry.id) },
