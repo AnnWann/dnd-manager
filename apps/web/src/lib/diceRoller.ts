@@ -70,6 +70,8 @@ export function requestDamageRoll(input: {
     visibility: getRollVisibility(),
     source: input.source,
     targetEntryId: input.targetEntryId,
+    targetRefs: input.targetRefs,
+    pointLabel: input.pointLabel,
   })
 }
 
@@ -108,6 +110,8 @@ export function requestActionRoll(input: {
   source: SessionActionRollSource
   mode?: SessionDiceRollMode
   targetEntryId?: string
+  targetRefs?: string[]
+  pointLabel?: string
 }): void {
   publishActionRequest({
     requestId: createRequestId(),
