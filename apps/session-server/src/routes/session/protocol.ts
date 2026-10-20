@@ -289,6 +289,9 @@ function isActionRollRequest(value: unknown): value is SessionActionRollRequest 
   if (!nonEmpty(value.characterId) || value.characterId.length > 120) return false;
   if (!diceRollMode(value.mode) || !rollVisibility(value.visibility) || !isRecord(value.source) || !nonEmpty(value.source.type)) return false;
   if (value.targetEntryId !== undefined && (!nonEmpty(value.targetEntryId) || value.targetEntryId.length > 200)) return false;
+  if (value.targetRefs !== undefined && (!Array.isArray(value.targetRefs) || value.targetRefs.length > 20 ||
+    !value.targetRefs.every((ref: unknown) => typeof ref === "string" && /^(character|initiative|companion):[^:]{1,200}$/.test(ref)))) return false;
+  if (value.pointLabel !== undefined && (typeof value.pointLabel !== "string" || value.pointLabel.length > 160)) return false;
   switch (value.source.type) {
     case "weapon":
       return nonEmpty(value.source.weaponId) && value.source.weaponId.length <= 160;
