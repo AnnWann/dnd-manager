@@ -147,12 +147,19 @@ export function abilityRequiresWeaponAttributeSelection(ability: Ability, option
   ].some(rider => rider.scope === "weapon" && rider.weaponAttackAttribute === "selected")
 }
 
-export function optionRequiresWeaponSelection(ability: Ability, optionId?: string): boolean {
+/** Read the base ability, the chosen option, and abilities granted by that option. */
+export function getActivationWeaponRiders(ability: Ability, optionId?: string): AttackRider[] {
   const option = ability.activationOptions?.find(candidate => candidate.id === optionId)
-  if (!option) return false
-  return (option.abilities ?? (option.ability ? [option.ability] : [])).some(granted =>
-    (granted.bonuses?.attackRiders ?? []).some(rider => rider.weaponSelection === "onActivation"),
-  )
+  const granted = option?.abilities ?? (option?.ability ? [option.ability] : [])
+  return [
+    ...(ability.bonuses?.attackRiders ?? []),
+    ...(option?.bonuses?.attackRiders ?? []),
+    ...granted.flatMap(entry => entry.bonuses?.attackRiders ?? []),
+  ].filter(rider => rider.scope === "weapon" && rider.weaponSelection === "onActivation")
+}
+
+export function optionRequiresWeaponSelection(ability: Ability, optionId?: string): boolean {
+  return getActivationWeaponRiders(ability, optionId).length > 0
 }
 
 export function getAbilityAttackRiderDamageChoices(ability: Ability, optionId?: string): DamageType[] {
