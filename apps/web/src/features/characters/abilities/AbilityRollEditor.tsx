@@ -209,16 +209,45 @@ export function AbilityRollEditor({ roll, onChange, targeting, onTargetingChange
                   <Input value={damage.dice} placeholder="1d6" onChange={event => updateDamage({ dice: event.target.value })} />
                 </Field>
                 <Field label="Tipo de dano">
-                  <Select value={damage.damageType ?? ""} onChange={event => updateDamage({ damageType: (event.target.value || undefined) as HpEffectType | undefined })}>
+                  <Select value={damage.damageType ?? ""} onChange={event => {
+                    const damageType = (event.target.value || undefined) as HpEffectType | undefined
+                    updateDamage({
+                      damageType,
+                      label: damage.label === "Dano" || damage.label === "Cura"
+                        ? damageType === "healing" ? "Cura" : "Dano"
+                        : damage.label,
+                    })
+                  }}>
                     <option value="">Não especificado</option>
                     {HP_EFFECT_TYPE_OPTIONS.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}
                   </Select>
                 </Field>
               </div>
               <label className="flex items-center gap-2 text-xs text-textH">
-                <input type="checkbox" checked={Boolean(damage.addAttributeModifier)} onChange={event => updateDamage({ addAttributeModifier: event.target.checked })} />
-                Somar modificador do atributo ao dano
+                <input type="checkbox" checked={Boolean(damage.addAttributeModifier)} onChange={event =>
+                  updateDamage({ addAttributeModifier: event.target.checked, attribute: event.target.checked ? (damage.attribute ?? roll.attribute ?? "str") : undefined })} />
+                Somar modificador de atributo {damage.damageType === "healing" ? "à cura" : "ao dano"}
               </label>
+              {damage.addAttributeModifier ? (
+                <Field label="Atributo para este componente">
+                  <Select value={damage.attribute ?? roll.attribute ?? "str"}
+                    onChange={event => updateDamage({ attribute: event.target.value as Attribute })}>
+                    {ATTRIBUTES.map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+                  </Select>
+                </Field>
+              ) : null}
+              {damage.damageType !== "healing" ? <>
+                <label className="flex items-center gap-2 text-xs text-textH">
+                  <input type="checkbox" checked={damage.magical ?? (roll.attackType === "spell")}
+                    onChange={event => updateDamage({ magical: event.target.checked })} />
+                  Dano mágico (para resistência/imunidade)
+                </label>
+                <label className="flex items-center gap-2 text-xs text-textH">
+                  <input type="checkbox" checked={damage.ignoreResistance === true}
+                    onChange={event => updateDamage({ ignoreResistance: event.target.checked })} />
+                  Ignorar resistência, imunidade e vulnerabilidade
+                </label>
+              </> : null}
               <label className="flex items-center gap-2 text-xs text-textH">
                 <input type="checkbox" checked={damage.critical !== false} onChange={event => updateDamage({ critical: event.target.checked })} />
                 Dobrar dados em acertos críticos
