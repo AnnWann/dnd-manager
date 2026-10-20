@@ -63,7 +63,7 @@ export function areSelectedTargetsDistinct(
 
 function applyDamageOrHealing(
   current: number, temporary: number, max: number,
-  effect: OnUseHpEffect | { kind: "damage" | "heal" | "temporary"; damageType?: import("../../../../../web/src/models/combat/Damage").DamageType; ignoreResistance?: boolean; bypassTemporaryHp?: boolean },
+  effect: OnUseHpEffect | { kind: "damage" | "heal" | "temporary"; damageType?: import("../../../../../web/src/models/combat/Damage").DamageType; ignoreResistance?: boolean; magical?: boolean; bypassTemporaryHp?: boolean },
   amount: number, affinities?: DamageAffinity[],
 ) {
   const positive = Math.max(0, Math.trunc(amount))
@@ -71,7 +71,7 @@ function applyDamageOrHealing(
   if (effect.kind === "temporary") return { current, temporary: Math.max(temporary, positive) }
   const damage = effect.ignoreResistance
     ? positive
-    : resolveDamage(positive, effect.damageType, affinities).applied
+    : resolveDamage(positive, effect.damageType, affinities, { magical: effect.magical }).applied
   if (effect.bypassTemporaryHp) return { current: Math.max(0, current - damage), temporary }
   const applied = applyHitPointDamage({ current, temporary }, damage)
   return { current: applied.current, temporary: applied.temporary }
