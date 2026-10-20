@@ -125,6 +125,11 @@ export function AttackRidersEditor({ riders, character, onChange, defaultScope =
             </label>
           </div> : null}
           {rider.scope === "weapon" ? <>
+            <label className="flex items-center gap-2 text-xs text-textH">
+              <input type="checkbox" checked={rider.treatWeaponAsMagical === true}
+                onChange={e => patch(rider.id, { treatWeaponAsMagical: e.target.checked })} />
+              Ataques da arma infundida são mágicos (inclusive dano base)
+            </label>
             <label className="grid gap-1 text-xs text-textMuted">Arma afetada
               <Select value={rider.weaponSelection ?? "fixed"} onChange={e => patch(rider.id, {
                 weaponSelection: e.target.value === "fixed" ? undefined : e.target.value as "onActivation" | "sourceWeapon",
