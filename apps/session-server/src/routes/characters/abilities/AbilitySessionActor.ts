@@ -21,7 +21,7 @@ import {
   type CharacterTemplateProps,
 } from "../../../../../web/src/models/characters/CharacterTemplate";
 import { normalizeDamageAffinities } from "../../../../../web/src/models/combat/Damage";
-import { listBonusRollRequirements, listResolvedBonusRolls } from "../../../../../web/src/models/bonuses/BonusRoll";
+import { isValidBonusRollValue, listBonusRollRequirements, listResolvedBonusRolls } from "../../../../../web/src/models/bonuses/BonusRoll";
 import { SessionActor as BaseSessionActor } from "../../session/SessionActor";
 import {
   parseAbilityClientMessage,
@@ -216,7 +216,7 @@ export class SessionActor extends BaseSessionActor {
       ];
       const missing = requirements.filter((requirement) => {
         const value = operation.bonusRollValues?.[requirement.key];
-        return typeof value !== "number" || !Number.isFinite(value);
+        return typeof value !== "number" || !isValidBonusRollValue(requirement.dice, value);
       });
       if (missing.length > 0) {
         this.sendAbilityError(
