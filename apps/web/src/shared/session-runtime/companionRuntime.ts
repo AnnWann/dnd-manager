@@ -10,6 +10,7 @@ export type CompanionState = {
   featureUses: Record<string, number>
   /** Remaining spell slots survive exiting initiative. */
   spellSlots: Record<string, number>
+  spellPerDay: Record<string, number>
   revision: number
 }
 
@@ -31,6 +32,7 @@ export function defaultCompanionState(creature: CompendiumCreature): CompanionSt
     maxHp,
     temporaryHp: 0,
     featureUses: {},
+    spellPerDay: {},
     spellSlots: Object.fromEntries(Object.entries(creature.spellcasting?.slots ?? {})
       .map(([level, amount]) => [level, Math.max(0, Math.trunc(amount ?? 0))])),
     revision: 0,
