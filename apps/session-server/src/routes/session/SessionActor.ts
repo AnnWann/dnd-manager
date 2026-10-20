@@ -754,8 +754,7 @@ export class SessionActor extends DurableObject<Env> {
           const [kind, id] = [ref.slice(0, colon), ref.slice(colon + 1)];
           if (kind === "character") return Boolean(hpState[id]) &&
             (connection.role === "MASTER" || hpState[id].ownerUserId === connection.userId || connection.visibleCharacterIds?.includes(id));
-          if (kind === "companion") return Boolean(runtimeConfig?.config.creatureCompendium.some(creature => creature.id === id && creature.ownerUserId &&
-            (connection.role === "MASTER" || creature.ownerUserId === connection.userId)));
+          if (kind === "companion") return Boolean(runtimeConfig?.config.creatureCompendium.some(creature => creature.id === id && creature.ownerUserId));
           if (kind === "initiative") {
             const entry = initiative?.entries.find(entry => entry.id === id);
             return Boolean(entry && (connection.role === "MASTER" || !entry.hidden));
