@@ -2,6 +2,7 @@ import type { Ability } from "../../../../../web/src/models/abilities/Ability";
 import { getAbilitySelfDamageRollRequirements } from "../../../../../web/src/models/abilities/abilitySelfDamage";
 import {
   canActivateAbility,
+  getAbilityWeaponInfusions,
   endAbilityEffect,
   restoreAbilityUse,
   useAbilityEffect,
@@ -663,13 +664,14 @@ function applyAbilityOperation(
     const needsAttribute = abilityRequiresWeaponAttributeSelection(ability, operation.activationOptionId);
     if (needsAttribute !== Boolean(operation.resourceSelection?.weaponAttribute)) return null;
     if (optionRequiresWeaponSelection(ability, operation.activationOptionId)) {
-      const previousWeapon = ability.allowMultipleWeaponActivations ? undefined : getCharacterConditions(character)
-        .filter(condition => condition.sourceAbilityId === ability.id && condition.sourceAbilityOptionId?.endsWith(":abilities"))
-        .flatMap(condition => condition.grantedAbilities ?? [])
-        .flatMap(granted => granted.bonuses?.attackRiders ?? [])
-        .find(rider => rider.weaponSelection === "onActivation" && rider.weaponId)?.weaponId;
-      if (!previousWeapon && !operation.selectedWeaponId) return null;
-      if (operation.selectedWeaponId && !character.get("equipment").weapons.some(weapon => weapon.id === operation.selectedWeaponId)) return null;
+      const existing = getAbilityWeaponInfusions(character, ability.id);
+      const previousWeapon = ability.allowMultipleWeaponActivations ? undefined : existing[0]?.weaponId;
+      const weaponId = previousWeapon ?? operation.selectedWeaponId;
+      if (!weaponId || !character.get("equipment").weapons.some(weapon => weapon.id === weaponId)) return null;
+      const onWeapon = existing.find(infusion => infusion.weaponId === weaponId);
+      if (onWeapon && (!ability.allowOptionSwitching || onWeapon.optionId === operation.activationOptionId)) {
+        return null; // A weapon cannot receive the same infusion twice.
+      }
     }
     if ((source.type === "character" || source.type === "condition") && ability.category === "channelDivinity" && !hasAbilityResourceCosts(ability) && (getChannelDivinityPool(character)?.current ?? 0) <= 0) return null;
     if ((source.type === "character" || source.type === "condition") && ability.category === "martialArts" && !hasAbilityResourceCosts(ability) && (getKiPool(character)?.current ?? 0) <= 0) return null;
