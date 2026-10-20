@@ -78,4 +78,14 @@ npm run typecheck:session-server
 npm run deploy:session-server
 ```
 
+When deploying production while keeping existing Cloudflare environment variables and secrets, run **from the repository root**:
+
+```bash
+npm run deploy:session-server:keep-vars
+```
+
+This command builds `@dnd-manager/game-core/dist` **before** Wrangler bundles the Worker and targets the top-level (production) environment explicitly. Do not run `npx wrangler deploy --keep-vars` directly from `apps/session-server`, because that skips the `predeploy:keep-vars` build hook and can fail to resolve `@dnd-manager/game-core/*` exports.
+
+The frontend and the Cloudflare Worker are deployed independently. CI build/typecheck success does **not** deploy the Worker. If the character sheet shows one on-hit effect but an attack rolls it twice, verify the Worker version by checking `GET /health`. A Worker with the authoritative fix includes `combat.weaponRider.deduplicated` in `capabilities`; if that entry is missing, redeploy the Worker with the command above. No existing player abilities need to be recreated.
+
 For QA deploys use `npx wrangler deploy --env qa` from `apps/session-server` so the QA Durable Object namespace and QA secret remain isolated from production.
