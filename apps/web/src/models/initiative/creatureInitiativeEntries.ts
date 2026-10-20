@@ -57,7 +57,7 @@ export function createCreatureInitiativeEntries(
       basicName,
       revealRealName: false,
       imageUrl: creature.sheetImageUrl,
-      initiative: sharedRoll ?? (enabled ? roller(creature.initiativeBonus) : 0),
+      initiative: sharedRoll ?? (enabled ? roller(bonus) : 0),
       initiativeBonus: bonus,
       dexterity: creature.abilityScores.dex,
       side: creature.defaultSide,
