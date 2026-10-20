@@ -334,6 +334,62 @@ export class SessionActor extends BaseSessionActor {
     if (hpChanged) hpState[operation.characterId] = nextHp;
     if (conditionsChanged) conditionsState[operation.characterId] = nextConditions;
 
+    let mutatedTargets: MutableHpTargets | undefined;
+    let targetReverse: {
+      hp: Record<string, SessionHpState>;
+      companions: Record<string, CompanionState>;
+      initiative?: SessionInitiativeState;
+    } | undefined;
+    if (operation.type === "character.ability.use"
+      && (abilityBeforeUse?.targeting?.mode === "targets" || abilityBeforeUse?.targeting?.mode === "point")) {
+      const afterAbility = findAbilityForSource(next, operation.source);
+      const afterOption = afterAbility?.activationOptions?.find(entry => entry.id === operation.activationOptionId);
+      const effects = [...(afterAbility?.bonuses?.onUseHp ?? []), ...(afterOption?.bonuses?.onUseHp ?? [])];
+      if (effects.length && targetRefs.length) {
+        const storedCompanions = (await this.ctx.storage.get<Record<string, CompanionState>>(COMPANIONS_STATE_KEY)) ?? {};
+        const storedInitiative = await this.ctx.storage.get<SessionInitiativeState>(INITIATIVE_STATE_KEY);
+        targetReverse = {
+          hp: structuredClone(hpState),
+          companions: structuredClone(storedCompanions),
+          initiative: storedInitiative ? structuredClone(storedInitiative) : undefined,
+        };
+        const affinities: MutableHpTargets["affinities"] = {};
+        for (const [id, targetAbility] of Object.entries(abilityState)) {
+          if (!hpState[id] || !targetAbility?.initialized) continue;
+          try {
+            affinities[id] = getEffectiveDamageAffinities(
+              hydrateAuthoritativeCharacter(targetAbility, hpState[id], conditionsState[id] ?? conditions),
+            );
+          } catch { affinities[id] = []; }
+        }
+        mutatedTargets = {
+          hp: hpState, companions: storedCompanions, initiative: storedInitiative,
+          creatures: runtimeConfig?.config.creatureCompendium ?? [],
+          affinities, changedCharacters: new Set(), changedCompanions: new Set(),
+          initiativeChanged: false,
+        };
+        for (const effect of effects) {
+          const amount = effect.bonus.rollResult?.total
+            ?? (effect.bonus.formula?.trim()
+              ? evaluateCharacterSheetFormula(effect.bonus.formula, current)
+              : effect.bonus.value);
+          if (amount === undefined || !Number.isFinite(amount)) {
+            this.sendAbilityError(webSocket, "TARGET_EFFECT_INVALID", "Não foi possível calcular o valor do efeito.");
+            return;
+          }
+          if (!applyHpToReferences(mutatedTargets, targetRefs, effect, amount)) {
+            this.sendAbilityError(webSocket, "ABILITY_TARGET_UNAVAILABLE", "Um dos alvos não existe mais.");
+            return;
+          }
+        }
+        if (mutatedTargets.changedCharacters.has(operation.characterId)) {
+          const latest = hpState[operation.characterId];
+          const sheet = (nextAbilityState.character as any).sheet;
+          if (sheet?.HP) sheet.HP = { ...sheet.HP, current: latest.current, temporary: latest.temporary };
+        }
+      }
+    }
+
     let loggedOperation = operationForApply;
     if (operation.type === "character.ability.use") {
       const resolvedAbility = findAbilityForSource(next, operation.source);
