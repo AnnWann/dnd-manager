@@ -179,3 +179,17 @@ test("selected targets cannot apply one effect twice through character and initi
   assert.equal(areSelectedTargetsDistinct(["companion:owl", "initiative:turn-owl"], combat, [{ id: "owl", ownerUserId: "p" }]), false)
   assert.equal(areSelectedTargetsDistinct(["character:a", "companion:owl"], combat, [{ id: "owl", ownerUserId: "p" }]), true)
 })
+
+test("magical/nonmagical affinity qualifiers and ignore resistance are enforced", () => {
+  const state = emptyTargets()
+  state.affinities.a = [{ damageType: "slashing", kind: "resistance", qualifier: "nonmagical" }]
+  state.hp.a = hp(20, 20, 0)
+  applyHpToReferences(state, ["character:a"], { kind: "damage", damageType: "slashing", magical: false }, 9)
+  assert.equal(state.hp.a.current, 16)
+  state.hp.a = hp(20, 20, 0)
+  applyHpToReferences(state, ["character:a"], { kind: "damage", damageType: "slashing", magical: true }, 9)
+  assert.equal(state.hp.a.current, 11)
+  state.hp.a = hp(20, 20, 0)
+  applyHpToReferences(state, ["character:a"], { kind: "damage", damageType: "slashing", magical: false, ignoreResistance: true }, 9)
+  assert.equal(state.hp.a.current, 11)
+})
