@@ -47,6 +47,7 @@ import { abilityShortPtBr } from "../../../../web/src/i18n/ptBR";
 import type { Skill } from "../../../../web/src/models/sheet/Skills";
 import {
   initiativeEntryDisplayName,
+  createInitiativeEntry,
   normalizeInitiativeSession,
   synchronizeSharedCombatantState,
   updateInitiativeEntry,
@@ -422,6 +423,31 @@ export class SessionActor extends DurableObject<Env> {
         this.sendError(webSocket, "CREATURE_ENTRY_NOT_FOUND", "The requested initiative combatant does not match this creature.");
         return;
       }
+    }
+
+    if (!entry && !request.initiativeEntryId && creature.ownerUserId) {
+      const saved = (await this.ctx.storage.get<Record<string, CompanionState>>(COMPANIONS_STATE_KEY)) ?? {};
+      const state = saved[creature.id] ?? defaultCompanionState(creature);
+      entry = createInitiativeEntry({
+        sourceId: `compendium:${creature.id}`,
+        sourceType: "monster", name: creature.name,
+        initiative: 0, initiativeBonus: creature.initiativeBonus,
+        side: "ally", armorClass: creature.armorClass, currentHp: state.currentHp,
+        maxHp: state.maxHp, temporaryHp: state.temporaryHp,
+        creatureFeatureResources: Object.fromEntries(allCreatureFeatures(creature)
+          .filter(feature => feature.usage)
+          .map(feature => [feature.id, { used: state.featureUses[feature.id] ?? 0, max: feature.usage!.max }])),
+        creatureSpellResources: {
+          slots: Object.fromEntries(Object.entries(creature.spellcasting?.slots ?? {})
+            .map(([level, max]) => [level, { current: state.spellSlots[level] ?? max ?? 0, max: max ?? 0 }])),
+          perDay: Object.fromEntries((creature.spellcasting?.spells ?? [])
+            .filter(spell => spell.usage.type === "perDay")
+            .map(spell => [spell.spellIndex, {
+              used: state.spellPerDay?.[spell.spellIndex] ?? 0,
+              max: spell.usage.type === "perDay" ? spell.usage.uses : 0,
+            }])),
+        },
+      });
     }
 
     if (request.source.type === "spell") {
