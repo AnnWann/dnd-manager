@@ -1056,9 +1056,57 @@ function normalizeInitiativeConditionInput(value: unknown): Omit<InitiativeEntry
   const name = readString(record.name);
   if (!name || name.length > 200) return null;
   const description = optionalString(record.description);
+  const behavior = optionalString(record.behavior);
+  const source = optionalString(record.source);
+  const tags = Array.isArray(record.tags)
+    ? record.tags.filter((tag): tag is string => typeof tag === "string" && tag.length <= 100).slice(0, 30)
+    : undefined;
+  const bonuses = normalizeInitiativeConditionBonuses(record.bonuses);
+  if (bonuses === null) return null;
   const duration = normalizeInitiativeDuration(record.duration);
   if (!duration) return null;
-  return { name, description, duration };
+  return { name, description, behavior, source, tags, bonuses, duration };
+}
+
+function normalizeInitiativeConditionBonuses(
+  input: unknown,
+): InitiativeEntry["conditions"][number]["bonuses"] | null {
+  if (input === undefined) return undefined;
+  if (!input || typeof input !== "object" || Array.isArray(input)) return null;
+  const record = input as Record<string, unknown>;
+  const allowed = [
+    "armorClass", "initiative", "speed", "attackBonus", "damageBonus",
+    "savingThrowBonus", "abilityCheckBonus", "generalTestBonus",
+    "passivePerception", "saveDcBonus",
+  ] as const;
+  const result: NonNullable<InitiativeEntry["conditions"][number]["bonuses"]> = {};
+  function validBonus(value: unknown) {
+    if (!value || typeof value !== "object" || Array.isArray(value)) return false;
+    const bonus = value as Record<string, unknown>;
+    return (bonus.type === "add" || bonus.type === "sub" || bonus.type === "flat")
+      && typeof bonus.value === "number" && Number.isFinite(bonus.value)
+      && Math.abs(bonus.value) <= 10000;
+  }
+  for (const key of allowed) {
+    const value = record[key];
+    if (value === undefined) continue;
+    if (!Array.isArray(value) || value.length > 50 || !value.every(validBonus)) return null;
+    // Only retain the validated, finite, numeric bonus shape.
+    Object.assign(result, { [key]: value.map((bonus: {type: "add"|"sub"|"flat"; value: number}) =>
+      ({ type: bonus.type, value: bonus.value })) });
+  }
+  if (record.savingThrowAttributeBonus !== undefined) {
+    const values = record.savingThrowAttributeBonus;
+    if (!Array.isArray(values) || values.length > 50
+      || !values.every(value => value && typeof value === "object"
+        && ["str", "dex", "con", "int", "wis", "cha"].includes(value.attribute)
+        && validBonus(value.bonus))) return null;
+    result.savingThrowAttributeBonus = values.map(value => ({
+      attribute: value.attribute,
+      bonus: { type: value.bonus.type, value: value.bonus.value },
+    }));
+  }
+  return result;
 }
 
 function normalizeInitiativeDuration(value: unknown): InitiativeEntry["conditions"][number]["duration"] | null {
