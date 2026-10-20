@@ -61,10 +61,14 @@ function App() {
  const [pendingCreatureAdd,setPendingCreatureAdd] = useState<{tokenId:string;entryId:string;sessionId:string}|null>(null)
  const [initiativeState,setInitiativeState] = useState<Record<string,unknown>|null>(null)
  const sessionSpells = useMemo(() => resolveOwlbearSpellDefinitions(runtimeConfig, spellLibrary), [runtimeConfig, spellLibrary])
- const serverSpellIndexes = useMemo(() => new Set(
-   (Array.isArray(asRecord(runtimeConfig?.config).spells) ? asRecord(runtimeConfig?.config).spells : [])
-     .map(spell => asRecord(spell).index).filter((index): index is string => typeof index === "string")
- ), [runtimeConfig])
+ const serverSpellIndexes = useMemo<ReadonlySet<string>>(() => {
+   const raw: unknown = asRecord(runtimeConfig?.config).spells
+   const entries: unknown[] = Array.isArray(raw) ? raw : []
+   return new Set<string>(entries.flatMap((entry): string[] => {
+     const index = asRecord(entry).index
+     return typeof index === "string" && index.trim() ? [index.trim()] : []
+   }))
+ }, [runtimeConfig])
  const availableCreatures = useMemo(() => {
    const official = Array.isArray(asRecord(runtimeConfig?.config).creatureCompendium)
      ? asRecord(runtimeConfig?.config).creatureCompendium as CompendiumCreature[] : []
