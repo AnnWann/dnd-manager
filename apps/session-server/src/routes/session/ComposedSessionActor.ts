@@ -1,4 +1,6 @@
 import { SessionActor as BaseSessionActor } from "./SessionActor";
+import type { CompanionState } from "../../../../web/src/shared/session-runtime/companionRuntime";
+import type { SessionInitiativeState } from "../initiative/initiativeProtocol";
 import { SessionActor as AbilitySessionActor } from "../characters/abilities/AbilitySessionActor";
 import { SessionActor as MagicSessionActor } from "../characters/spells/MagicSessionActor";
 import { SessionActor as EquipmentSessionActor } from "../characters/equipment/EquipmentSessionActor";
@@ -52,6 +54,8 @@ import {
   sendVisibilityFiltered,
 } from "./visibilityDelivery";
 
+const COMPANIONS_STATE_KEY = "companions-state";
+const INITIATIVE_STATE_KEY = "initiative-state";
 const ABILITIES_STATE_KEY = "abilities-state";
 const HP_STATE_KEY = "hp-state";
 const CONDITIONS_STATE_KEY = "conditions-state";
@@ -92,6 +96,13 @@ type AbilityReverse = {
     ability: SessionAbilityState;
     hp: SessionHpState;
     conditions: SessionConditionsState;
+    targetReverse?: {
+      hp: Record<string, SessionHpState>;
+      companions: Record<string, CompanionState>;
+      initiative?: SessionInitiativeState;
+      changedCharacters?: string[];
+      changedCompanions?: string[];
+    };
   };
 };
 
@@ -399,6 +410,29 @@ export class SessionActor extends BaseSessionActor {
         writes[ABILITIES_STATE_KEY] = abilities;
         writes[HP_STATE_KEY] = hp;
         writes[CONDITIONS_STATE_KEY] = conditions;
+        if (reverse.snapshot.targetReverse) {
+          const targets = reverse.snapshot.targetReverse;
+          const currentCompanions = (await this.ctx.storage.get<Record<string, CompanionState>>(COMPANIONS_STATE_KEY)) ?? {};
+          const currentInitiative = await this.ctx.storage.get<SessionInitiativeState>(INITIATIVE_STATE_KEY);
+          const inverseTargets = {
+            hp: Object.fromEntries((targets.changedCharacters ?? []).map(id => [id, hp[id]]).filter(([,state]) => state)),
+            companions: Object.fromEntries((targets.changedCompanions ?? []).map(id => [id, currentCompanions[id]]).filter(([,state]) => state)),
+            initiative: targets.initiative && currentInitiative ? currentInitiative : undefined,
+            changedCharacters: targets.changedCharacters,
+            changedCompanions: targets.changedCompanions,
+          };
+          (inverseReverse as AbilityReverse).snapshot.targetReverse = inverseTargets;
+          for (const id of targets.changedCharacters ?? []) {
+            if (id !== characterId && targets.hp[id]) hp[id] = targets.hp[id];
+          }
+          writes[HP_STATE_KEY] = hp;
+          for (const id of targets.changedCompanions ?? []) {
+            if (targets.companions[id]) currentCompanions[id] = targets.companions[id];
+            else delete currentCompanions[id];
+          }
+          if (targets.changedCompanions?.length) writes[COMPANIONS_STATE_KEY] = currentCompanions;
+          if (targets.initiative) writes[INITIATIVE_STATE_KEY] = targets.initiative;
+        }
         break;
       }
       case "session.rest.restore": {
@@ -529,6 +563,25 @@ export class SessionActor extends BaseSessionActor {
       undoneAt: now,
     });
     await this.broadcastAuthoritativeStateForReverse(reverse);
+    if (reverse.type === "character.ability.restore" && reverse.snapshot.targetReverse) {
+      for (const id of reverse.snapshot.targetReverse.changedCharacters ?? []) {
+        if (id !== characterId && hp[id]) broadcast(this.ctx.getWebSockets(), { type: "session.hp.updated", character: hp[id] });
+      }
+      if (reverse.snapshot.targetReverse.initiative) {
+        broadcast(this.ctx.getWebSockets(), { type: "session.initiative.updated", state: reverse.snapshot.targetReverse.initiative });
+      }
+      const config = await this.ctx.storage.get<{ config?: { creatureCompendium?: Array<{ id: string; ownerUserId?: string }> } }>("session-runtime-config");
+      const persistedCompanions = (await this.ctx.storage.get<Record<string, CompanionState>>(COMPANIONS_STATE_KEY)) ?? {};
+      for (const id of reverse.snapshot.targetReverse.changedCompanions ?? []) {
+        const owner = config?.config?.creatureCompendium?.find(creature => creature.id === id)?.ownerUserId;
+        for (const socket of this.ctx.getWebSockets()) {
+          const viewer = readSessionConnection(socket);
+          if (viewer && (viewer.role === "MASTER" || (owner && viewer.userId === owner))) {
+            send(socket, { type: "session.companions.updated", companion: persistedCompanions[id] });
+          }
+        }
+      }
+    }
   }
 
   private async handleCharacterLifecycleOperation(
