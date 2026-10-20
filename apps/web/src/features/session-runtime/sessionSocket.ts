@@ -110,6 +110,7 @@ function decodeSessionMessage(raw: string): DecodedSessionMessage | null {
 
 export class SessionSocket {
   private readonly transport: SessionMessageClient<SessionOutgoingMessage, DecodedSessionMessage>
+  private paused = false
   private pendingMagicOperations: SessionMagicOperation[] = []
   private magicFlushQueued = false
   private latestAbilityStates = new Map<string, SessionAbilityState>()
@@ -136,6 +137,8 @@ export class SessionSocket {
 
   send(message: SessionOutgoingMessage): boolean {
     if (!this.transport.connected) return false
+    // Do not buffer operations created while paused; the server is authoritative.
+    if (this.paused && this.options.role !== "MASTER" && message.type !== "session.heartbeat" && message.type !== "session.ping") return false
 
     if (message.type === "session.magic.operation") {
       if (message.operation.type === "character.spell.cast") {
@@ -158,6 +161,7 @@ export class SessionSocket {
   }
 
   private clearLocalState(): void {
+    this.paused = false
     this.pendingMagicOperations = []
     this.magicFlushQueued = false
     this.latestAbilityStates.clear()
@@ -165,6 +169,10 @@ export class SessionSocket {
   }
 
   private handleMessage({ message, abilityMessage, lifecycleMessage, runtimeConfigMessage }: DecodedSessionMessage): void {
+      if (message.type === "session.pause.state") {
+        this.paused = message.state.paused
+        if (this.paused) this.pendingMagicOperations = []
+      }
       if (abilityMessage?.type === "session.abilities.snapshot") {
         this.latestAbilityStates = new Map(
           abilityMessage.characters.map((character) => [character.characterId, character]),
@@ -211,6 +219,10 @@ export class SessionSocket {
 
   private flushMagicOperations(): void {
     this.magicFlushQueued = false
+    if (this.paused && this.options.role !== "MASTER") {
+      this.pendingMagicOperations = []
+      return
+    }
     const transport = this.transport
     const pending = this.pendingMagicOperations.splice(0)
     if (!pending.length || !transport.connected) return
