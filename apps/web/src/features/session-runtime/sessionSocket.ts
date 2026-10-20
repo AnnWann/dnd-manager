@@ -43,6 +43,7 @@ import {
   type SessionRuntimeConfigServerMessage,
 } from "./runtimeConfigSessionProtocol"
 import type { CompanionClientMessage, CompanionServerMessage } from "../../shared/session-runtime/companionRuntime"
+import { parseSessionPauseServerMessage, type SessionPauseClientMessage, type SessionPauseServerMessage } from "../../shared/session-runtime/sessionPause"
 import { setRuntimeCustomSystemOverride } from "../../lib/customSystems/creationCustomSystemsBridge"
 import type { SessionSheetOperationMessage } from "./sheetRoutes"
 
@@ -65,6 +66,7 @@ export type SessionSocketOptions = {
       | SessionInitiativeServerMessage
       | SessionRuntimeConfigServerMessage
       | CompanionServerMessage
+      | SessionPauseServerMessage
   ) => void
 }
 
@@ -84,6 +86,7 @@ type SessionOutgoingMessage = | ClientSessionMessage
     | { type: "session.magic.operation"; operation: SessionMagicOperation }
     | { type: "session.equipment.operation"; operation: SessionEquipmentOperation }
     | CompanionClientMessage
+    | SessionPauseClientMessage
 type SessionIncomingMessage = Parameters<SessionSocketOptions["onMessage"]>[0]
 type DecodedSessionMessage = {
   message: SessionIncomingMessage
@@ -100,7 +103,8 @@ function decodeSessionMessage(raw: string): DecodedSessionMessage | null {
   const initiativeMessage = parseInitiativeServerMessage(raw)
   const abilityMessage = parseAbilityServerMessage(raw)
   const companionMessage = parseCompanionServerMessage(raw)
-  const message = runtimeConfigMessage ?? lifecycleMessage ?? inventoryMessage ?? missionMessage ?? initiativeMessage ?? abilityMessage ?? companionMessage ?? parseServerSessionMessage(raw)
+  const pauseMessage = parseSessionPauseServerMessage(raw)
+  const message = pauseMessage ?? runtimeConfigMessage ?? lifecycleMessage ?? inventoryMessage ?? missionMessage ?? initiativeMessage ?? abilityMessage ?? companionMessage ?? parseServerSessionMessage(raw)
   return message ? { message, abilityMessage, lifecycleMessage, runtimeConfigMessage } : null
 }
 
