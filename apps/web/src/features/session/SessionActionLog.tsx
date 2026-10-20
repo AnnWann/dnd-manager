@@ -16,6 +16,7 @@ import type {
 } from "../../models/customSystems/CustomSystemDefinition"
 import type { JsonValue } from "../../models/customSystems/CustomGenerals"
 import type { BonusRollResolution } from "../../models/bonuses/Bonus"
+import { buildAbilityRollFeed, readHiddenAbilityRollIds, saveHiddenAbilityRollIds, type AbilityRollFeedEntry } from "./abilityRollFeed"
 import type { SessionCustomSystemOperation } from "../session-runtime/customSystemSessionProtocol"
 import { isLatestUndoableSessionLog, type SessionLogRecord } from "../session-runtime/sessionLogProtocol"
 import type { SessionSkill } from "../session-runtime/sessionProtocol"
@@ -39,10 +40,17 @@ const MAX_DICE_ROLLS = 100
 const SESSION_PANEL_COLLAPSED_STORAGE_KEY = "dnd-manager:session-right-panel:collapsed"
 
 type PanelView = "logs" | "dice"
-type RollFeedEntry =
-  | { type: "bonus"; id: string; characterId: string; title: string; dice: string; result: number; description: string; createdAt: string }
+type LiveRollFeedEntry =
   | { type: "dice"; result: SessionDiceRollResult }
   | { type: "action"; result: SessionActionRollResult }
+
+type RollFeedEntry = AbilityRollFeedEntry | LiveRollFeedEntry
+
+function rollFeedCreatedAt(entry: RollFeedEntry): number {
+  const timestamp = entry.type === "ability" ? entry.createdAt : entry.result.createdAt
+  const parsed = Date.parse(timestamp)
+  return Number.isFinite(parsed) ? parsed : 0
+}
 
 export function SessionActionLog() {
   const { activeCharacter, operationLog, visibleCharacters, partyInventory, groundInventory } = useCharacterContext()
@@ -56,8 +64,9 @@ export function SessionActionLog() {
   const isMaster = runtime?.role === "MASTER"
   const [page, setPage] = useState(0)
   const [panelView, setPanelView] = useState<PanelView>("logs")
-  const [rollFeed, setRollFeed] = useState<RollFeedEntry[]>([])
-  const [clearedBonusRollBefore, setClearedBonusRollBefore] = useState(0)
+  const [rollFeed, setRollFeed] = useState<LiveRollFeedEntry[]>([])
+  const [hiddenAbilityRollIds, setHiddenAbilityRollIds] = useState<string[]>(() => readHiddenAbilityRollIds(runtime?.sessionId))
+  useEffect(() => { setHiddenAbilityRollIds(readHiddenAbilityRollIds(runtime?.sessionId)) }, [runtime?.sessionId])
   const [collapsed, setCollapsed] = useState(() => {
     if (typeof window === "undefined") return false
     return window.localStorage.getItem(SESSION_PANEL_COLLAPSED_STORAGE_KEY) === "1"
@@ -104,21 +113,27 @@ export function SessionActionLog() {
     })
   }, [operationLog, runtime, sessionLog])
 
-  const abilityBonusRolls = useMemo<RollFeedEntry[]>(() => sessionLog.flatMap((record) => {
-    if (record.operation.type !== "character.ability.use" || Date.parse(record.createdAt) <= clearedBonusRollBefore) return []
-    return (record.operation.bonusRollResults ?? []).map((roll) => ({
-      type: "bonus" as const,
-      id: `${record.id}:${roll.key}`,
-      characterId: record.operation.characterId,
-      title: roll.label,
-      dice: roll.dice,
-      result: roll.total,
-      description: roll.key.startsWith("self-damage:") || roll.key.includes("onUseHp:")
-        ? "Rolagem de cura/dano"
-        : "Rolagem de bônus",
-      createdAt: record.createdAt,
-    }))
-  }), [sessionLog, clearedBonusRollBefore])
+  const hiddenRollRecordIds = useMemo(() => new Set(hiddenAbilityRollIds), [hiddenAbilityRollIds])
+  const abilityRolls = useMemo(
+    () => buildAbilityRollFeed(sessionLog, hiddenRollRecordIds),
+    [sessionLog, hiddenRollRecordIds],
+  )
+  const displayedRolls = useMemo<RollFeedEntry[]>(() =>
+    [...abilityRolls, ...rollFeed]
+      .sort((left, right) => rollFeedCreatedAt(right) - rollFeedCreatedAt(left))
+      .slice(0, MAX_DICE_ROLLS),
+  [abilityRolls, rollFeed])
+
+  function clearDisplayedRolls() {
+    setRollFeed([])
+    // Clear is a view action: preserve all source session logs for undo/audit.
+    const ids = Array.from(new Set([
+      ...hiddenAbilityRollIds,
+      ...sessionLog.filter(record => record.operation.type === "character.ability.use").map(record => record.id),
+    ]))
+    setHiddenAbilityRollIds(ids)
+    saveHiddenAbilityRollIds(runtime?.sessionId, ids)
+  }
 
   const records = useMemo<DisplayRecord[]>(() => [
     ...visibleLegacyRecords.map((record) => ({ source: "legacy" as const, record })),
@@ -137,13 +152,10 @@ export function SessionActionLog() {
   }, [page, pageCount])
 
   useEffect(() => {
-    function prepend(entry: RollFeedEntry) {
+    function prepend(entry: LiveRollFeedEntry) {
       setRollFeed((current) => [
         entry,
-        ...current.filter((candidate) => {
-          if (candidate.type === "bonus" || entry.type === "bonus") return true
-          return candidate.result.id !== entry.result.id
-        }),
+        ...current.filter((candidate) => candidate.result.id !== entry.result.id),
       ].slice(0, MAX_DICE_ROLLS))
     }
     function onDiceRoll(event: Event) {
@@ -186,7 +198,7 @@ export function SessionActionLog() {
   const title = activeView === "logs" ? "Logs da sessão" : "Rolagens"
   const subtitle = activeView === "logs"
     ? `${records.length} ações recentes`
-    : `${rollFeed.length} rolagens recentes`
+    : `${displayedRolls.length} rolagens recentes`
   const PanelIcon = activeView === "logs" ? History : Dices
 
   function renderPanelContent() {
@@ -244,14 +256,14 @@ export function SessionActionLog() {
       </>
     ) : (
       <DiceRollPanel
-        entries={[...abilityBonusRolls, ...rollFeed]}
+        entries={displayedRolls}
         characterNames={characterNames}
         manualTarget={manualRollTarget}
         allowAnonymous={isMaster}
         privateRolls={privateRolls}
         digitalDiceEnabled={digitalDiceEnabled}
         onPrivateRollsChange={changePrivateRolls}
-        onClear={() => { setRollFeed([]); setClearedBonusRollBefore(Date.now()) }}
+        onClear={clearDisplayedRolls}
       />
     )
   }
@@ -544,12 +556,12 @@ function DiceRollPanel({
       <div className="min-h-0 flex-1 overflow-y-auto p-3">
         {entries.length ? (
           <div className="flex flex-col gap-2">
-            {entries.map((entry) => entry.type === "bonus" ? (
-              <div key={entry.id} className="rounded-xl border border-border bg-bg-subtle p-3">
-                <div className="text-xs font-semibold text-textH">{entry.title}</div>
-                <div className="mt-1 text-[11px] text-textMuted">{characterNames.get(entry.characterId) ?? entry.characterId} · {entry.dice}</div>
-                <div className="mt-2 text-lg font-bold text-textH">{entry.result} · {entry.description}</div>
-              </div>
+            {entries.map((entry) => entry.type === "ability" ? (
+              <AbilityRollEntry
+                key={entry.id}
+                entry={entry}
+                characterName={characterNames.get(entry.characterId) ?? entry.characterId}
+              />
             ) : entry.type === "action" ? (
               <ActionRollEntry
                 key={entry.result.id}
@@ -581,6 +593,38 @@ function DiceRollPanel({
         )}
       </div>
     </>
+  )
+}
+
+function AbilityRollEntry({ entry, characterName }: {
+  entry: AbilityRollFeedEntry
+  characterName: string
+}) {
+  return (
+    <article className="overflow-hidden rounded-xl border border-accentBorder bg-bg">
+      <header className="border-b border-border bg-accentBg px-3 py-2.5">
+        <div className="truncate text-sm font-bold text-textH">{entry.title}</div>
+        <div className="mt-0.5 text-[10px] text-textMuted">Habilidade · Rolagem ao usar</div>
+      </header>
+      <div className="grid gap-2 p-3">
+        {entry.rolls.map((roll, index) => (
+          <div key={`${roll.key}:${index}`} className="rounded-lg border border-border bg-bg-subtle p-3">
+            <div className="text-[11px] font-semibold text-textH">{roll.label}</div>
+            <div className="mt-1 text-[10px] text-textMuted">
+              {roll.dice} → {roll.diceValue}
+              {roll.formulaBonus !== 0 ? ` ${roll.formulaBonus >= 0 ? "+" : "−"} ${Math.abs(roll.formulaBonus)} (fórmula)` : ""}
+            </div>
+            <div className="mt-2 text-lg font-bold text-textH">
+              {roll.total} <span className="text-xs font-medium text-textMuted">total</span>
+            </div>
+          </div>
+        ))}
+        <div className="flex items-center justify-between gap-2 text-[10px] text-textMuted">
+          <span className="truncate">{characterName}</span>
+          <time dateTime={entry.createdAt}>{formatTime(entry.createdAt)}</time>
+        </div>
+      </div>
+    </article>
   )
 }
 
