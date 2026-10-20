@@ -120,7 +120,10 @@ export function useActiveInitiativeTokenMarker({
         return
       }
       const tokens = await OBR.scene.items.getItems(
-        item => item.layer === "CHARACTER" || Boolean(readTokenCreatureLink(item.metadata)) || Boolean(readTokenCharacterLink(item.metadata)),
+        item => item.layer === "CHARACTER"
+          || Boolean(readTokenCreatureLink(item.metadata))
+          || Boolean(readTokenCharacterLink(item.metadata))
+          || Boolean(readTokenCompendiumCreature(item.metadata)),
       )
       const token = findActiveInitiativeItem(tokens, sessionId, active)
       if (!token) {
