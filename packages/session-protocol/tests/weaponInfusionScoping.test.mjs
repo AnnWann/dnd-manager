@@ -16,7 +16,7 @@ async function production(relative) {
   return import("data:text/javascript;base64," + Buffer.from(built.outputFiles[0].contents).toString("base64"))
 }
 
-const [{ CharacterTemplate }, { getActiveAttackRiders }, { getAbilityWeaponInfusions },
+const [{ CharacterTemplate }, { getActiveAttackRiders, getActiveAttackRiderEntries }, { getAbilityWeaponInfusions },
   { getCharacterConditions, removeCharacterCondition }] = await Promise.all([
   production("../../../apps/web/src/models/characters/CharacterTemplate.ts"),
   production("../../../apps/web/src/models/combat/AttackRider.ts"),
@@ -104,4 +104,42 @@ test("legacy duplicate conditions on one weapon are collapsed, without losing ot
   assert.equal(active(legacy, "w2").length, 1)
   const ended = legacy.deactivateAbility("rite")
   assert.equal(getCharacterConditions(ended).filter(condition => condition.sourceAbilityId === "rite").length, 0)
+})
+
+test("weapon inspector identifies which condition owns the applied extra die", () => {
+  const c = character().useAbility("rite", "storm", undefined, "w1")
+  const entries = getActiveAttackRiderEntries(c, { scope: "weapon", weaponId: "w1" })
+  assert.equal(entries.length, 1)
+  assert.equal(entries[0].origin.type, "condition")
+  assert.equal(entries[0].origin.sourceAbilityId, "rite")
+  assert.equal(entries[0].rider.damage.dice, "1d6")
+  assert.equal(entries[0].rider.damage.damageType, "lightning")
+  assert.equal(getActiveAttackRiderEntries(c, { scope: "weapon", weaponId: "w2" }).length, 0)
+})
+
+test("a copied on-hit rider stored twice cannot roll twice and both sources remain inspectable", () => {
+  const c = character().useAbility("rite", "storm", undefined, "w1")
+  const condition = getCharacterConditions(c).find(value => value.sourceAbilityOptionId?.includes(":abilities"))
+  assert.ok(condition)
+  // A legacy editor could store the same on-hit rider directly on a
+  // condition as well as on the ability granted by that condition.
+  const malformed = c.withSheet("conditions", getCharacterConditions(c).map(value => value.id !== condition.id
+    ? value : { ...value, bonuses: { attackRiders: value.grantedAbilities[0].bonuses.attackRiders } }))
+  const effective = getActiveAttackRiderEntries(malformed, { scope: "weapon", weaponId: "w1" })
+  const inspected = getActiveAttackRiderEntries(malformed, { scope: "weapon", weaponId: "w1" }, { includeDuplicates: true })
+  assert.equal(effective.length, 1)
+  assert.equal(inspected.length, 2)
+  assert.equal(inspected.filter(value => value.suppressedDuplicate).length, 1)
+  assert.equal(getActiveAttackRiders(malformed, { scope: "weapon", weaponId: "w1" }).length, 1)
+})
+
+test("removing the original effect after a double projection leaves no phantom rider", () => {
+  const c = character().useAbility("rite", "storm", undefined, "w1")
+  const condition = getCharacterConditions(c).find(value => value.sourceAbilityOptionId?.includes(":abilities"))
+  assert.ok(condition)
+  const malformed = c.withSheet("conditions", getCharacterConditions(c).map(value => value.id !== condition.id
+    ? value : { ...value, bonuses: { attackRiders: value.grantedAbilities[0].bonuses.attackRiders } }))
+  const cleaned = removeCharacterCondition(malformed, condition.id)
+  assert.equal(getActiveAttackRiderEntries(cleaned, { scope: "weapon", weaponId: "w1" }).length, 0)
+  assert.equal(getCharacterConditions(cleaned).some(value => value.id === condition.id), false)
 })
