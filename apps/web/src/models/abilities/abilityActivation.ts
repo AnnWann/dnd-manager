@@ -290,7 +290,7 @@ export function useAbilityEffect(
     }
     const damage = effect.ignoreResistance
       ? amount
-      : resolveDamage(amount, effect.damageType ?? "fire", next.get("sheet").damageAffinities).applied
+      : resolveDamage(amount, effect.damageType ?? "fire", next.get("sheet").damageAffinities, { magical: effect.magical }).applied
     next = effect.bypassTemporaryHp
       ? next.setCurrentHp(next.get("sheet").HP.current - damage)
       : next.takeDamage(damage)
