@@ -43,6 +43,8 @@ export type OnUseHpEffect = {
   kind: "damage" | "heal"
   bonus: Bonus
   damageType?: DamageType
+  /** Whether the damage counts as magical for affinity qualifiers. */
+  magical?: boolean
   /** When true, bypass resistance, immunity and vulnerability. */
   ignoreResistance?: boolean
   /** Damage paid directly from current HP, without using temporary HP. */
