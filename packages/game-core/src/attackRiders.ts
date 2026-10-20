@@ -15,7 +15,7 @@ export type AttackRider = {
   /** A marked target is chosen when the spell is cast. */
   targetSelection?: "onCast"
   /** Rolled once per successful hit; its type is independent of the base damage. */
-  damage?: { dice: string; damageType?: DamageType }
+  damage?: { dice: string; damageType?: DamageType; magical?: boolean; ignoreResistance?: boolean }
   /** When present, a player must choose one of these types at activation/cast. */
   damageTypeChoices?: DamageType[]
   /** Changes only the base weapon damage packet, not other typed riders. */
