@@ -179,6 +179,7 @@ function App() {
    finally { popoverOpening.current=false }
  }, [])
  useEffect(() => {
+   if(isInitiativePopover||isAssociatePopover)return
    const channel = new BroadcastChannel(DICE_CHANNEL)
    diceChannel.current = channel
    channel.onmessage = event => {
@@ -198,7 +199,7 @@ function App() {
    return ()=>{channel.close();if(diceChannel.current===channel)diceChannel.current=null}
  }, [])
  useEffect(()=>{
-   if(isDicePopover)return
+   if(isDicePopover||isInitiativePopover||isAssociatePopover)return
    currentDiceState.current={connected:status==="Conectado à sessão",selectedCharacterId:selectedId||undefined,history:rollHistory}
    diceChannel.current?.postMessage({type:"state",value:currentDiceState.current})
  },[status,selectedId,rollHistory])
@@ -207,7 +208,7 @@ function App() {
  const grant = useRef<string | null>(null)
  const socket = useRef<SessionTransport | null>(null)
  useEffect(() => {
-   if(isDicePopover||isAssociatePopover)return
+   if(isDicePopover||isAssociatePopover||isInitiativePopover)return
    const forward=(event:Event)=>{
      const request=(event as CustomEvent).detail
      if(!request || status!=="Conectado à sessão" || role!=="MASTER"){
@@ -223,7 +224,7 @@ function App() {
  },[status,role])
  useEffect(() => { let active = true; OBR.onReady(() => { if (active) setReady(true) }); return () => { active = false } }, [])
  useEffect(() => {
-   if (!ready || isDicePopover || isAssociatePopover) return
+   if (!ready || isDicePopover || isAssociatePopover || isInitiativePopover) return
    const id = "com.dnd-manager.owlbear/associate-character"
    void OBR.contextMenu.create({
      id,
@@ -252,7 +253,7 @@ function App() {
    return () => { void OBR.contextMenu.remove(id) }
  }, [ready])
  useEffect(() => {
-   if (!ready || isDicePopover) return
+   if (!ready || isDicePopover || isInitiativePopover) return
    let active = true
    const update = async () => {
      try {
@@ -282,7 +283,7 @@ function App() {
    } catch (e) {setTokenLinkError("Não foi possível alterar o vínculo: " + String(e))}
  },[selectedToken,sessionId,selectedId])
  useEffect(()=>{
-   if(isDicePopover)return
+   if(isDicePopover||isInitiativePopover)return
    const channel=new BroadcastChannel(ASSOC_CHANNEL)
    assocChannel.current=channel
    channel.onmessage=event=>{
@@ -306,7 +307,7 @@ function App() {
    return()=>{channel.close();if(assocChannel.current===channel)assocChannel.current=null}
  },[])
  useEffect(()=>{
-   if(isDicePopover||isAssociatePopover)return
+   if(isDicePopover||isAssociatePopover||isInitiativePopover)return
    associationSnapshot.current={
      sessionId,connected:status==="Conectado à sessão",role,
      catalog:role==="MASTER"?compendiumCreatures.map(c=>({id:c.id,name:c.name})):[],
@@ -532,6 +533,19 @@ function App() {
  const sheet = asRecord(raw.sheet)
  const health = hp[selectedId]
  const attributes = asRecord(sheet.attributes)
+ if(isInitiativePopover)return <main className="owlbear-shell">
+   <header><strong>Iniciativa da sessão</strong><button type="button" onClick={()=>void OBR.popover.close(INITIATIVE_POPOVER_ID)} className="rounded-lg border border-border px-3 py-1 text-xs text-textH">Fechar</button></header>
+   <OwlbearInitiativeStrip
+     session={sharedInitiative.session}
+     isMaster={sharedInitiative.role==="MASTER"}
+     connected={sharedInitiative.connected}
+     rollingEnabled={sharedInitiative.rollingEnabled}
+     resolveBonus={entry=>entry.initiativeBonus}
+     onInitialize={()=>{initiativeChannel.current?.postMessage({type:"initialize"});return initiativeChannel.current!==null}}
+     onOperation={operation=>{initiativeChannel.current?.postMessage({type:"operation",operation});return initiativeChannel.current!==null}}
+     onRoll={entry=>{initiativeChannel.current?.postMessage({type:"roll",entryId:entry.id});return initiativeChannel.current!==null}}
+   />
+ </main>
  if(isAssociatePopover)return <main className="owlbear-shell">
    <section className="grid gap-3 p-4">
      <div className="flex items-center justify-between gap-2">
@@ -608,7 +622,10 @@ function App() {
    </div>
    {tokenLinkError && <p role="alert" className="text-danger">{tokenLinkError}</p>}
  </div>}
- {!isDicePopover && <button type="button" className="mb-3 inline-flex items-center gap-2 rounded-lg border border-accentBorder bg-accentBg px-3 py-2 text-xs font-semibold text-textH" onClick={()=>void openDicePopover()}>Abrir rolador separado ↗</button>}
+ <div className="mb-3 flex flex-wrap gap-2">
+ <button type="button" className="inline-flex items-center gap-2 rounded-lg border border-accentBorder bg-accentBg px-3 py-2 text-xs font-semibold text-textH" onClick={()=>void openInitiativePopover()}>Abrir iniciativa no mapa ↗</button>
+ <button type="button" className="inline-flex items-center gap-2 rounded-lg border border-accentBorder bg-accentBg px-3 py-2 text-xs font-semibold text-textH" onClick={()=>void openDicePopover()}>Abrir rolador separado ↗</button>
+ </div>
  {!isDicePopover && <div className="mb-3 flex gap-2 rounded-xl border border-border bg-bg p-1" role="tablist" aria-label="Ferramentas da sessão">
  <button type="button" role="tab" aria-selected={activeArea==="sheet"} onClick={()=>setActiveArea("sheet")} className={`flex-1 rounded-lg px-3 py-2 text-sm font-semibold ${activeArea==="sheet"?"bg-accentBg text-textH":"text-textMuted hover:bg-bg-subtle"}`}>Ficha</button>
  <button type="button" role="tab" aria-selected={activeArea==="dice"} onClick={()=>setActiveArea("dice")} className={`flex-1 rounded-lg px-3 py-2 text-sm font-semibold ${activeArea==="dice"?"bg-accentBg text-textH":"text-textMuted hover:bg-bg-subtle"}`}>Dados</button>
