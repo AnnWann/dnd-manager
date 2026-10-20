@@ -81,7 +81,7 @@ function synchronizeSharedAbilityUsage(character: CharacterTemplate, ability: Ab
 export function canActivateAbility(character: CharacterTemplate, ability: Ability): boolean {
   if (abilityRequiresActivation(ability) && isAbilityBenefitsActive(ability)) {
     // Changing an active elemental/stance option isn't another initial activation.
-    return Boolean(ability.allowOptionSwitching && ((ability.activationOptions?.length ?? 0) > 0 || getAbilityAttackRiderDamageChoices(ability).length > 0))
+    return Boolean(ability.allowMultipleWeaponActivations || (ability.allowOptionSwitching && ((ability.activationOptions?.length ?? 0) > 0 || getAbilityAttackRiderDamageChoices(ability).length > 0)))
   }
   const usage = getSharedAbilityUsage(character, ability)
   if (!usage || usage.reset === "spellSlot") return true
