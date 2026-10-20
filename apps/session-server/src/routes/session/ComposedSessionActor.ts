@@ -574,6 +574,32 @@ export class SessionActor extends BaseSessionActor {
       delete abilities[characterId];
       delete hp[characterId];
       delete conditions[characterId];
+    } else if (operation.type === "character.session.rename") {
+      const storedAbility = abilities[characterId];
+      if (!storedAbility?.initialized || lifecycle[characterId]?.active === false) {
+        sendError(webSocket, "CHARACTER_NOT_IN_SESSION", "The character is not active in this session.");
+        return;
+      }
+      let character: CharacterTemplate;
+      try {
+        character = CharacterTemplate.fromJSON(storedAbility.character as Partial<CharacterTemplateProps>);
+      } catch {
+        sendError(webSocket, "CHARACTER_STATE_INVALID", "The authoritative character snapshot is invalid.");
+        return;
+      }
+      const nextCharacter = character.with("name", operation.name);
+      abilities[characterId] = {
+        ...storedAbility,
+        character: nextCharacter.toJSON() as unknown as Record<string, unknown>,
+        revision: storedAbility.revision + 1,
+      };
+      lifecycle[characterId] = {
+        characterId,
+        character: abilities[characterId].character,
+        ownerUserId: lifecycle[characterId]?.ownerUserId ?? hp[characterId]?.ownerUserId,
+        active: true,
+        revision: (lifecycle[characterId]?.revision ?? 0) + 1,
+      };
     } else if (operation.type === "character.session.owner.set") {
       const storedAbility = abilities[characterId];
       const storedHp = hp[characterId];
