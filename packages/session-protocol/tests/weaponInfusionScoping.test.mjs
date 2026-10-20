@@ -16,7 +16,7 @@ async function production(relative) {
   return import("data:text/javascript;base64," + Buffer.from(built.outputFiles[0].contents).toString("base64"))
 }
 
-const [{ CharacterTemplate }, { getActiveAttackRiders, getActiveAttackRiderEntries }, { getAbilityWeaponInfusions },
+const [{ CharacterTemplate }, { getActiveAttackRiders, getActiveAttackRiderEntries, optionRequiresWeaponSelection }, { getAbilityWeaponInfusions },
   { getCharacterConditions, removeCharacterCondition }] = await Promise.all([
   production("../../../apps/web/src/models/characters/CharacterTemplate.ts"),
   production("../../../apps/web/src/models/combat/AttackRider.ts"),
@@ -142,4 +142,57 @@ test("removing the original effect after a double projection leaves no phantom r
   const cleaned = removeCharacterCondition(malformed, condition.id)
   assert.equal(getActiveAttackRiderEntries(cleaned, { scope: "weapon", weaponId: "w1" }).length, 0)
   assert.equal(getCharacterConditions(cleaned).some(value => value.id === condition.id), false)
+})
+
+test("a base ability rider requiring an activation weapon creates a real bound condition", () => {
+  const baseRite = { ...rite, activationOptions: undefined, bonuses: { attackRiders: [infusedRider] } }
+  const initial = CharacterTemplate.fromJSON({
+    id: "direct-rite", name: "Direct rite", abilities: [baseRite],
+    equipment: { weapons: [{ id: "w1", name: "Espada curta" }, { id: "w2", name: "Condutor Dracônico" }] },
+  })
+  assert.equal(optionRequiresWeaponSelection(baseRite), true)
+  assert.equal(initial.useAbility("rite").toJSON().abilities[0].benefitsActive, undefined)
+  const first = initial.useAbility("rite", undefined, undefined, "w1")
+  assert.deepEqual(getAbilityWeaponInfusions(first, "rite").map(entry => entry.weaponId), ["w1"])
+  assert.equal(active(first, "w1").length, 1)
+  assert.equal(active(first, "w2").length, 0)
+  const second = first.useAbility("rite", undefined, undefined, "w2")
+  assert.deepEqual(getAbilityWeaponInfusions(second, "rite").map(entry => entry.weaponId).sort(), ["w1", "w2"])
+  assert.equal(active(second, "w1").length, 1)
+  assert.equal(active(second, "w2").length, 1)
+  assert.deepEqual(second.useAbility("rite", undefined, undefined, "w1").toJSON(), second.toJSON())
+  const withoutFirst = removeCharacterCondition(second, getAbilityWeaponInfusions(second, "rite").find(entry => entry.weaponId === "w1").conditionId)
+  assert.equal(active(withoutFirst, "w1").length, 0)
+  assert.equal(active(withoutFirst, "w2").length, 1)
+  const ended = second.deactivateAbility("rite")
+  assert.equal(active(ended, "w1").length, 0)
+  assert.equal(active(ended, "w2").length, 0)
+})
+
+test("an activation option with its own rider but no granted subability binds the selected weapon", () => {
+  const optionRite = { ...rite, activationOptions: [{ id: "flame", name: "Rito das Chamas", bonuses: { attackRiders: [
+    { ...infusedRider, id: "flame-die", damage: { dice: "1d6", damageType: "fire" } },
+  ] } }] }
+  const initial = CharacterTemplate.fromJSON({
+    id: "option-rite", name: "Option rite", abilities: [optionRite],
+    equipment: { weapons: [{ id: "w1", name: "Espada curta" }, { id: "w2", name: "Condutor Dracônico" }] },
+  })
+  assert.equal(optionRequiresWeaponSelection(optionRite, "flame"), true)
+  const applied = initial.useAbility("rite", "flame", undefined, "w2")
+  assert.equal(active(applied, "w1").length, 0)
+  assert.equal(active(applied, "w2").length, 1)
+  assert.equal(active(applied, "w2")[0].damage.damageType, "fire")
+  assert.deepEqual(getAbilityWeaponInfusions(applied, "rite").map(entry => entry.weaponId), ["w2"])
+})
+
+test("base and option riders retain their own identities while following one selected weapon", () => {
+  const combined = { ...rite, bonuses: { attackRiders: [{ ...infusedRider, id: "base" }] } }
+  const initial = CharacterTemplate.fromJSON({
+    id: "combined", name: "Combined", abilities: [combined],
+    equipment: { weapons: [{ id: "w1", name: "Espada curta" }, { id: "w2", name: "Condutor Dracônico" }] },
+  })
+  const applied = initial.useAbility("rite", "storm", undefined, "w1")
+  assert.equal(active(applied, "w1").length, 2)
+  assert.equal(active(applied, "w2").length, 0)
+  assert.equal(getAbilityWeaponInfusions(applied, "rite").length, 1)
 })
