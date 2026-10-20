@@ -118,6 +118,8 @@ export function requestActionRoll(input: {
     visibility: getRollVisibility(),
     source: input.source,
     targetEntryId: input.targetEntryId,
+    targetRefs: input.targetRefs,
+    pointLabel: input.pointLabel,
   })
 }
 
