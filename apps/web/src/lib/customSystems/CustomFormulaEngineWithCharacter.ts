@@ -233,16 +233,17 @@ export function validateCustomFormula(
   formula: string,
   definition: CustomSystemDefinition,
   abilityType?: CustomAbilityTypeDefinition,
+  character?: CharacterTemplate,
 ): string | undefined {
   const transformed = transformFormulaContext(
     formula,
     definition,
     createMockState(definition),
     getCharacterFormulaValues(
-      undefined,
+      character,
       collectReferencedCharacterPaths(formula, definition, abilityType),
     ),
-    undefined,
+    character,
     abilityType ? { type: abilityType } : undefined,
     {
       level: abilityType?.activation?.level?.baseLevel ?? 1,
