@@ -6,6 +6,7 @@ import type { CustomNumericOperation, CustomSystemEventType } from '../../models
 import type { CustomResourceDefinition, CustomResourceRecoveryRule } from '../../models/customSystems/CustomResourceDefinition'
 import type { CharacterCustomSystemState, CustomSystemDefinition } from '../../models/customSystems/CustomSystemDefinition'
 import { evaluateCustomFormula } from './CustomFormulaEngineWithCharacter'
+import { getCustomSystemFormulaOverride, formulaOverrideKey } from './CustomSystemFormulaOverrides'
 
 let installed = false
 let resolveDefinition: ((systemId: string) => import('../../models/customSystems/CustomSystemDefinition').CustomSystemDefinition | undefined) | undefined
@@ -40,7 +41,7 @@ export function recalculateCustomSystemState(
     if (mode === 'manual' || hasManualOverride) continue
 
     const result = evaluateCustomFormula(
-      resource.maximumFormula,
+      getCustomSystemFormulaOverride(next, formulaOverrideKey('resourceMaximum', resource.id)) ?? resource.maximumFormula,
       definition,
       next,
       character,
@@ -72,7 +73,10 @@ export function recalculateCustomSystemState(
 
   for (const field of definition.fields) {
     if (field.type !== 'formula') continue
-    const result = evaluateCustomFormula(field.formula, definition, next, character)
+    const result = evaluateCustomFormula(
+      getCustomSystemFormulaOverride(next, formulaOverrideKey('field', field.id)) ?? field.formula,
+      definition, next, character,
+    )
     if (!result.ok) {
       if (!(field.id in next.fields)) continue
       const fields = { ...next.fields }
