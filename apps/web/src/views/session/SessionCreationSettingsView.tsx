@@ -820,6 +820,7 @@ function toCreationCustomSystemConfiguration(
     enabled: state.enabled,
     suppressed: isSuppressedConfiguredCustomSystemState(state) || undefined,
     abilityAcquisitionExceptions: state.abilityAcquisitionExceptions,
+    formulaOverrides: state.formulaOverrides,
     installationSource: state.installationSource,
   }
 }
