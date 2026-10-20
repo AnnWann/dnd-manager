@@ -65,7 +65,7 @@ export type ActiveAttackRiderEntry = {
 export function getActiveAttackRiderEntries(
   character: CharacterTemplate,
   context: AttackRiderContext,
-  options?: { includeDuplicates?: boolean },
+  options?: { includeDuplicates?: boolean; includeOtherTargets?: boolean },
 ): ActiveAttackRiderEntry[] {
   const activeConditions = getCharacterConditions(character)
     .filter(condition => condition.duration.remaining !== 0 || !["rounds", "turns", "minutes", "hours", "days"].includes(condition.duration.type))
@@ -120,7 +120,7 @@ export function getActiveAttackRiderEntries(
     .filter(({ rider }) => rider.scope === "all" || rider.scope === context.scope)
     .filter(({ rider }) => !rider.weaponSelection || Boolean(rider.weaponId))
     .filter(({ rider }) => !rider.weaponId || (context.scope === "weapon" && rider.weaponId === context.weaponId))
-    .filter(({ rider }) => !rider.targetEntryId || rider.targetEntryId === context.targetEntryId)
+    .filter(({ rider }) => options?.includeOtherTargets || !rider.targetEntryId || rider.targetEntryId === context.targetEntryId)
     .flatMap(entry => {
       // The weapon panel can reveal and delete suppressed historical effects,
       // while dice rollers receive only the first effective instance.
