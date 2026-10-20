@@ -2,9 +2,11 @@ import { MagicProvider } from "../../web/src/contexts/magicContext"
 import { CreatureQuickSheet, quickSheetFromCompendiumCreature } from "../../web/src/features/creatures/CreatureQuickSheet"
 import type { CompendiumCreature } from "../../web/src/models/creatures/CompendiumCreature"
 import { CreatureTokenInspector } from "./CreatureTokenInspector"
+import { OwlbearInitiativeStrip } from "./OwlbearInitiativeStrip"
+import { createCreatureInitiativeEntries } from "../../web/src/models/initiative/creatureInitiativeEntries"
 import { findOwlbearInitiativeCreature, resolveOwlbearSpellDefinitions } from "./owlbearSpellCatalog"
 import { filterAssociationChoices } from "./associationSearch"
-import type { InitiativeEntry } from "../../web/src/models/initiative/Initiative"
+import { createInitiativeSession, normalizeInitiativeSession, type InitiativeSession } from "../../web/src/models/initiative/Initiative"
 import { readSelectedToken, readTokenCharacterLink, setTokenCharacterLink, readTokenCreatureLink, setTokenCreatureLink, readTokenCompendiumCreature, TOKEN_COMPENDIUM_CREATURE_METADATA } from "./tokenCharacterLink"
 import { SessionDicePanel, type DiceHistoryEntry } from "./SessionDicePanel"
 import { SessionTransport } from "@dnd-manager/session-client/transport"
@@ -382,16 +384,22 @@ function App() {
      ws.connect()
    } catch (e) { setStatus("Desconectado"); setError(String(e instanceof Error ? e.message : e)) }
  }, [api, disconnect, openDicePopover])
- const initiativeEntries=(Array.isArray(asRecord(initiativeState?.session).entries)
-  ? asRecord(initiativeState?.session).entries : []) as InitiativeEntry[]
+ const initiativeSession = initiativeState?.initialized === true
+   ? normalizeInitiativeSession(asRecord(initiativeState.session) as Partial<InitiativeSession>)
+   : null
+ const initiativeEntries = initiativeSession?.entries ?? []
  const boundCreature=role==="MASTER" && selectedToken?.creatureLink?.sessionId===sessionId
   ? initiativeEntries.find(entry=>entry.id===selectedToken.creatureLink?.entryId) : undefined
  const catalogCreature=role==="MASTER"&&selectedToken?.catalogSessionId===sessionId&&selectedToken?.catalogId?availableCreatures.find(c=>c.id===selectedToken.catalogId):undefined
  const addCatalogToInitiative=()=>{
    if(!catalogCreature||status!=="Conectado à sessão"||role!=="MASTER"||!selectedToken||pendingCreatureAdd)return
-   const entryId=crypto.randomUUID()
-   const entry={id:entryId,sourceId:"compendium:"+catalogCreature.id,sourceType:"monster",name:catalogCreature.name,basicName:catalogCreature.basicName,realName:catalogCreature.name,initiative:0,initiativeBonus:catalogCreature.initiativeBonus,side:catalogCreature.defaultSide,armorClass:catalogCreature.armorClass,maxHp:catalogCreature.maxHp,currentHp:catalogCreature.maxHp,temporaryHp:0,conditions:[],order:initiativeEntries.length,createdAt:Date.now(),hidden:false,defeated:false}
-   if(socket.current?.sendRaw(JSON.stringify({type:"session.initiative.operation",operation:{type:"initiative.entries.add",characterId:"session",entries:[entry]}})))setPendingCreatureAdd({tokenId:selectedToken.id,entryId,sessionId})
+   if (!initiativeSession) { setError("Crie a iniciativa antes de adicionar criaturas."); return }
+   const entries = createCreatureInitiativeEntries(catalogCreature, initiativeEntries, {
+     digitalDiceEnabled: asRecord(runtimeConfig?.config).diceRollingEnabled !== false,
+   })
+   const entryId = entries[0]?.id
+   if (!entryId) { setError("Esta criatura única já está na iniciativa."); return }
+   if(socket.current?.sendRaw(JSON.stringify({type:"session.initiative.operation",operation:{type:"initiative.entries.add",characterId:"session",entries}})))setPendingCreatureAdd({tokenId:selectedToken.id,entryId,sessionId})
    else setError("Não foi possível enviar a criatura à iniciativa.")
  }
  useEffect(()=>{
@@ -456,6 +464,13 @@ function App() {
  </main>
  return <main className="owlbear-shell">
  <header><strong>{isDicePopover ? "D&D Manager · Dados" : "D&D Manager"}</strong><span>{ready ? "Owlbear conectado" : "Pré-visualização"}</span></header>
+ <OwlbearInitiativeStrip
+   session={initiativeSession}
+   isMaster={role==="MASTER"}
+   connected={status==="Conectado à sessão"}
+   onInitialize={()=>socket.current?.sendRaw(JSON.stringify({type:"session.initiative.initialize",session:createInitiativeSession("Combate da sessão")}))??false}
+   onOperation={operation=>socket.current?.sendRaw(JSON.stringify({type:"session.initiative.operation",operation}))??false}
+ />
  <section>{!isDicePopover && <><h1>D&D Manager · Sessão</h1><p>Ficha e rolagens sincronizadas com o Session Server.</p></>}
  <div className="toolbar"><button onClick={connectAccount}>{connected ? "Reconectar conta" : "Conectar ao D&D Manager"}</button><button disabled={!connected} onClick={() => void refreshSessions()}>Atualizar sessões</button></div>
  {error && <p role="alert" className="error">{error}</p>}
@@ -482,7 +497,7 @@ function App() {
  </div>}
  <div role="tabpanel" hidden={activeArea!=="dice"}><SessionDicePanel connected={status==="Conectado à sessão"} selectedCharacterId={selectedId || undefined} history={rollHistory} onRoll={request=>socket.current?.sendRaw(JSON.stringify({type:"session.dice.roll",request}))??false}/></div>
  {!isDicePopover && <div role="tabpanel" hidden={activeArea!=="sheet"}>
- {catalogCreature && !boundCreature ? <MagicProvider spells={sessionSpells}><div className="grid gap-3"><CreatureQuickSheet data={quickSheetFromCompendiumCreature(catalogCreature,undefined,{enableRolls:true,serverSpellIndexes})} compact/>{creatureRollError ? <p role="alert" className="text-xs text-danger">{creatureRollError}</p> : null}<button type="button" disabled={Boolean(pendingCreatureAdd)} onClick={addCatalogToInitiative} className="rounded-lg border border-accentBorder bg-accentBg px-3 py-2 text-sm font-semibold disabled:opacity-40">{pendingCreatureAdd?"Aguardando confirmação...":"Adicionar à iniciativa"}</button></div></MagicProvider> : boundCreature ? <CreatureTokenInspector key={boundCreature.id} entry={boundCreature} creature={findOwlbearInitiativeCreature(availableCreatures,boundCreature)} spells={sessionSpells} serverSpellIndexes={serverSpellIndexes} creatureRollError={creatureRollError} connected={status==="Conectado à sessão"} onOperation={operation=>socket.current?.sendRaw(JSON.stringify({type:"session.initiative.operation",operation}))??false}/> : selectedId && chosen && <article className="character-panel">
+ {catalogCreature && !boundCreature ? <MagicProvider spells={sessionSpells}><div className="grid gap-3"><CreatureQuickSheet data={quickSheetFromCompendiumCreature(catalogCreature,undefined,{enableRolls:true,serverSpellIndexes})} compact/>{creatureRollError ? <p role="alert" className="text-xs text-danger">{creatureRollError}</p> : null}<button type="button" disabled={Boolean(pendingCreatureAdd)||!initiativeSession} onClick={addCatalogToInitiative} className="rounded-lg border border-accentBorder bg-accentBg px-3 py-2 text-sm font-semibold disabled:opacity-40">{pendingCreatureAdd?"Aguardando confirmação...":"Adicionar à iniciativa"}</button></div></MagicProvider> : boundCreature ? <CreatureTokenInspector key={boundCreature.id} entry={boundCreature} creature={findOwlbearInitiativeCreature(availableCreatures,boundCreature)} spells={sessionSpells} serverSpellIndexes={serverSpellIndexes} creatureRollError={creatureRollError} connected={status==="Conectado à sessão"} onOperation={operation=>socket.current?.sendRaw(JSON.stringify({type:"session.initiative.operation",operation}))??false}/> : selectedId && chosen && <article className="character-panel">
  <CharacterSheetHeader name={String(raw.name ?? selectedId)} id={selectedId} />
  <NativeCharacterSheetHost
    characterId={selectedId} raw={raw} hp={health as unknown as Record<string, unknown>} conditions={conditions[selectedId]} runtimeConfig={runtimeConfig} inventoryState={inventoryState} spells={spellLibrary} role={role === "MASTER" ? "MASTER" : "PLAYER"}
