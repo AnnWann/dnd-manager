@@ -107,7 +107,6 @@ function App() {
  useEffect(() => {
    const channel = new BroadcastChannel(DICE_CHANNEL)
    diceChannel.current = channel
-   if(isDicePopover) channel.postMessage({type:"request-state"})
    channel.onmessage = event => {
      const message=event.data as Record<string,unknown>
      if(isDicePopover){
@@ -121,6 +120,7 @@ function App() {
        if(message.type==="roll" && message.request && socket.current)socket.current.sendRaw(JSON.stringify({type:"session.dice.roll",request:message.request}))
      }
    }
+   if(isDicePopover) channel.postMessage({type:"request-state"})
    return ()=>{channel.close();if(diceChannel.current===channel)diceChannel.current=null}
  }, [])
  useEffect(()=>{
@@ -265,10 +265,21 @@ function App() {
    }catch(error){setAssociationError(String(error))}
    finally{setAssociationBusy(false)}
  },[associationTokenId,associationState,associationChoice,associationKind])
+ const recordDiceResult = (entry: DiceHistoryEntry) => {
+   if (!entry.result || typeof entry.result.id !== "string") return
+   const previous = currentDiceState.current.history
+   const history = previous.some(item => item.result.id === entry.result.id)
+     ? previous
+     : [entry, ...previous].slice(0, 60)
+   currentDiceState.current = { ...currentDiceState.current, history }
+   setRollHistory(history)
+   // The popover can be mounting; on its handshake this first roll is replayed.
+   diceChannel.current?.postMessage({type:"state",value:currentDiceState.current})
+ }
  const disconnect = useCallback(() => {
    socket.current?.disconnect()
    socket.current = null
-   setCharacters({}); setAbilities({}); setHp({}); setConditions({}); setRuntimeConfig(null); setSpellLibrary([]); setCreatureRollError(""); setInventoryState(null);setInitiativeState(null);setCompendiumCreatures([]); setSelectedId(""); setRollHistory([]); setStatus("Desconectado")
+   setCharacters({}); setAbilities({}); setHp({}); setConditions({}); setRuntimeConfig(null); setSpellLibrary([]); setCreatureRollError(""); setInventoryState(null);setInitiativeState(null);setCompendiumCreatures([]); setSelectedId(""); setRollHistory([]); currentDiceState.current={connected:false,selectedCharacterId:undefined,history:[]}; setStatus("Desconectado")
  }, [])
  useEffect(() => () => { socket.current?.disconnect() }, [])
  const api = useCallback(async <T,>(path: string): Promise<T> => {
@@ -342,19 +353,19 @@ function App() {
        const entries = Array.isArray(message.characters) ? message.characters : []
        const character = asRecord(message.character)
        if (message.type === "session.dice.result") {
-         if(!isDicePopover){void openDicePopover();diceChannel.current?.postMessage({type:"result",entry:{kind:"dice",result:message.result}})}
+         const result = message.result as Extract<DiceHistoryEntry,{kind:"dice"}>["result"]
+         if (result && typeof result.id === "string") recordDiceResult({kind:"dice",result})
+         if(!isDicePopover)void openDicePopover()
          publishServerDiceRoll(message.result as Parameters<typeof publishServerDiceRoll>[0])
-         const result = message.result as DiceHistoryEntry["result"]
-         if (result && typeof result.id === "string") setRollHistory(previous => previous.some(entry=>entry.result.id===result.id)?previous:[{kind:"dice" as const,result:result as Extract<DiceHistoryEntry,{kind:"dice"}>["result"]},...previous].slice(0,60))
        }
        if (message.type === "session.creature.result") {
          if(!isDicePopover)void openDicePopover()
        }
        if (message.type === "session.action.result") {
-         if(!isDicePopover){void openDicePopover();diceChannel.current?.postMessage({type:"result",entry:{kind:"action",result:message.result}})}
+         const result = message.result as Extract<DiceHistoryEntry,{kind:"action"}>["result"]
+         if (result && typeof result.id === "string") recordDiceResult({kind:"action",result})
+         if(!isDicePopover)void openDicePopover()
          publishServerActionRoll(message.result as Parameters<typeof publishServerActionRoll>[0])
-         const result = message.result as DiceHistoryEntry["result"]
-         if (result && typeof result.id === "string") setRollHistory(previous => previous.some(entry=>entry.result.id===result.id)?previous:[{kind:"action" as const,result:result as Extract<DiceHistoryEntry,{kind:"action"}>["result"]},...previous].slice(0,60))
        }
        if (message.type === "session.error") {
          const messageText = String(message.message ?? "Erro na sessão.")
