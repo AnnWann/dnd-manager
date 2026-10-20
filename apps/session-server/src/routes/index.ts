@@ -19,6 +19,7 @@ const SESSION_PROTOCOL_CAPABILITIES = [
   "session.member.kick",
   "creature.loot.drop",
   "character.ammunition.spend",
+  "combat.weaponRider.deduplicated",
 ] as const;
 
 export default {
