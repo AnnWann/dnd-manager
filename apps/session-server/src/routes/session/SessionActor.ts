@@ -112,10 +112,14 @@ import {
 } from "./visibilityDelivery";
 import { resolveCreatureSpellCastAction } from "./creatureSpellCastResolution";
 import type { SessionInitiativeState } from "../../../../web/src/features/session-runtime/initiativeSessionProtocol";
+import { allCreatureFeatures, defaultCompanionState, type CompanionOperation, type CompanionState } from "../../../../web/src/shared/session-runtime/companionRuntime";
+import { applyHitPointDamage } from "../../../../../packages/game-core/src/hitPoints";
+import { resolveDamage } from "../../../../web/src/models/combat/Damage";
 
 const CONNECTION_TIMEOUT_MS = 90_000;
 const CLOSE_CODE_TIMEOUT = 4000;
 const CLOSE_CODE_REPLACED = 4001;
+const COMPANIONS_STATE_KEY = "companions-state";
 const HP_STATE_KEY = "hp-state";
 const CONDITIONS_STATE_KEY = "conditions-state";
 const ABILITIES_STATE_KEY = "abilities-state";
@@ -150,7 +154,7 @@ export class SessionActor extends DurableObject<Env> {
     refreshConnectionVisibility(server, await readRuntimeConfig(this.ctx.storage));
 
     this.send(server, { type: "session.ready", sessionId: connection.sessionId, clientId: connection.clientId, serverTime: Date.now() });
-    await Promise.all([this.sendHpSnapshot(server), this.sendConditionsSnapshot(server)]);
+    await Promise.all([this.sendHpSnapshot(server), this.sendConditionsSnapshot(server), this.sendCompanionsSnapshot(server)]);
     if (connection.role === "MASTER") await this.sendHpLog(server);
     this.broadcastPresence();
     await this.scheduleNextAlarm();
@@ -224,6 +228,9 @@ export class SessionActor extends DurableObject<Env> {
       case "session.creature.roll":
         await this.handleCreatureRoll(webSocket, connection, parsed.request);
         break;
+      case "session.companions.operation":
+        await this.handleCompanionOperation(webSocket, connection, parsed.operation);
+        break;
       case "session.log.undo":
         this.sendError(webSocket, "UNDO_ROUTING_ERROR", "Session undo must be handled by the composed session actor.");
         break;
@@ -258,6 +265,88 @@ export class SessionActor extends DurableObject<Env> {
     }
     this.broadcastPresence(now);
     await this.scheduleNextAlarm(now);
+  }
+
+  private async sendCompanionsSnapshot(webSocket: WebSocket): Promise<void> {
+    const connection = this.getConnection(webSocket);
+    if (!connection) return;
+    const [config, saved] = await Promise.all([
+      readRuntimeConfig(this.ctx.storage),
+      this.ctx.storage.get<Record<string, CompanionState>>(COMPANIONS_STATE_KEY),
+    ]);
+    const companions = (config?.config.creatureCompendium ?? [])
+      .filter(creature => Boolean(creature.ownerUserId) &&
+        (connection.role === "MASTER" || creature.ownerUserId === connection.userId))
+      .map(creature => saved?.[creature.id] ?? defaultCompanionState(creature));
+    this.send(webSocket, { type: "session.companions.snapshot", companions });
+  }
+
+  private broadcastCompanionState(companion: CompanionState, ownerUserId: string): void {
+    for (const socket of this.ctx.getWebSockets()) {
+      const connection = this.getConnection(socket);
+      if (!connection || (connection.role !== "MASTER" && connection.userId !== ownerUserId)) continue;
+      this.send(socket, { type: "session.companions.updated", companion });
+    }
+  }
+
+  private async handleCompanionOperation(
+    webSocket: WebSocket,
+    connection: SessionConnection,
+    operation: CompanionOperation,
+  ): Promise<void> {
+    const config = await readRuntimeConfig(this.ctx.storage);
+    const creature = config?.config.creatureCompendium.find(item => item.id === operation.creatureId);
+    if (!creature?.ownerUserId) {
+      this.sendError(webSocket, "COMPANION_NOT_FOUND", "Este acompanhante não está atribuído a um jogador.");
+      return;
+    }
+    if (connection.role !== "MASTER" && connection.userId !== creature.ownerUserId) {
+      this.sendError(webSocket, "COMPANION_ACCESS_DENIED", "Você não controla este acompanhante.");
+      return;
+    }
+    const states = (await this.ctx.storage.get<Record<string, CompanionState>>(COMPANIONS_STATE_KEY)) ?? {};
+    const current = states[creature.id] ?? defaultCompanionState(creature);
+    let next: CompanionState = { ...current, revision: current.revision + 1 };
+    if (operation.type === "hp") {
+      const amount = operation.amount;
+      if (operation.mode === "set") {
+        next = { ...next, currentHp: Math.min(current.maxHp, amount) };
+      } else if (operation.mode === "heal") {
+        next = { ...next, currentHp: Math.min(current.maxHp, current.currentHp + amount) };
+      } else if (operation.mode === "temporary") {
+        next = { ...next, temporaryHp: Math.max(current.temporaryHp, amount) };
+      } else {
+        const applied = resolveDamage(amount, operation.damageType, creature.damageAffinities).applied;
+        const hp = applyHitPointDamage({ current: current.currentHp, temporary: current.temporaryHp }, applied);
+        next = { ...next, currentHp: hp.current, temporaryHp: hp.temporary };
+      }
+    } else if (operation.type === "feature") {
+      const feature = allCreatureFeatures(creature).find(entry => entry.id === operation.featureId);
+      if (!feature?.usage) {
+        this.sendError(webSocket, "COMPANION_FEATURE_INVALID", "Habilidade sem contador de usos.");
+        return;
+      }
+      const max = Math.max(0, feature.usage.max);
+      const used = current.featureUses[feature.id] ?? 0;
+      const updated = used - operation.delta;
+      if (updated < 0 || updated > max) {
+        this.sendError(webSocket, "COMPANION_FEATURE_LIMIT", "Limite de usos da habilidade atingido.");
+        return;
+      }
+      next = { ...next, featureUses: { ...current.featureUses, [feature.id]: updated } };
+    } else {
+      const maximum = creature.spellcasting?.slots[operation.level as keyof typeof creature.spellcasting.slots] ?? 0;
+      const available = current.spellSlots[String(operation.level)] ?? maximum;
+      const updated = available + operation.delta;
+      if (updated < 0 || updated > maximum) {
+        this.sendError(webSocket, "COMPANION_SLOT_LIMIT", "Espaços de magia insuficientes.");
+        return;
+      }
+      next = { ...next, spellSlots: { ...current.spellSlots, [String(operation.level)]: updated } };
+    }
+    states[creature.id] = next;
+    await this.ctx.storage.put(COMPANIONS_STATE_KEY, states);
+    this.broadcastCompanionState(next, creature.ownerUserId);
   }
 
   private async handleCreatureRoll(
