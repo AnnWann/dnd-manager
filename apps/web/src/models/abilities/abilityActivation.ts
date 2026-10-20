@@ -307,9 +307,13 @@ export function endAbilityEffect(
   const conditionPrefix = getAbilityConditionId(ability.id, source)
   next = withCharacterConditions(
     next,
-    getCharacterConditions(next).filter(
-      (condition) => condition.id !== conditionPrefix && !condition.id.startsWith(`${conditionPrefix}:grant:`),
-    ),
+    getCharacterConditions(next).filter(condition => {
+      if (condition.id === conditionPrefix || condition.id.startsWith(`${conditionPrefix}:grant:`)) return false
+      // Also remove migrated/legacy instances whose generated IDs changed.
+      return !(condition.sourceAbilityId === ability.id
+        && condition.sourceAbilityLocation === source.type
+        && (source.type !== "equipment" || condition.sourceItemId === source.itemId))
+    }),
   )
   if (ability.effectPersistence !== "permanent") {
     const effectiveMaxHp = next.getEffectiveMaxHp()
