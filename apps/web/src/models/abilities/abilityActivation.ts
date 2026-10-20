@@ -89,6 +89,25 @@ export function canActivateAbility(character: CharacterTemplate, ability: Abilit
   return usage.used < getAbilityUsageMax(character, usage)
 }
 
+/** Bind each weapon infusion to its originating ability, option and actual weapon. */
+export function getAbilityWeaponInfusions(character: CharacterTemplate, abilityId: string): Array<{
+  conditionId: string
+  optionId: string
+  weaponId: string
+}> {
+  const infusions: Array<{ conditionId: string; optionId: string; weaponId: string }> = []
+  for (const condition of getCharacterConditions(character)) {
+    if (condition.sourceAbilityId !== abilityId || !condition.sourceAbilityOptionId) continue
+    const match = /^(.+):abilities(?::(.+))?$/.exec(condition.sourceAbilityOptionId)
+    if (!match) continue
+    const weaponId = (condition.grantedAbilities ?? [])
+      .flatMap(granted => granted.bonuses?.attackRiders ?? [])
+      .find(rider => rider.weaponSelection === "onActivation" && rider.weaponId)?.weaponId ?? match[2]
+    if (weaponId) infusions.push({ conditionId: condition.id, optionId: match[1], weaponId })
+  }
+  return infusions
+}
+
 /** Retorna todas as mini-habilidades de uma opção, migrando formatos antigos. */
 export function getActivationOptionAbilities(option: AbilityActivationOption): Ability[] {
   if (option.abilities?.length) return option.abilities
@@ -135,12 +154,21 @@ export function useAbilityEffect(
   selectedWeaponAttribute?: Attribute,
 ): CharacterTemplate {
   if (!abilityRequiresActivation(ability) || !canActivateAbility(character, ability)) return character
+  const infusions = getAbilityWeaponInfusions(character, ability.id)
+  if (ability.allowMultipleWeaponActivations && activationOptionId && selectedWeaponId) {
+    const activeOnWeapon = infusions.find(infusion => infusion.weaponId === selectedWeaponId)
+    // An infusion is unique to the weapon: another use may switch the option,
+    // but may not stack the same or a different rite unless switching is allowed.
+    if (activeOnWeapon && (!ability.allowOptionSwitching || activeOnWeapon.optionId === activationOptionId)) {
+      return character
+    }
+  }
   const switchingOption = Boolean(ability.allowOptionSwitching && isAbilityBenefitsActive(ability) && (activationOptionId || selectedDamageType))
   if (ability.allowOptionSwitching && isAbilityBenefitsActive(ability) && !activationOptionId && !selectedDamageType) return character
   // The weapon initially infused by the ability cannot change when only the element changes.
-  const originalWeaponId = switchingOption
+  const originalWeaponId = switchingOption && !ability.allowMultipleWeaponActivations
     ? getCharacterConditions(character)
-      .filter(condition => condition.sourceAbilityId === ability.id && condition.sourceAbilityOptionId?.endsWith(":abilities"))
+      .filter(condition => condition.sourceAbilityId === ability.id && condition.sourceAbilityOptionId?.includes(":abilities"))
       .flatMap(condition => condition.grantedAbilities ?? [])
       .flatMap(granted => granted.bonuses?.attackRiders ?? [])
       .find(rider => rider.weaponSelection === "onActivation" && rider.weaponId)?.weaponId
@@ -187,8 +215,13 @@ export function useAbilityEffect(
   let next = replaceAbilityAtSource(character, nextAbility, source)
   if (!switchingOption) next = synchronizeSharedAbilityUsage(next, nextAbility)
   if (switchingOption) {
-    const optionConditionIds = new Set((resolvedAbility.activationOptions ?? []).map(option => `${getAbilityConditionId(resolvedAbility.id, source)}:grant:${option.id}:abilities`))
-    next = withCharacterConditions(next, getCharacterConditions(next).filter(condition => !optionConditionIds.has(condition.id)))
+    const baseId = getAbilityConditionId(resolvedAbility.id, source)
+    const idsToRemove = new Set((resolvedAbility.activationOptions ?? []).map(option => `${baseId}:grant:${option.id}:abilities`))
+    const activeOnThisWeapon = ability.allowMultipleWeaponActivations && activeWeaponId
+      ? infusions.filter(infusion => infusion.weaponId === activeWeaponId).map(infusion => infusion.conditionId)
+      : []
+    for (const id of activeOnThisWeapon) idsToRemove.add(id)
+    next = withCharacterConditions(next, getCharacterConditions(next).filter(condition => !idsToRemove.has(condition.id)))
   }
 
   const maxHpBonuses = resolveBonuses(character, resolvedAbility.bonuses?.maxHp ?? [])
