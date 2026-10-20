@@ -53,6 +53,12 @@ export type SessionAbilityOperation<TResourceSelection, TBonus, TAffinity, TAbil
       abilityName?: string
     }
   | {
+      /** Remove one persisted ability effect (e.g. the rite on one weapon). */
+      type: "character.ability.effect.remove"
+      characterId: string
+      conditionId: string
+    }
+  | {
       type: "character.ability.save"
       characterId: string
       ability: TAbility
