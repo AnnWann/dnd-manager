@@ -42,6 +42,9 @@ export type SessionDiceRollRequest = {
   visibility?: SessionRollVisibility
   source: SessionDiceRollSource
   targetEntryId?: string
+  /** Targets of an opt-in automated ability damage/healing roll. */
+  targetRefs?: string[]
+  pointLabel?: string
 }
 
 export type SessionDiceRollGroupResult = {
