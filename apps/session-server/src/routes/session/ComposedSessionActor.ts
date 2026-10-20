@@ -1,5 +1,6 @@
 import { SessionActor as BaseSessionActor } from "./SessionActor";
 import { readRuntimeConfig } from "./runtimeConfigAccess";
+import { isSessionPlayerOperationBlocked, parseSessionPauseMessage, type SessionPauseState } from "../../../../web/src/shared/session-runtime/sessionPause";
 import type { CompanionState } from "../../../../web/src/shared/session-runtime/companionRuntime";
 import type { SessionInitiativeState } from "../initiative/initiativeProtocol";
 import { SessionActor as AbilitySessionActor } from "../characters/abilities/AbilitySessionActor";
@@ -55,6 +56,7 @@ import {
   sendVisibilityFiltered,
 } from "./visibilityDelivery";
 
+const SESSION_PAUSE_STATE_KEY = "session-pause-state";
 const COMPANIONS_STATE_KEY = "companions-state";
 const INITIATIVE_STATE_KEY = "initiative-state";
 const ABILITIES_STATE_KEY = "abilities-state";
@@ -184,6 +186,8 @@ export class SessionActor extends BaseSessionActor {
       }
     });
     if (!socket) return response;
+    const pauseState = await this.ctx.storage.get<SessionPauseState>(SESSION_PAUSE_STATE_KEY);
+    sendVisibilityFiltered(socket, { type: "session.pause.state", state: pauseState ?? { paused: false, updatedAt: "", updatedBy: null } });
 
     await Promise.all([
       this.sendAbilitySnapshot(socket),
@@ -198,6 +202,37 @@ export class SessionActor extends BaseSessionActor {
     message: string | ArrayBuffer,
   ): Promise<void> {
     const raw = typeof message === "string" ? message : new TextDecoder().decode(message);
+    const sessionControl = parseSessionPauseMessage(raw);
+    if (sessionControl) {
+      const connection = readSessionConnection(webSocket);
+      if (!connection || connection.role !== "MASTER") {
+        sendError(webSocket, "MASTER_REQUIRED", "Somente o mestre pode pausar ou retomar a sessão.");
+        return;
+      }
+      const state: SessionPauseState = { paused: sessionControl.paused, updatedAt: new Date().toISOString(), updatedBy: connection.userId };
+      await this.ctx.storage.put(SESSION_PAUSE_STATE_KEY, state);
+      broadcast(this.ctx.getWebSockets(), { type: "session.pause.state", state });
+      return;
+    }
+
+    const connection = readSessionConnection(webSocket);
+    if (!connection) {
+      webSocket.close(1011, "Missing connection attachment");
+      return;
+    }
+    const storedPause = await this.ctx.storage.get<SessionPauseState>(SESSION_PAUSE_STATE_KEY);
+    let messageType: string | undefined;
+    try {
+      const envelope: unknown = JSON.parse(raw);
+      if (envelope && typeof envelope === "object" && !Array.isArray(envelope)) {
+        const type = (envelope as { type?: unknown }).type;
+        if (typeof type === "string") messageType = type;
+      }
+    } catch { /* malformed packets are rejected by normal routing */ }
+    if (isSessionPlayerOperationBlocked(Boolean(storedPause?.paused), connection.role, messageType)) {
+      sendError(webSocket, "SESSION_PAUSED", "A sessão está pausada pelo mestre. Apenas ações do mestre podem alterar a sessão.");
+      return;
+    }
 
     const undoLogId = parseUndoLogId(raw);
     if (undoLogId) {
