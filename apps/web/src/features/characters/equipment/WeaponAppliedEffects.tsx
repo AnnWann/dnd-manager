@@ -66,7 +66,7 @@ export function WeaponAppliedEffects({
         value.sourceItemId === source.itemId && value.originalAbilityId === source.abilityId)
       return Boolean(ability && abilityRequiresActivation(ability))
     }
-    const ability = character.get("abilities").find(value => value.id === source.abilityId)
+    const ability = (character.get("abilities") ?? []).find(value => value.id === source.abilityId)
     return Boolean(ability && abilityRequiresActivation(ability))
   }
 
