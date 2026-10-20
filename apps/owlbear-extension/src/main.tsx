@@ -36,6 +36,8 @@ const isDicePopover = new URLSearchParams(window.location.search).get("panel") =
 const INITIATIVE_CHANNEL = "dnd-manager:owlbear-initiative-v1"
 const INITIATIVE_POPOVER_ID = "com.dnd-manager.owlbear/initiative-popover"
 const isInitiativePopover = new URLSearchParams(window.location.search).get("panel") === "initiative"
+const initiativeBridgeId = new URLSearchParams(window.location.search).get("bridge") || crypto.randomUUID()
+const initiativeChannelName = INITIATIVE_CHANNEL + ":" + initiativeBridgeId
 const origin = (import.meta.env.VITE_DND_MANAGER_URL || "https://dnd-magic-manager.vercel.app").replace(/\/$/, "")
 type Session = { id: string; name: string; role: "MASTER" | "PLAYER" }
 type RuntimeCharacter = { characterId: string; ownerUserId?: string; active?: boolean; character?: Record<string, unknown> }
@@ -107,7 +109,7 @@ function App() {
    initiativePopoverOpening.current=true
    try {
      await OBR.popover.open({
-       id:INITIATIVE_POPOVER_ID,url:"/?panel=initiative",
+       id:INITIATIVE_POPOVER_ID,url:"/?panel=initiative&bridge="+encodeURIComponent(initiativeBridgeId),
        width:900,height:335,
        anchorReference:"POSITION",
        anchorPosition:{left:window.screen.availWidth/2,top:28},
@@ -120,7 +122,7 @@ function App() {
  },[])
  useEffect(() => {
    if(isAssociatePopover || isDicePopover)return
-   const channel=new BroadcastChannel(INITIATIVE_CHANNEL)
+   const channel=new BroadcastChannel(initiativeChannelName)
    initiativeChannel.current=channel
    channel.onmessage=event=>{
      const message=asRecord(event.data)
@@ -352,6 +354,7 @@ function App() {
    diceChannel.current?.postMessage({type:"state",value:currentDiceState.current})
  }
  const disconnect = useCallback(() => {
+   if(!isAssociatePopover&&!isDicePopover&&!isInitiativePopover)void OBR.popover.close(INITIATIVE_POPOVER_ID).catch(()=>{})
    socket.current?.disconnect()
    socket.current = null
    setCharacters({}); setAbilities({}); setHp({}); setConditions({}); setRuntimeConfig(null); setSpellLibrary([]); setCreatureRollError(""); setInventoryState(null);setInitiativeState(null);setCompendiumCreatures([]); setSelectedId(""); setRollHistory([]); currentDiceState.current={connected:false,selectedCharacterId:undefined,history:[]}; setStatus("Desconectado")
