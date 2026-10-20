@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react"
-import { useCharacterContext } from "../../../contexts/characterContext"
+import { useCharacterWorkspace } from "../workspace/CharacterWorkspaceContext"
 import { useOptionalSessionRuntime } from "../../session-runtime/useSessionRuntime"
 import { normalizeInitiativeSession } from "../../../models/initiative/Initiative"
 
@@ -38,7 +38,7 @@ export function AbilityResourceActivationModal({
   onConfirm: (optionId: string | undefined, selection: AbilityResourceSelection | undefined, bonusRollValues?: Record<string, number>, selectedWeaponId?: string, targetRefs?: string[], pointLabel?: string) => void
   forceManualRolls?: boolean
 }) {
-  const { visibleCharacters } = useCharacterContext()
+  const { characters: visibleCharacters } = useCharacterWorkspace()
   const runtime = useOptionalSessionRuntime()
   const targeting = ability.targeting?.mode ?? "none"
   const maxTargets = Math.max(1, Math.min(20, ability.targeting?.maxTargets ?? 1))
