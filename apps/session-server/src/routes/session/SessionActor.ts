@@ -649,6 +649,18 @@ export class SessionActor extends DurableObject<Env> {
         type: "session.initiative.updated",
         state: updatedState,
       });
+      const updatedEntry = next.entries.find(candidate => candidate.id === entry.id);
+      if (updatedEntry) await this.persistCompanionResources(creature, updatedEntry);
+    } else if (spendsFeatureUse && entry && feature?.usage && creature.ownerUserId) {
+      const existingUsed = entry.creatureFeatureResources?.[feature.id]?.used ?? 0;
+      const updated = {
+        ...entry,
+        creatureFeatureResources: {
+          ...(entry.creatureFeatureResources ?? {}),
+          [feature.id]: { max: feature.usage.max, used: existingUsed + 1 },
+        },
+      };
+      await this.persistCompanionResources(creature, updated);
     }
 
     this.broadcast(
