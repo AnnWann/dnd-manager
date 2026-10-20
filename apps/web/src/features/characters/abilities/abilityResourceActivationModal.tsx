@@ -24,6 +24,7 @@ import {
 import type { CharacterTemplate } from "../../../models/characters/CharacterTemplate"
 import { isValidBonusRollValue, listBonusRollRequirements } from "../../../models/bonuses/BonusRoll"
 import { getAbilitySelfDamageRollRequirements } from "../../../models/abilities/abilitySelfDamage"
+import { getAbilityWeaponInfusions } from "../../../models/abilities/abilityActivation"
 
 export function AbilityResourceActivationModal({
   ability,
@@ -93,12 +94,13 @@ export function AbilityResourceActivationModal({
   const [selectedWeaponId, setSelectedWeaponId] = useState("")
   const [selectedWeaponAttribute, setSelectedWeaponAttribute] = useState<Attribute | "">("")
   const needsAttribute = abilityRequiresWeaponAttributeSelection(ability, optionId)
-  const boundWeaponId = ability.allowMultipleWeaponActivations ? undefined : getCharacterConditions(character)
-    .filter(condition => condition.sourceAbilityId === (ability.originalAbilityId ?? ability.id))
-    .flatMap(condition => condition.grantedAbilities ?? [])
-    .flatMap(granted => granted.bonuses?.attackRiders ?? [])
-    .find(rider => rider.weaponSelection === "onActivation" && rider.weaponId)?.weaponId
+  const infusions = getAbilityWeaponInfusions(character, ability.originalAbilityId ?? ability.id)
+  const boundWeaponId = ability.allowMultipleWeaponActivations ? undefined : infusions[0]?.weaponId
   const needsWeapon = optionRequiresWeaponSelection(ability, optionId)
+  const currentWeaponId = boundWeaponId || selectedWeaponId
+  const existingOnWeapon = infusions.find(infusion => infusion.weaponId === currentWeaponId)
+  const isDuplicateInfusion = Boolean(needsWeapon && existingOnWeapon &&
+    (!ability.allowOptionSwitching || existingOnWeapon.optionId === optionId))
   const effectiveDamageType = damageTypeChoices.includes(selectedDamageType as DamageType) ? selectedDamageType : ""
   const [alternatives, setAlternatives] = useState<Record<string, string>>(() =>
     Object.fromEntries(
@@ -161,7 +163,7 @@ export function AbilityResourceActivationModal({
       : isValidBonusRollValue(entry.dice, Number(raw))
   })
   const targetSelectionValid = targeting === "none" || targeting === "self" || (targetRefs.length > 0 && targetRefs.length <= maxTargets)
-  const canConfirm = targetSelectionValid && payment.ok && selfDamageRequirements.every(entry => entry.minimum > 0) && (!optionRequired || Boolean(optionId)) && manualRollsValid && (!damageTypeChoices.length || Boolean(effectiveDamageType)) && (!needsWeapon || Boolean(boundWeaponId || selectedWeaponId)) && (!needsAttribute || Boolean(selectedWeaponAttribute))
+  const canConfirm = targetSelectionValid && payment.ok && selfDamageRequirements.every(entry => entry.minimum > 0) && (!optionRequired || Boolean(optionId)) && manualRollsValid && (!damageTypeChoices.length || Boolean(effectiveDamageType)) && (!needsWeapon || Boolean(currentWeaponId)) && !isDuplicateInfusion && (!needsAttribute || Boolean(selectedWeaponAttribute))
 
   return (
     <Modal title={`Usar habilidade — ${ability.name}`} onClose={onClose} className="max-w-xl">
@@ -186,8 +188,16 @@ export function AbilityResourceActivationModal({
           <span className="font-semibold text-textH">Arma afetada</span>
           <Select value={boundWeaponId || selectedWeaponId} disabled={Boolean(boundWeaponId)} onChange={event => setSelectedWeaponId(event.target.value)}>
             <option value="">Escolha uma arma equipada</option>
-            {character.get("equipment").weapons.map(weapon => <option key={weapon.id} value={weapon.id}>{weapon.name}</option>)}
+            {character.get("equipment").weapons.map(weapon => {
+              const active = infusions.find(infusion => infusion.weaponId === weapon.id)
+              return <option key={weapon.id} value={weapon.id}>
+                {weapon.name}{active ? " (já infundida)" : ""}
+              </option>
+            })}
           </Select>
+          {isDuplicateInfusion ? <span className="text-xs text-danger">
+            Esta arma já tem um rito ativo. Encerre o efeito existente ou escolha outra arma.
+          </span> : null}
         </label> : null}
 
         {needsAttribute ? <label className="grid gap-1 text-xs text-textMuted">
