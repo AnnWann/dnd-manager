@@ -23,12 +23,22 @@ export function getCustomNativeStatOverride(
   character: CharacterTemplate,
   target: CustomNativeStatTarget,
 ): number | undefined {
+  return getCustomNativeStatOverrideWithResolver(character, target, resolveDefinition)
+}
+
+/** A per-request resolver for authoritative session-server calculations.
+ * Does not mutate the global browser/editor definition registry. */
+export function getCustomNativeStatOverrideWithResolver(
+  character: CharacterTemplate,
+  target: CustomNativeStatTarget,
+  definitionResolver: CustomSystemDefinitionResolver,
+): number | undefined {
   if (evaluatingOverride) return undefined
 
   const states = (character.get("sheet").customSystems ?? []) as CharacterCustomSystemState[]
   const candidates = states.flatMap((state) => {
     if (state.enabled === false) return []
-    const definition = resolveDefinition(state.systemId)
+    const definition = definitionResolver(state.systemId)
     if (!definition) return []
 
     return (definition.nativeStatOverrides ?? [])

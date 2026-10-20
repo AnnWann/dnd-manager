@@ -2,13 +2,18 @@ import { MagicProvider } from "../../web/src/contexts/magicContext"
 import { CreatureQuickSheet, quickSheetFromCompendiumCreature } from "../../web/src/features/creatures/CreatureQuickSheet"
 import type { CompendiumCreature } from "../../web/src/models/creatures/CompendiumCreature"
 import { CreatureTokenInspector } from "./CreatureTokenInspector"
+import { OwlbearInitiativeStrip } from "./OwlbearInitiativeStrip"
+import { createCreatureInitiativeEntries } from "../../web/src/models/initiative/creatureInitiativeEntries"
+import { getCreatureEffectiveInitiative } from "../../web/src/models/creatures/CreatureCombatRuntime"
+import type { InitiativeEntry } from "../../web/src/models/initiative/Initiative"
+import { setRuntimeCustomSystemOverride } from "../../web/src/lib/customSystems/creationCustomSystemsBridge"
 import { findOwlbearInitiativeCreature, resolveOwlbearSpellDefinitions } from "./owlbearSpellCatalog"
 import { filterAssociationChoices } from "./associationSearch"
-import type { InitiativeEntry } from "../../web/src/models/initiative/Initiative"
+import { createInitiativeSession, normalizeInitiativeSession, type InitiativeSession } from "../../web/src/models/initiative/Initiative"
 import { readSelectedToken, readTokenCharacterLink, setTokenCharacterLink, readTokenCreatureLink, setTokenCreatureLink, readTokenCompendiumCreature, TOKEN_COMPENDIUM_CREATURE_METADATA } from "./tokenCharacterLink"
 import { SessionDicePanel, type DiceHistoryEntry } from "./SessionDicePanel"
 import { SessionTransport } from "@dnd-manager/session-client/transport"
-import { NativeCharacterSheetHost } from "./NativeCharacterSheetHost"
+import { NativeCharacterSheetHost, hydrateOwlbearCharacter } from "./NativeCharacterSheetHost"
 import { publishServerDiceRoll, publishServerActionRoll, CREATURE_ROLL_REQUEST_EVENT } from "../../web/src/lib/diceRoller"
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { createRoot } from "react-dom/client"
@@ -28,6 +33,11 @@ const isAssociatePopover = new URLSearchParams(window.location.search).get("pane
 const DICE_CHANNEL = "dnd-manager:owlbear-dice-v1"
 const DICE_POPOVER_ID = "com.dnd-manager.owlbear/dice-popover"
 const isDicePopover = new URLSearchParams(window.location.search).get("panel") === "dice"
+const INITIATIVE_CHANNEL = "dnd-manager:owlbear-initiative-v1"
+const INITIATIVE_POPOVER_ID = "com.dnd-manager.owlbear/initiative-popover"
+const isInitiativePopover = new URLSearchParams(window.location.search).get("panel") === "initiative"
+const initiativeBridgeId = new URLSearchParams(window.location.search).get("bridge") || crypto.randomUUID()
+const initiativeChannelName = INITIATIVE_CHANNEL + ":" + initiativeBridgeId
 const origin = (import.meta.env.VITE_DND_MANAGER_URL || "https://dnd-magic-manager.vercel.app").replace(/\/$/, "")
 type Session = { id: string; name: string; role: "MASTER" | "PLAYER" }
 type RuntimeCharacter = { characterId: string; ownerUserId?: string; active?: boolean; character?: Record<string, unknown> }
@@ -71,6 +81,11 @@ function App() {
      return typeof index === "string" && index.trim() ? [index.trim()] : []
    }))
  }, [runtimeConfig])
+ useEffect(() => {
+   const config = asRecord(runtimeConfig?.config)
+   setRuntimeCustomSystemOverride(Array.isArray(config.customSystems) ? config.customSystems as never : null)
+   return () => setRuntimeCustomSystemOverride(null)
+ }, [runtimeConfig])
  const availableCreatures = useMemo(() => {
    const official = Array.isArray(asRecord(runtimeConfig?.config).creatureCompendium)
      ? asRecord(runtimeConfig?.config).creatureCompendium as CompendiumCreature[] : []
@@ -83,6 +98,69 @@ function App() {
  const [sharedDice, setSharedDice] = useState<{connected:boolean; selectedCharacterId?:string; history:DiceHistoryEntry[]}>({connected:false,history:[]})
  const diceChannel = useRef<BroadcastChannel | null>(null)
  const currentDiceState = useRef({connected:false,selectedCharacterId:undefined as string|undefined,history:[] as DiceHistoryEntry[]})
+ const [sharedInitiative, setSharedInitiative] = useState<{session:InitiativeSession|null;role:string;connected:boolean;rollingEnabled:boolean}>({session:null,role:"",connected:false,rollingEnabled:true})
+ const initiativeChannel = useRef<BroadcastChannel|null>(null)
+ const initiativeBridge = useRef<{session:InitiativeSession|null;role:string;connected:boolean;rollingEnabled:boolean;resolveBonus:(entry:InitiativeEntry)=>number}>({
+   session:null,role:"",connected:false,rollingEnabled:true,resolveBonus:entry=>entry.initiativeBonus,
+ })
+ const initiativePopoverOpening = useRef(false)
+ const openInitiativePopover = useCallback(async () => {
+   if(isInitiativePopover||isAssociatePopover||isDicePopover||initiativePopoverOpening.current)return
+   initiativePopoverOpening.current=true
+   try {
+     await OBR.popover.open({
+       id:INITIATIVE_POPOVER_ID,url:"/?panel=initiative&bridge="+encodeURIComponent(initiativeBridgeId),
+       width:900,height:335,
+       anchorReference:"POSITION",
+       anchorPosition:{left:window.screen.availWidth/2,top:28},
+       anchorOrigin:{horizontal:"CENTER",vertical:"TOP"},
+       transformOrigin:{horizontal:"CENTER",vertical:"TOP"},
+       disableClickAway:true,
+     })
+   } catch(error) {setError("Não foi possível abrir a iniciativa no mapa: "+String(error))}
+   finally {initiativePopoverOpening.current=false}
+ },[])
+ useEffect(() => {
+   if(isAssociatePopover || isDicePopover)return
+   const channel=new BroadcastChannel(initiativeChannelName)
+   initiativeChannel.current=channel
+   channel.onmessage=event=>{
+     const message=asRecord(event.data)
+     if(isInitiativePopover){
+       if(message.type==="state")setSharedInitiative(message.value as typeof sharedInitiative)
+       return
+     }
+     const current=initiativeBridge.current
+     if(message.type==="request-state"){
+       channel.postMessage({type:"state",value:{
+         session:current.session,role:current.role,connected:current.connected,rollingEnabled:current.rollingEnabled,
+       }})
+       return
+     }
+     if(current.role!=="MASTER"||!current.connected||!socket.current)return
+     if(message.type==="initialize"){
+       if(!current.session)socket.current.sendRaw(JSON.stringify({type:"session.initiative.initialize",session:createInitiativeSession("Combate da sessão")}))
+     }else if(message.type==="operation" && current.session){
+       const operation=asRecord(message.operation)
+       if(typeof operation.type==="string")socket.current.sendRaw(JSON.stringify({type:"session.initiative.operation",operation}))
+     }else if(message.type==="roll"&&current.session&&current.rollingEnabled){
+       const entry=current.session.entries.find(candidate=>candidate.id===message.entryId)
+       if(!entry)return
+       const initiativeBonus=current.resolveBonus(entry)
+       if(!Number.isFinite(initiativeBonus))return
+       socket.current.sendRaw(JSON.stringify({type:"session.initiative.operation",operation:{
+         type:"initiative.entry.update",characterId:"session",entryId:entry.id,
+         patch:{initiativeBonus,initiative:Math.floor(Math.random()*20)+1+initiativeBonus},
+       }}))
+     }
+   }
+   if(isInitiativePopover)channel.postMessage({type:"request-state"})
+   return()=>{channel.close();if(initiativeChannel.current===channel)initiativeChannel.current=null}
+ },[])
+ useEffect(()=>{
+   if(!ready || status!=="Conectado à sessão"||isInitiativePopover||isDicePopover||isAssociatePopover)return
+   void openInitiativePopover()
+ },[ready,status,openInitiativePopover])
  const popoverOpening = useRef(false)
  const openDicePopover = useCallback(async () => {
    if(isDicePopover || popoverOpening.current)return
@@ -103,9 +181,9 @@ function App() {
    finally { popoverOpening.current=false }
  }, [])
  useEffect(() => {
+   if(isInitiativePopover||isAssociatePopover)return
    const channel = new BroadcastChannel(DICE_CHANNEL)
    diceChannel.current = channel
-   if(isDicePopover) channel.postMessage({type:"request-state"})
    channel.onmessage = event => {
      const message=event.data as Record<string,unknown>
      if(isDicePopover){
@@ -119,10 +197,11 @@ function App() {
        if(message.type==="roll" && message.request && socket.current)socket.current.sendRaw(JSON.stringify({type:"session.dice.roll",request:message.request}))
      }
    }
+   if(isDicePopover) channel.postMessage({type:"request-state"})
    return ()=>{channel.close();if(diceChannel.current===channel)diceChannel.current=null}
  }, [])
  useEffect(()=>{
-   if(isDicePopover)return
+   if(isDicePopover||isInitiativePopover||isAssociatePopover)return
    currentDiceState.current={connected:status==="Conectado à sessão",selectedCharacterId:selectedId||undefined,history:rollHistory}
    diceChannel.current?.postMessage({type:"state",value:currentDiceState.current})
  },[status,selectedId,rollHistory])
@@ -131,7 +210,7 @@ function App() {
  const grant = useRef<string | null>(null)
  const socket = useRef<SessionTransport | null>(null)
  useEffect(() => {
-   if(isDicePopover||isAssociatePopover)return
+   if(isDicePopover||isAssociatePopover||isInitiativePopover)return
    const forward=(event:Event)=>{
      const request=(event as CustomEvent).detail
      if(!request || status!=="Conectado à sessão" || role!=="MASTER"){
@@ -147,7 +226,7 @@ function App() {
  },[status,role])
  useEffect(() => { let active = true; OBR.onReady(() => { if (active) setReady(true) }); return () => { active = false } }, [])
  useEffect(() => {
-   if (!ready || isDicePopover || isAssociatePopover) return
+   if (!ready || isDicePopover || isAssociatePopover || isInitiativePopover) return
    const id = "com.dnd-manager.owlbear/associate-character"
    void OBR.contextMenu.create({
      id,
@@ -176,7 +255,7 @@ function App() {
    return () => { void OBR.contextMenu.remove(id) }
  }, [ready])
  useEffect(() => {
-   if (!ready || isDicePopover) return
+   if (!ready || isDicePopover || isInitiativePopover) return
    let active = true
    const update = async () => {
      try {
@@ -206,7 +285,7 @@ function App() {
    } catch (e) {setTokenLinkError("Não foi possível alterar o vínculo: " + String(e))}
  },[selectedToken,sessionId,selectedId])
  useEffect(()=>{
-   if(isDicePopover)return
+   if(isDicePopover||isInitiativePopover)return
    const channel=new BroadcastChannel(ASSOC_CHANNEL)
    assocChannel.current=channel
    channel.onmessage=event=>{
@@ -230,7 +309,7 @@ function App() {
    return()=>{channel.close();if(assocChannel.current===channel)assocChannel.current=null}
  },[])
  useEffect(()=>{
-   if(isDicePopover||isAssociatePopover)return
+   if(isDicePopover||isAssociatePopover||isInitiativePopover)return
    associationSnapshot.current={
      sessionId,connected:status==="Conectado à sessão",role,
      catalog:role==="MASTER"?compendiumCreatures.map(c=>({id:c.id,name:c.name})):[],
@@ -263,10 +342,22 @@ function App() {
    }catch(error){setAssociationError(String(error))}
    finally{setAssociationBusy(false)}
  },[associationTokenId,associationState,associationChoice,associationKind])
+ const recordDiceResult = (entry: DiceHistoryEntry) => {
+   if (!entry.result || typeof entry.result.id !== "string") return
+   const previous = currentDiceState.current.history
+   const history = previous.some(item => item.result.id === entry.result.id)
+     ? previous
+     : [entry, ...previous].slice(0, 60)
+   currentDiceState.current = { ...currentDiceState.current, history }
+   setRollHistory(history)
+   // The popover can be mounting; on its handshake this first roll is replayed.
+   diceChannel.current?.postMessage({type:"state",value:currentDiceState.current})
+ }
  const disconnect = useCallback(() => {
+   if(!isAssociatePopover&&!isDicePopover&&!isInitiativePopover)void OBR.popover.close(INITIATIVE_POPOVER_ID).catch(()=>{})
    socket.current?.disconnect()
    socket.current = null
-   setCharacters({}); setAbilities({}); setHp({}); setConditions({}); setRuntimeConfig(null); setSpellLibrary([]); setCreatureRollError(""); setInventoryState(null);setInitiativeState(null);setCompendiumCreatures([]); setSelectedId(""); setRollHistory([]); setStatus("Desconectado")
+   setCharacters({}); setAbilities({}); setHp({}); setConditions({}); setRuntimeConfig(null); setSpellLibrary([]); setCreatureRollError(""); setInventoryState(null);setInitiativeState(null);setCompendiumCreatures([]); setSelectedId(""); setRollHistory([]); currentDiceState.current={connected:false,selectedCharacterId:undefined,history:[]}; setStatus("Desconectado")
  }, [])
  useEffect(() => () => { socket.current?.disconnect() }, [])
  const api = useCallback(async <T,>(path: string): Promise<T> => {
@@ -317,7 +408,7 @@ function App() {
        onStatusChange:state=>{
          if(socket.current !== ws)return
          if(state === "reconnecting" || state === "error" || state === "disconnected") {
-           setCharacters({}); setAbilities({}); setHp({}); setConditions({}); setInventoryState(null); setRuntimeConfig(null)
+           setCharacters({}); setAbilities({}); setHp({}); setConditions({}); setInventoryState(null); setRuntimeConfig(null); setInitiativeState(null)
          }
          setStatus(state === "connected" ? "Conectado à sessão"
            : state === "reconnecting" ? "Reconectando à sessão..."
@@ -340,19 +431,19 @@ function App() {
        const entries = Array.isArray(message.characters) ? message.characters : []
        const character = asRecord(message.character)
        if (message.type === "session.dice.result") {
-         if(!isDicePopover){void openDicePopover();diceChannel.current?.postMessage({type:"result",entry:{kind:"dice",result:message.result}})}
+         const result = message.result as Extract<DiceHistoryEntry,{kind:"dice"}>["result"]
+         if (result && typeof result.id === "string") recordDiceResult({kind:"dice",result})
+         if(!isDicePopover)void openDicePopover()
          publishServerDiceRoll(message.result as Parameters<typeof publishServerDiceRoll>[0])
-         const result = message.result as DiceHistoryEntry["result"]
-         if (result && typeof result.id === "string") setRollHistory(previous => previous.some(entry=>entry.result.id===result.id)?previous:[{kind:"dice" as const,result:result as Extract<DiceHistoryEntry,{kind:"dice"}>["result"]},...previous].slice(0,60))
        }
        if (message.type === "session.creature.result") {
          if(!isDicePopover)void openDicePopover()
        }
        if (message.type === "session.action.result") {
-         if(!isDicePopover){void openDicePopover();diceChannel.current?.postMessage({type:"result",entry:{kind:"action",result:message.result}})}
+         const result = message.result as Extract<DiceHistoryEntry,{kind:"action"}>["result"]
+         if (result && typeof result.id === "string") recordDiceResult({kind:"action",result})
+         if(!isDicePopover)void openDicePopover()
          publishServerActionRoll(message.result as Parameters<typeof publishServerActionRoll>[0])
-         const result = message.result as DiceHistoryEntry["result"]
-         if (result && typeof result.id === "string") setRollHistory(previous => previous.some(entry=>entry.result.id===result.id)?previous:[{kind:"action" as const,result:result as Extract<DiceHistoryEntry,{kind:"action"}>["result"]},...previous].slice(0,60))
        }
        if (message.type === "session.error") {
          const messageText = String(message.message ?? "Erro na sessão.")
@@ -382,16 +473,53 @@ function App() {
      ws.connect()
    } catch (e) { setStatus("Desconectado"); setError(String(e instanceof Error ? e.message : e)) }
  }, [api, disconnect, openDicePopover])
- const initiativeEntries=(Array.isArray(asRecord(initiativeState?.session).entries)
-  ? asRecord(initiativeState?.session).entries : []) as InitiativeEntry[]
+ const initiativeSession = initiativeState?.initialized === true
+   ? normalizeInitiativeSession(asRecord(initiativeState.session) as Partial<InitiativeSession>)
+   : null
+ const initiativeEntries = initiativeSession?.entries ?? []
+ const resolveEntryInitiativeBonus = (entry: InitiativeEntry): number => {
+   if (entry.sourceId?.startsWith("compendium:")) {
+     const creature = findOwlbearInitiativeCreature(availableCreatures, entry)
+     if (creature) return getCreatureEffectiveInitiative(creature, entry.conditions, entry)
+   }
+   if (entry.sourceId) {
+     const characterRaw = abilities[entry.sourceId]?.character ?? characters[entry.sourceId]?.character
+     if (characterRaw) {
+       try {
+         return hydrateOwlbearCharacter(
+           asRecord(characterRaw),
+           asRecord(hp[entry.sourceId]),
+           asRecord(conditions[entry.sourceId]),
+         ).getEffectiveInitiative()
+       } catch (error) {
+         console.warn("[owlbear] initiative bonus fallback", error)
+       }
+     }
+   }
+   return entry.initiativeBonus
+ }
+ initiativeBridge.current={
+   session:initiativeSession,role,connected:status==="Conectado à sessão",
+   rollingEnabled:asRecord(runtimeConfig?.config).diceRollingEnabled!==false,
+   resolveBonus:resolveEntryInitiativeBonus,
+ }
+ useEffect(()=>{
+   if(isInitiativePopover||isDicePopover||isAssociatePopover)return
+   const {session,role,connected,rollingEnabled}=initiativeBridge.current
+   initiativeChannel.current?.postMessage({type:"state",value:{session,role,connected,rollingEnabled}})
+ },[initiativeState,role,status,runtimeConfig,abilities,hp,conditions])
  const boundCreature=role==="MASTER" && selectedToken?.creatureLink?.sessionId===sessionId
   ? initiativeEntries.find(entry=>entry.id===selectedToken.creatureLink?.entryId) : undefined
  const catalogCreature=role==="MASTER"&&selectedToken?.catalogSessionId===sessionId&&selectedToken?.catalogId?availableCreatures.find(c=>c.id===selectedToken.catalogId):undefined
  const addCatalogToInitiative=()=>{
    if(!catalogCreature||status!=="Conectado à sessão"||role!=="MASTER"||!selectedToken||pendingCreatureAdd)return
-   const entryId=crypto.randomUUID()
-   const entry={id:entryId,sourceId:"compendium:"+catalogCreature.id,sourceType:"monster",name:catalogCreature.name,basicName:catalogCreature.basicName,realName:catalogCreature.name,initiative:0,initiativeBonus:catalogCreature.initiativeBonus,side:catalogCreature.defaultSide,armorClass:catalogCreature.armorClass,maxHp:catalogCreature.maxHp,currentHp:catalogCreature.maxHp,temporaryHp:0,conditions:[],order:initiativeEntries.length,createdAt:Date.now(),hidden:false,defeated:false}
-   if(socket.current?.sendRaw(JSON.stringify({type:"session.initiative.operation",operation:{type:"initiative.entries.add",characterId:"session",entries:[entry]}})))setPendingCreatureAdd({tokenId:selectedToken.id,entryId,sessionId})
+   if (!initiativeSession) { setError("Crie a iniciativa antes de adicionar criaturas."); return }
+   const entries = createCreatureInitiativeEntries(catalogCreature, initiativeEntries, {
+     digitalDiceEnabled: asRecord(runtimeConfig?.config).diceRollingEnabled !== false,
+   })
+   const entryId = entries[0]?.id
+   if (!entryId) { setError("Esta criatura única já está na iniciativa."); return }
+   if(socket.current?.sendRaw(JSON.stringify({type:"session.initiative.operation",operation:{type:"initiative.entries.add",characterId:"session",entries}})))setPendingCreatureAdd({tokenId:selectedToken.id,entryId,sessionId})
    else setError("Não foi possível enviar a criatura à iniciativa.")
  }
  useEffect(()=>{
@@ -408,6 +536,19 @@ function App() {
  const sheet = asRecord(raw.sheet)
  const health = hp[selectedId]
  const attributes = asRecord(sheet.attributes)
+ if(isInitiativePopover)return <main className="owlbear-shell">
+   <header><strong>Iniciativa da sessão</strong><button type="button" onClick={()=>void OBR.popover.close(INITIATIVE_POPOVER_ID)} className="rounded-lg border border-border px-3 py-1 text-xs text-textH">Fechar</button></header>
+   <OwlbearInitiativeStrip
+     session={sharedInitiative.session}
+     isMaster={sharedInitiative.role==="MASTER"}
+     connected={sharedInitiative.connected}
+     rollingEnabled={sharedInitiative.rollingEnabled}
+     resolveBonus={entry=>entry.initiativeBonus}
+     onInitialize={()=>{initiativeChannel.current?.postMessage({type:"initialize"});return initiativeChannel.current!==null}}
+     onOperation={operation=>{initiativeChannel.current?.postMessage({type:"operation",operation});return initiativeChannel.current!==null}}
+     onRoll={entry=>{initiativeChannel.current?.postMessage({type:"roll",entryId:entry.id});return initiativeChannel.current!==null}}
+   />
+ </main>
  if(isAssociatePopover)return <main className="owlbear-shell">
    <section className="grid gap-3 p-4">
      <div className="flex items-center justify-between gap-2">
@@ -456,6 +597,15 @@ function App() {
  </main>
  return <main className="owlbear-shell">
  <header><strong>{isDicePopover ? "D&D Manager · Dados" : "D&D Manager"}</strong><span>{ready ? "Owlbear conectado" : "Pré-visualização"}</span></header>
+ <OwlbearInitiativeStrip
+   session={initiativeSession}
+   isMaster={role==="MASTER"}
+   connected={status==="Conectado à sessão"}
+   onInitialize={()=>socket.current?.sendRaw(JSON.stringify({type:"session.initiative.initialize",session:createInitiativeSession("Combate da sessão")}))??false}
+   onOperation={operation=>socket.current?.sendRaw(JSON.stringify({type:"session.initiative.operation",operation}))??false}
+   resolveBonus={resolveEntryInitiativeBonus}
+   rollingEnabled={asRecord(runtimeConfig?.config).diceRollingEnabled!==false}
+ />
  <section>{!isDicePopover && <><h1>D&D Manager · Sessão</h1><p>Ficha e rolagens sincronizadas com o Session Server.</p></>}
  <div className="toolbar"><button onClick={connectAccount}>{connected ? "Reconectar conta" : "Conectar ao D&D Manager"}</button><button disabled={!connected} onClick={() => void refreshSessions()}>Atualizar sessões</button></div>
  {error && <p role="alert" className="error">{error}</p>}
@@ -475,14 +625,17 @@ function App() {
    </div>
    {tokenLinkError && <p role="alert" className="text-danger">{tokenLinkError}</p>}
  </div>}
- {!isDicePopover && <button type="button" className="mb-3 inline-flex items-center gap-2 rounded-lg border border-accentBorder bg-accentBg px-3 py-2 text-xs font-semibold text-textH" onClick={()=>void openDicePopover()}>Abrir rolador separado ↗</button>}
+ <div className="mb-3 flex flex-wrap gap-2">
+ <button type="button" className="inline-flex items-center gap-2 rounded-lg border border-accentBorder bg-accentBg px-3 py-2 text-xs font-semibold text-textH" onClick={()=>void openInitiativePopover()}>Abrir iniciativa no mapa ↗</button>
+ <button type="button" className="inline-flex items-center gap-2 rounded-lg border border-accentBorder bg-accentBg px-3 py-2 text-xs font-semibold text-textH" onClick={()=>void openDicePopover()}>Abrir rolador separado ↗</button>
+ </div>
  {!isDicePopover && <div className="mb-3 flex gap-2 rounded-xl border border-border bg-bg p-1" role="tablist" aria-label="Ferramentas da sessão">
  <button type="button" role="tab" aria-selected={activeArea==="sheet"} onClick={()=>setActiveArea("sheet")} className={`flex-1 rounded-lg px-3 py-2 text-sm font-semibold ${activeArea==="sheet"?"bg-accentBg text-textH":"text-textMuted hover:bg-bg-subtle"}`}>Ficha</button>
  <button type="button" role="tab" aria-selected={activeArea==="dice"} onClick={()=>setActiveArea("dice")} className={`flex-1 rounded-lg px-3 py-2 text-sm font-semibold ${activeArea==="dice"?"bg-accentBg text-textH":"text-textMuted hover:bg-bg-subtle"}`}>Dados</button>
  </div>}
  <div role="tabpanel" hidden={activeArea!=="dice"}><SessionDicePanel connected={status==="Conectado à sessão"} selectedCharacterId={selectedId || undefined} history={rollHistory} onRoll={request=>socket.current?.sendRaw(JSON.stringify({type:"session.dice.roll",request}))??false}/></div>
  {!isDicePopover && <div role="tabpanel" hidden={activeArea!=="sheet"}>
- {catalogCreature && !boundCreature ? <MagicProvider spells={sessionSpells}><div className="grid gap-3"><CreatureQuickSheet data={quickSheetFromCompendiumCreature(catalogCreature,undefined,{enableRolls:true,serverSpellIndexes})} compact/>{creatureRollError ? <p role="alert" className="text-xs text-danger">{creatureRollError}</p> : null}<button type="button" disabled={Boolean(pendingCreatureAdd)} onClick={addCatalogToInitiative} className="rounded-lg border border-accentBorder bg-accentBg px-3 py-2 text-sm font-semibold disabled:opacity-40">{pendingCreatureAdd?"Aguardando confirmação...":"Adicionar à iniciativa"}</button></div></MagicProvider> : boundCreature ? <CreatureTokenInspector key={boundCreature.id} entry={boundCreature} creature={findOwlbearInitiativeCreature(availableCreatures,boundCreature)} spells={sessionSpells} serverSpellIndexes={serverSpellIndexes} creatureRollError={creatureRollError} connected={status==="Conectado à sessão"} onOperation={operation=>socket.current?.sendRaw(JSON.stringify({type:"session.initiative.operation",operation}))??false}/> : selectedId && chosen && <article className="character-panel">
+ {catalogCreature && !boundCreature ? <MagicProvider spells={sessionSpells}><div className="grid gap-3"><CreatureQuickSheet data={quickSheetFromCompendiumCreature(catalogCreature,undefined,{enableRolls:true,serverSpellIndexes})} compact/>{creatureRollError ? <p role="alert" className="text-xs text-danger">{creatureRollError}</p> : null}<button type="button" disabled={Boolean(pendingCreatureAdd)||!initiativeSession} onClick={addCatalogToInitiative} className="rounded-lg border border-accentBorder bg-accentBg px-3 py-2 text-sm font-semibold disabled:opacity-40">{pendingCreatureAdd?"Aguardando confirmação...":"Adicionar à iniciativa"}</button></div></MagicProvider> : boundCreature ? <CreatureTokenInspector key={boundCreature.id} entry={boundCreature} creature={findOwlbearInitiativeCreature(availableCreatures,boundCreature)} spells={sessionSpells} serverSpellIndexes={serverSpellIndexes} creatureRollError={creatureRollError} connected={status==="Conectado à sessão"} onOperation={operation=>socket.current?.sendRaw(JSON.stringify({type:"session.initiative.operation",operation}))??false}/> : selectedId && chosen && <article className="character-panel">
  <CharacterSheetHeader name={String(raw.name ?? selectedId)} id={selectedId} />
  <NativeCharacterSheetHost
    characterId={selectedId} raw={raw} hp={health as unknown as Record<string, unknown>} conditions={conditions[selectedId]} runtimeConfig={runtimeConfig} inventoryState={inventoryState} spells={spellLibrary} role={role === "MASTER" ? "MASTER" : "PLAYER"}

@@ -28,7 +28,6 @@ import { hasCustomClass } from "../../web/src/models/characters/customClassConfi
 import { toSheetOperationMessage } from "../../web/src/features/session-runtime/sheetRoutes"
 import { deriveEquipmentOperations, deriveMagicOperations, deriveProficiencyOperations, deriveCustomSystemOperations, deriveConcentrationOperation, deriveGrantedSpellUsageOperation, resolveHandReference } from "../../web/src/features/characters/workspace/SessionCharacterWorkspace"
 import { ACTION_ROLL_REQUEST_EVENT, CREATURE_ROLL_REQUEST_EVENT, DICE_ROLL_REQUEST_EVENT } from "../../web/src/lib/diceRoller"
-import { setRuntimeCustomSystemOverride } from "../../web/src/lib/customSystems/creationCustomSystemsBridge"
 
 type Raw = Record<string, unknown>
 type Props = {
@@ -47,7 +46,7 @@ type Props = {
 
 function same(a: unknown, b: unknown) { return JSON.stringify(a) === JSON.stringify(b) }
 const obj = (value: unknown): Raw => value && typeof value === "object" && !Array.isArray(value) ? value as Raw : {}
-function ensureCharacter(raw: Raw, hp: Raw | undefined, conditions: Raw | undefined) {
+export function hydrateOwlbearCharacter(raw: Raw, hp: Raw | undefined, conditions: Raw | undefined) {
   const sheet = obj(raw.sheet)
   const hitpoints = obj(sheet.HP)
   const state = hp ?? {}
@@ -99,12 +98,7 @@ function CharacterSpellDefinitionsLoader({ character }: { character: CharacterTe
  */
 export function NativeCharacterSheetHost({ characterId, raw, hp, conditions, runtimeConfig, inventoryState, spells, role, sessionId, connected, send }: Props) {
   const [notice, setNotice] = useState("")
-  useEffect(() => {
-    const config = obj(runtimeConfig?.config)
-    setRuntimeCustomSystemOverride(Array.isArray(config.customSystems) ? config.customSystems as never : null)
-    return () => setRuntimeCustomSystemOverride(null)
-  }, [runtimeConfig])
-  const character = useMemo(() => ensureCharacter(raw, hp, conditions), [raw, hp, conditions])
+  const character = useMemo(() => hydrateOwlbearCharacter(raw, hp, conditions), [raw, hp, conditions])
   const safeSend = useCallback((message: Raw) => {
     if (!connected) { setNotice("Sessão desconectada. Nenhuma alteração foi salva."); return false }
     const success = send(message)

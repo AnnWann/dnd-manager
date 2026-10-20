@@ -49,6 +49,7 @@ import { resolveDamage, type DamageAffinity } from "../models/combat/Damage"
 import { useOptionalSessionRuntime } from "../features/session-runtime/useSessionRuntime"
 import { useInitiativeSession } from "../hooks/useInitiativeSession"
 import type { CompendiumCreature } from "../models/creatures/CompendiumCreature"
+import { createCreatureInitiativeEntries } from "../models/initiative/creatureInitiativeEntries"
 import { getEffectiveArmorClassWithShield } from "../models/items/equipment/Shield"
 import {
   addInitiativeEntries,
@@ -65,7 +66,6 @@ import {
   startInitiativeCombat,
   tradeConsecutiveAllies,
   updateInitiativeEntry,
-  type InitiativeCreatureSpellResources,
   type InitiativeEntry,
   type InitiativeSide,
 } from "../models/initiative/Initiative"
@@ -324,40 +324,11 @@ export function InitiativeView() {
     updateSession(current => {
       const entries: Array<Parameters<typeof addInitiativeEntries>[1][number]> = []
       for (const { creature, quantity: requestedQuantity } of selections) {
-        const sourceId = `${COMPENDIUM_SOURCE_PREFIX}${creature.id}`
-        const existingCopies = current.entries.filter(entry => entry.sourceId === sourceId).length
-          + entries.filter(entry => entry.sourceId === sourceId).length
-        if (creature.unique && existingCopies > 0) continue
-        const quantity = creature.unique
-          ? clamp(Math.trunc(creature.initiativeTurns), 1, 50)
-          : clamp(Math.trunc(requestedQuantity), 1, 50)
-        const sharedRoll = digitalDiceEnabled && sharedCreatureInitiative
-          ? rollInitiative(creature.initiativeBonus)
-          : undefined
-        const combatantId = creature.unique ? crypto.randomUUID() : undefined
-        for (let index = 0; index < quantity; index++) {
-          const name = creature.unique ? creature.name : `${creature.name} ${existingCopies + index + 1}`
-          const basicName = creature.unique ? creature.basicName : `${creature.basicName} ${existingCopies + index + 1}`
-          entries.push({
-            sourceId,
-            sourceType: creatureSourceType(creature),
-            combatantId,
-            name,
-            realName: name,
-            basicName,
-            revealRealName: false,
-            imageUrl: creature.sheetImageUrl,
-            initiative: sharedRoll ?? (digitalDiceEnabled ? rollInitiative(creature.initiativeBonus) : 0),
-            initiativeBonus: creature.initiativeBonus,
-            dexterity: creature.abilityScores.dex,
-            side: creature.defaultSide,
-            armorClass: creature.armorClass,
-            currentHp: creature.maxHp,
-            maxHp: creature.maxHp,
-            temporaryHp: 0,
-            creatureSpellResources: createCreatureSpellResources(creature),
-          })
-        }
+        entries.push(...createCreatureInitiativeEntries(
+          creature,
+          [...current.entries, ...entries],
+          { quantity: requestedQuantity, sharedInitiative: sharedCreatureInitiative, digitalDiceEnabled },
+        ))
       }
       return entries.length ? addInitiativeEntries(current, entries) : current
     })
@@ -1095,53 +1066,6 @@ function resolveQuickSheet(
   }
 
   return quickSheetFromInitiativeEntry(entry)
-}
-
-function createCreatureSpellResources(
-  creature: CompendiumCreature,
-): InitiativeCreatureSpellResources | undefined {
-  const spellcasting = creature.spellcasting
-  if (!spellcasting) return undefined
-
-  const slots: InitiativeCreatureSpellResources["slots"] = {}
-  for (let level = 1; level <= 9; level += 1) {
-    const max = Math.max(
-      0,
-      Math.trunc(
-        spellcasting.slots[
-          level as keyof typeof spellcasting.slots
-        ] ?? 0,
-      ),
-    )
-    if (max > 0) {
-      slots[level as keyof InitiativeCreatureSpellResources["slots"]] = {
-        current: max,
-        max,
-      }
-    }
-  }
-
-  const perDay = Object.fromEntries(
-    spellcasting.spells.flatMap((spell) =>
-      spell.usage.type === "perDay"
-        ? [[spell.spellIndex, {
-            used: 0,
-            max: Math.max(1, Math.trunc(spell.usage.uses)),
-          }]]
-        : [],
-    ),
-  )
-
-  return { slots, perDay }
-}
-
-function creatureSourceType(
-  creature: CompendiumCreature,
-): "npc" | "monster" | "custom" {
-  const category = creature.category.toLocaleLowerCase()
-  if (category.includes("npc") || category.includes("personagem")) return "npc"
-  if (category.includes("outro")) return "custom"
-  return "monster"
 }
 
 function defaultSideForCharacter(type: string): InitiativeSide {

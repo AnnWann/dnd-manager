@@ -34,7 +34,8 @@ import { getUnarmedAttackProfile } from "../../../../web/src/models/characters/u
 import type { Ability } from "../../../../web/src/models/abilities/Ability";
 import type { AbilityRollDefinition } from "../../../../web/src/models/abilities/AbilityRoll";
 import { validateAbilityRoll } from "../../../../web/src/models/abilities/AbilityRoll";
-import { applyBonuses, getEquippedItems, getScopedCharacterBonuses } from "../../../../web/src/models/characters/characterStats";
+import { applyBonuses, getCharacterBonuses, getEquippedItems, getScopedCharacterBonuses, getStatAdjustment } from "../../../../web/src/models/characters/characterStats";
+import { getCustomNativeStatOverrideWithResolver } from "../../../../web/src/lib/customSystems/CustomNativeStatOverrides";
 import { getActiveAttackRiders, getCharacterWeaponAttackAttribute, getWeaponRiderTransformation, parseAttackRiderDice } from "../../../../web/src/models/combat/AttackRider";
 import { rollAttackRiderDamages } from "./attackRiderDice";
 import {
@@ -920,7 +921,10 @@ export class SessionActor extends DurableObject<Env> {
 
     let resolved: DiceResolution;
     try {
-      resolved = resolveServerDiceRoll(request, connection.userId, character);
+      resolved = resolveServerDiceRoll(
+         request, connection.userId, character,
+         request.source.type === "initiative" ? getAuthoritativeInitiativeBonus(character, runtimeConfig) : undefined,
+       );
     } catch {
       this.sendError(webSocket, "ROLL_RESOLUTION_FAILED", "The authoritative roll could not be resolved.");
       return;
@@ -2588,9 +2592,10 @@ function resolveServerDiceRoll(
   request: SessionDiceRollRequest,
   actorId: string,
   character: CharacterTemplate,
+  effectiveInitiativeBonus?: number,
 ): DiceResolution {
 
-  const plan = buildAuthoritativeDicePlan(request, character);
+  const plan = buildAuthoritativeDicePlan(request, character, effectiveInitiativeBonus);
   if (!plan.ok) return plan;
 
   if (plan.plan.kind !== "damage") {
@@ -2664,9 +2669,27 @@ function resolveServerDiceRoll(
   };
 }
 
+/** Derive the same custom native initiative base as the website, but using
+ * definitions from THIS session instead of a global mutable browser registry. */
+function getAuthoritativeInitiativeBonus(
+  character: CharacterTemplate,
+  runtimeConfig: SessionRuntimeConfigSnapshot | null,
+): number {
+  const definitions = runtimeConfig?.config.customSystems ?? [];
+  const override = getCustomNativeStatOverrideWithResolver(
+    character,
+    "initiative",
+    (systemId) => definitions.find(definition => definition.id === systemId),
+  );
+  if (override === undefined) return character.getEffectiveInitiative();
+  const bonuses = getCharacterBonuses(character, "initiative").filter(bonus => bonus.type !== "flat");
+  return applyBonuses(override, bonuses) + getStatAdjustment(character, "initiativeAdjustment");
+}
+
 function buildAuthoritativeDicePlan(
   request: SessionDiceRollRequest,
   character: CharacterTemplate,
+  effectiveInitiativeBonus?: number,
 ): { ok: true; plan: DicePlan } | { ok: false; code: string; message: string } {
   const source = request.source;
   switch (source.type) {
@@ -2681,7 +2704,7 @@ function buildAuthoritativeDicePlan(
     case "save":
       return d20Plan("save", request.mode, character.getSavingThrowBonus(source.attribute));
     case "initiative":
-      return d20Plan("initiative", request.mode, character.getEffectiveInitiative());
+      return d20Plan("initiative", request.mode, effectiveInitiativeBonus ?? character.getEffectiveInitiative());
     case "spell-attack": {
       const modifier = character.getEffectiveAttributeModifier(source.attribute);
       return d20Plan(
