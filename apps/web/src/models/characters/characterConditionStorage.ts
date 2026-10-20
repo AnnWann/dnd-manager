@@ -26,7 +26,7 @@ export function getCharacterConditions(
 ): CharacterCondition[] {
   const sheetConditions = character.get("sheet").conditions
   if (Array.isArray(sheetConditions)) {
-    return sheetConditions.map(normalizeCondition)
+    return collapseDuplicateWeaponInfusions(sheetConditions.map(normalizeCondition))
   }
 
   const metadata = character
@@ -40,7 +40,7 @@ export function getCharacterConditions(
       metadata.slice(CONDITION_NOTE_PREFIX.length),
     ) as unknown
 
-    return Array.isArray(parsed) ? parsed.map(normalizeCondition) : []
+    return Array.isArray(parsed) ? collapseDuplicateWeaponInfusions(parsed.map(normalizeCondition)) : []
   } catch {
     return []
   }
@@ -50,7 +50,7 @@ export function withCharacterConditions(
   character: CharacterTemplate,
   conditions: CharacterCondition[],
 ): CharacterTemplate {
-  const normalized = conditions.map(normalizeCondition)
+  const normalized = collapseDuplicateWeaponInfusions(conditions.map(normalizeCondition))
   const visibleNotes = character
     .get("notes")
     .filter((note) => !note.startsWith(CONDITION_NOTE_PREFIX))
@@ -64,6 +64,39 @@ export function withCharacterConditions(
   return character
     .withSheet("conditions", normalized)
     .with("notes", notes)
+}
+
+/**
+ * Older sessions could create multiple copies of the same infusion on a weapon.
+ * Keep the most recent instance for each (origin ability, weapon) pair, while
+ * preserving simultaneous infusions on different weapons and all other buffs.
+ */
+export function collapseDuplicateWeaponInfusions(conditions: CharacterCondition[]): CharacterCondition[] {
+  const ownership = new Map<string, number>()
+  const keyFor = (condition: CharacterCondition): string | undefined => {
+    if (!condition.sourceAbilityId) return undefined
+    const riders = [
+      ...(condition.bonuses?.attackRiders ?? []),
+      ...(condition.grantedAbilities ?? []).flatMap(ability => ability.bonuses?.attackRiders ?? []),
+    ]
+    const weapons = [...new Set(riders
+      .filter(rider => rider.weaponSelection === "onActivation" && rider.weaponId)
+      .map(rider => rider.weaponId!))]
+    if (weapons.length !== 1) return undefined
+    return [condition.sourceAbilityLocation ?? "", condition.sourceItemId ?? "",
+      condition.sourceAbilityId, weapons[0]].join(":")
+  }
+  conditions.forEach((condition, index) => {
+    const key = keyFor(condition)
+    if (!key) return
+    const previousIndex = ownership.get(key)
+    const previous = previousIndex === undefined ? undefined : conditions[previousIndex]
+    if (!previous || condition.createdAt >= previous.createdAt) ownership.set(key, index)
+  })
+  return conditions.filter((condition, index) => {
+    const key = keyFor(condition)
+    return !key || ownership.get(key) === index
+  })
 }
 
 export function addCharacterCondition(
