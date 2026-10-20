@@ -28,6 +28,8 @@ import {
 } from "../../../../web/src/models/characters/CharacterTemplate";
 import { getCurrentMaxHp } from "../../../../web/src/models/characters/characterHp";
 import { getEffectiveDamageAffinities } from "../../../../web/src/models/characters/characterDamageAffinities";
+import { getEffectiveArmorClassWithShield } from "../../../../web/src/models/items/equipment/Shield";
+import { projectInitiativeSessionFromCharacterState } from "../initiative/initiativeCharacterProjection";
 import { areSelectedTargetsDistinct, applyHpToReferences, validateAbilityTargets, type MutableHpTargets } from "../characters/abilities/abilityTargeting";
 import { hasProficiency } from "../../../../web/src/models/characters/characterProficiencies";
 import { getUnarmedAttackProfile } from "../../../../web/src/models/characters/unarmedAttack";
@@ -48,9 +50,11 @@ import { abilityShortPtBr } from "../../../../web/src/i18n/ptBR";
 import type { Skill } from "../../../../web/src/models/sheet/Skills";
 import {
   initiativeEntryDisplayName,
+  addInitiativeEntries,
   createInitiativeEntry,
   createInitiativeSession,
   normalizeInitiativeSession,
+  sortInitiativeEntries,
   synchronizeSharedCombatantState,
   updateInitiativeEntry,
   type InitiativeEntry,
@@ -934,7 +938,97 @@ export class SessionActor extends DurableObject<Env> {
       return;
     }
 
+    // A successful character-sheet initiative roll is also its combat roster
+    // registration. Use the authoritative total; do not roll again on clients.
+    if (request.source.type === "initiative" && resolved.result.kind === "initiative") {
+      try {
+        await this.registerRolledCharacterInitiative(
+          request, resolved.result, character, abilities, hpState, conditionsState,
+        );
+      } catch (error) {
+        this.sendError(
+          webSocket,
+          "INITIATIVE_ROLL_SYNC_FAILED",
+          error instanceof Error ? error.message : "Unable to register the initiative roll.",
+        );
+        return;
+      }
+    }
+
     this.broadcast({ type: "session.dice.result", result: resolved.result });
+  }
+
+  private async registerRolledCharacterInitiative(
+    request: SessionDiceRollRequest,
+    result: SessionDiceRollResult,
+    character: CharacterTemplate,
+    abilities: Record<string, SessionAbilityState>,
+    hp: Record<string, SessionHpState>,
+    conditions: Record<string, SessionConditionsState>,
+  ): Promise<void> {
+    const characterId = request.characterId;
+    if (!characterId || result.kind !== "initiative") return;
+
+    const transaction = await this.ctx.storage.transaction(async (storage) => {
+      const previous = await storage.get<SessionInitiativeState>("initiative-state");
+      const initialized = previous?.initialized === true;
+      const current = initialized
+        ? normalizeInitiativeSession(previous.session as Partial<InitiativeSession>)
+        : createInitiativeSession("Combate da sessão");
+      const existing = current.entries.find((entry) => entry.sourceId === characterId);
+      const characterName = character.get("name");
+      const characterType = character.get("sheet").type;
+      const sourceType = characterType === "pc" ? "character"
+        : characterType === "npc" ? "npc" : "monster";
+      const side = characterType === "pc" ? "ally"
+        : characterType === "npc" ? "neutral" : "enemy";
+
+      // Updating an existing participant preserves its ID, conditions, HP,
+      // active turn, and all master edits. Re-rolling never creates a duplicate.
+      const updated = existing
+        ? updateInitiativeEntry(current, existing.id, (entry) => ({
+            ...entry,
+            initiative: result.total,
+            initiativeBonus: result.modifier,
+            hidden: entry.hidden || request.visibility === "roller-master",
+          }))
+        : addInitiativeEntries(current, [{
+            sourceId: characterId,
+            sourceType,
+            name: characterName,
+            realName: characterName,
+            basicName: characterName,
+            revealRealName: true,
+            imageUrl: character.get("profile").imageUrl,
+            initiative: result.total,
+            initiativeBonus: result.modifier,
+            dexterity: character.getEffectiveAttribute("dex"),
+            side,
+            armorClass: getEffectiveArmorClassWithShield(character),
+            currentHp: hp[characterId]?.current ?? character.get("sheet").HP.current,
+            maxHp: character.getEffectiveMaxHp(),
+            temporaryHp: hp[characterId]?.temporary ?? character.getEffectiveTemporaryHp(),
+            hidden: request.visibility === "roller-master",
+          }]);
+
+      // Sorting before combat keeps the ribbon accurate. During combat the
+      // current turn order remains stable even when an entry is re-rolled.
+      const ordered = updated.started ? updated : sortInitiativeEntries(updated);
+      const projected = projectInitiativeSessionFromCharacterState(
+        ordered, { abilities, hp, conditions },
+      ).session;
+      const state: SessionInitiativeState = {
+        initialized: true,
+        revision: initialized ? (previous?.revision ?? 0) + 1 : 0,
+        session: projected as unknown as Record<string, unknown>,
+      };
+      await storage.put("initiative-state", state);
+      return { state, initialized };
+    });
+    this.broadcast({
+      type: transaction.initialized ? "session.initiative.updated" : "session.initiative.snapshot",
+      state: transaction.state,
+    });
   }
 
   private async resolveManualRollAttribution(
