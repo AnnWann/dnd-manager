@@ -25,7 +25,9 @@ export type AbilityActivationOption = {
   name: string
   /** Texto curto exibido antes da escolha. */
   description?: string
-  /** Additional self-damage only when this option is selected (e.g. Amplify). */
+  /** Bonus effects specific to this activation option. */
+  bonuses?: BonusCollection
+  /** Legacy self-damage only when this option is selected (migrated on edit). */
   selfDamageOnUse?: AbilitySelfDamageCost
   /** Por quanto tempo as mini-habilidades escolhidas permanecem disponíveis. */
   duration?: CharacterConditionDuration
