@@ -101,9 +101,11 @@ type AbilityReverse = {
     conditions: SessionConditionsState;
     targetReverse?: {
       hp: Record<string, SessionHpState>;
+      conditions: Record<string, SessionConditionsState>;
       companions: Record<string, CompanionState>;
       initiative?: SessionInitiativeState;
       changedCharacters?: string[];
+      changedConditions?: string[];
       changedCompanions?: string[];
     };
   };
@@ -452,9 +454,11 @@ export class SessionActor extends BaseSessionActor {
           const currentInitiative = await this.ctx.storage.get<SessionInitiativeState>(INITIATIVE_STATE_KEY);
           const inverseTargets = {
             hp: Object.fromEntries((targets.changedCharacters ?? []).map(id => [id, hp[id]]).filter(([,state]) => state)),
+            conditions: Object.fromEntries((targets.changedConditions ?? []).map(id => [id, conditions[id]]).filter(([,state]) => state)),
             companions: Object.fromEntries((targets.changedCompanions ?? []).map(id => [id, currentCompanions[id]]).filter(([,state]) => state)),
             initiative: targets.initiative && currentInitiative ? currentInitiative : undefined,
             changedCharacters: targets.changedCharacters,
+            changedConditions: targets.changedConditions,
             changedCompanions: targets.changedCompanions,
           };
           (inverseReverse as AbilityReverse).snapshot.targetReverse = inverseTargets;
@@ -462,6 +466,10 @@ export class SessionActor extends BaseSessionActor {
             if (id !== characterId && targets.hp[id]) hp[id] = targets.hp[id];
           }
           writes[HP_STATE_KEY] = hp;
+          for (const id of targets.changedConditions ?? []) {
+            if (id !== characterId && targets.conditions[id]) conditions[id] = targets.conditions[id];
+          }
+          if (targets.changedConditions?.length) writes[CONDITIONS_STATE_KEY] = conditions;
           for (const id of targets.changedCompanions ?? []) {
             if (targets.companions[id]) currentCompanions[id] = targets.companions[id];
             else delete currentCompanions[id];
@@ -602,6 +610,9 @@ export class SessionActor extends BaseSessionActor {
     if (reverse.type === "character.ability.restore" && reverse.snapshot.targetReverse) {
       for (const id of reverse.snapshot.targetReverse.changedCharacters ?? []) {
         if (id !== characterId && hp[id]) broadcast(this.ctx.getWebSockets(), { type: "session.hp.updated", character: hp[id] });
+      }
+      for (const id of reverse.snapshot.targetReverse.changedConditions ?? []) {
+        if (id !== characterId && conditions[id]) broadcast(this.ctx.getWebSockets(), { type: "session.conditions.updated", character: conditions[id] });
       }
       if (reverse.snapshot.targetReverse.initiative) {
         broadcast(this.ctx.getWebSockets(), { type: "session.initiative.updated", state: reverse.snapshot.targetReverse.initiative });
