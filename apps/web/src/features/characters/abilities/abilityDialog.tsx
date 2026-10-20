@@ -601,7 +601,7 @@ export function AbilityDialog({
                 title="Rolagem da habilidade"
                 description="Escolha os testes e danos efetuados ao usar a habilidade. Modificadores da ficha são calculados automaticamente."
               />
-              <AbilityRollEditor roll={draft.roll} onChange={roll => setDraft(current => ({ ...current, roll }))} />
+              <AbilityRollEditor roll={draft.roll} onChange={roll => setDraft(current => ({ ...current, roll }))} targeting={draft.targeting} onTargetingChange={targeting => setDraft(current => ({ ...current, targeting }))} />
             </div>
           ) : null}
 
