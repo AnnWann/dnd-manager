@@ -23,6 +23,10 @@ export type SessionAbilityOperation<TResourceSelection, TBonus, TAffinity, TAbil
       source: SessionAbilitySource
       abilityName?: string
       activationOptionId?: string
+      /** Explicit authenticated targets for HP effects and ability rolls. */
+      targetRefs?: string[]
+      /** Optional descriptive center for point/area effects. */
+      pointLabel?: string
       selectedWeaponId?: string
       resourceSelection?: TResourceSelection
       /** Resultados dos dados informados pelo jogador para bônus em modo manual. */
