@@ -12,6 +12,12 @@ export type AbilityRollDamage = {
   damageType?: HpEffectType
   /** Add the configured ability attribute modifier to this damage component. */
   addAttributeModifier?: boolean
+  /** Optional per-component modifier attribute, otherwise use roll.attribute. */
+  attribute?: Attribute
+  /** Whether this component is magical for conditional damage affinities. */
+  magical?: boolean
+  /** Ignore all target damage affinities (resistance, immunity and vulnerability). */
+  ignoreResistance?: boolean
   /** Whether critical hits double these dice. Default: true. */
   critical?: boolean
 }
