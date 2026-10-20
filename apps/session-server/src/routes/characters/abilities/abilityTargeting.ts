@@ -39,11 +39,12 @@ export function validateAbilityTargets(
 
 function applyDamageOrHealing(
   current: number, temporary: number, max: number,
-  effect: OnUseHpEffect | { kind: "damage" | "heal"; damageType?: import("../../../../../web/src/models/combat/Damage").DamageType; ignoreResistance?: boolean; bypassTemporaryHp?: boolean },
+  effect: OnUseHpEffect | { kind: "damage" | "heal" | "temporary"; damageType?: import("../../../../../web/src/models/combat/Damage").DamageType; ignoreResistance?: boolean; bypassTemporaryHp?: boolean },
   amount: number, affinities?: DamageAffinity[],
 ) {
   const positive = Math.max(0, Math.trunc(amount))
   if (effect.kind === "heal") return { current: Math.min(max, current + positive), temporary }
+  if (effect.kind === "temporary") return { current, temporary: Math.max(temporary, positive) }
   const damage = effect.ignoreResistance
     ? positive
     : resolveDamage(positive, effect.damageType, affinities).applied
@@ -54,7 +55,7 @@ function applyDamageOrHealing(
 
 export function applyHpToReferences(
   targets: MutableHpTargets, refs: string[],
-  effect: OnUseHpEffect | { kind: "damage" | "heal"; damageType?: import("../../../../../web/src/models/combat/Damage").DamageType; ignoreResistance?: boolean; bypassTemporaryHp?: boolean },
+  effect: OnUseHpEffect | { kind: "damage" | "heal" | "temporary"; damageType?: import("../../../../../web/src/models/combat/Damage").DamageType; ignoreResistance?: boolean; bypassTemporaryHp?: boolean },
   amount: number,
 ): boolean {
   for (const ref of refs) {
