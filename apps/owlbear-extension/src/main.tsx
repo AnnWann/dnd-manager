@@ -118,6 +118,47 @@ function App() {
    } catch(error) {setError("Não foi possível abrir a iniciativa no mapa: "+String(error))}
    finally {initiativePopoverOpening.current=false}
  },[])
+ useEffect(() => {
+   if(isAssociatePopover || isDicePopover)return
+   const channel=new BroadcastChannel(INITIATIVE_CHANNEL)
+   initiativeChannel.current=channel
+   channel.onmessage=event=>{
+     const message=asRecord(event.data)
+     if(isInitiativePopover){
+       if(message.type==="state")setSharedInitiative(message.value as typeof sharedInitiative)
+       return
+     }
+     const current=initiativeBridge.current
+     if(message.type==="request-state"){
+       channel.postMessage({type:"state",value:{
+         session:current.session,role:current.role,connected:current.connected,rollingEnabled:current.rollingEnabled,
+       }})
+       return
+     }
+     if(current.role!=="MASTER"||!current.connected||!socket.current)return
+     if(message.type==="initialize"){
+       if(!current.session)socket.current.sendRaw(JSON.stringify({type:"session.initiative.initialize",session:createInitiativeSession("Combate da sessão")}))
+     }else if(message.type==="operation" && current.session){
+       const operation=asRecord(message.operation)
+       if(typeof operation.type==="string")socket.current.sendRaw(JSON.stringify({type:"session.initiative.operation",operation}))
+     }else if(message.type==="roll"&&current.session&&current.rollingEnabled){
+       const entry=current.session.entries.find(candidate=>candidate.id===message.entryId)
+       if(!entry)return
+       const initiativeBonus=current.resolveBonus(entry)
+       if(!Number.isFinite(initiativeBonus))return
+       socket.current.sendRaw(JSON.stringify({type:"session.initiative.operation",operation:{
+         type:"initiative.entry.update",characterId:"session",entryId:entry.id,
+         patch:{initiativeBonus,initiative:Math.floor(Math.random()*20)+1+initiativeBonus},
+       }}))
+     }
+   }
+   if(isInitiativePopover)channel.postMessage({type:"request-state"})
+   return()=>{channel.close();if(initiativeChannel.current===channel)initiativeChannel.current=null}
+ },[])
+ useEffect(()=>{
+   if(!ready || status!=="Conectado à sessão"||isInitiativePopover||isDicePopover||isAssociatePopover)return
+   void openInitiativePopover()
+ },[ready,status,openInitiativePopover])
  const popoverOpening = useRef(false)
  const openDicePopover = useCallback(async () => {
    if(isDicePopover || popoverOpening.current)return
@@ -453,6 +494,16 @@ function App() {
    }
    return entry.initiativeBonus
  }
+ initiativeBridge.current={
+   session:initiativeSession,role,connected:status==="Conectado à sessão",
+   rollingEnabled:asRecord(runtimeConfig?.config).diceRollingEnabled!==false,
+   resolveBonus:resolveEntryInitiativeBonus,
+ }
+ useEffect(()=>{
+   if(isInitiativePopover||isDicePopover||isAssociatePopover)return
+   const {session,role,connected,rollingEnabled}=initiativeBridge.current
+   initiativeChannel.current?.postMessage({type:"state",value:{session,role,connected,rollingEnabled}})
+ },[initiativeState,role,status,runtimeConfig,abilities,hp,conditions])
  const boundCreature=role==="MASTER" && selectedToken?.creatureLink?.sessionId===sessionId
   ? initiativeEntries.find(entry=>entry.id===selectedToken.creatureLink?.entryId) : undefined
  const catalogCreature=role==="MASTER"&&selectedToken?.catalogSessionId===sessionId&&selectedToken?.catalogId?availableCreatures.find(c=>c.id===selectedToken.catalogId):undefined
