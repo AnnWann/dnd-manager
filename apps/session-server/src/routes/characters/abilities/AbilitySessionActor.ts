@@ -24,7 +24,7 @@ import { normalizeDamageAffinities } from "../../../../../web/src/models/combat/
 import { evaluateCharacterSheetFormula } from "../../../../../web/src/lib/customSystems/CharacterSheetFormula";
 import type { CompanionState } from "../../../../../web/src/shared/session-runtime/companionRuntime";
 import type { SessionInitiativeState } from "../../initiative/initiativeProtocol";
-import { applyHpToReferences, validateAbilityTargets, type MutableHpTargets } from "./abilityTargeting";
+import { areSelectedTargetsDistinct, applyHpToReferences, validateAbilityTargets, type MutableHpTargets } from "./abilityTargeting";
 import { abilityTargetGrants, applyConditionToReferences, createTargetCondition, type MutableConditionsTargets } from "./abilityTargetConditions";
 import { getEffectiveDamageAffinities } from "../../../../../web/src/models/characters/characterDamageAffinities";
 import { normalizeInitiativeSession } from "../../../../../web/src/models/initiative/Initiative";
@@ -213,6 +213,10 @@ export class SessionActor extends BaseSessionActor {
         }
         return true;
       });
+      if (!areSelectedTargetsDistinct(targetRefs, storedInitiative, runtimeConfig?.config.creatureCompendium ?? [])) {
+        this.sendAbilityError(webSocket, "ABILITY_TARGET_DUPLICATE", "A mesma criatura foi selecionada mais de uma vez.");
+        return;
+      }
       if (invalidTarget) {
         this.sendAbilityError(webSocket, "ABILITY_TARGET_UNAVAILABLE", "Um dos alvos selecionados não está disponível nesta sessão.");
         return;
