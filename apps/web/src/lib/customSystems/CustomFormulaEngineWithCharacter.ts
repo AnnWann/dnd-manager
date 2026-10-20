@@ -630,8 +630,10 @@ function collectReferencedCharacterPaths(
   formula: string,
   definition: CustomSystemDefinition,
   abilityType?: CustomAbilityTypeDefinition,
+  state?: CharacterCustomSystemState,
 ): string[] {
   const expressions = [
+    ...Object.values(state?.formulaOverrides ?? {}),
     formula,
     ...definition.fields.flatMap((field) =>
       field.type === 'formula' ? [field.formula] : [],
