@@ -21,6 +21,12 @@ import {
   type CharacterTemplateProps,
 } from "../../../../../web/src/models/characters/CharacterTemplate";
 import { normalizeDamageAffinities } from "../../../../../web/src/models/combat/Damage";
+import { evaluateCharacterSheetFormula } from "../../../../../web/src/lib/customSystems/CharacterSheetFormula";
+import type { CompanionState } from "../../../../../web/src/shared/session-runtime/companionRuntime";
+import type { SessionInitiativeState } from "../../initiative/initiativeProtocol";
+import { applyHpToReferences, validateAbilityTargets, type MutableHpTargets } from "./abilityTargeting";
+import { getEffectiveDamageAffinities } from "../../../../../web/src/models/characters/characterDamageAffinities";
+import { normalizeInitiativeSession } from "../../../../../web/src/models/initiative/Initiative";
 import { isValidBonusRollValue, listBonusRollRequirements, listResolvedBonusRolls } from "../../../../../web/src/models/bonuses/BonusRoll";
 import { SessionActor as BaseSessionActor } from "../../session/SessionActor";
 import {
@@ -46,6 +52,8 @@ import {
   readRuntimeConfig,
 } from "../../session/runtimeConfigAccess";
 
+const COMPANIONS_STATE_KEY = "companions-state";
+const INITIATIVE_STATE_KEY = "initiative-state";
 const ABILITIES_STATE_KEY = "abilities-state";
 const HP_STATE_KEY = "hp-state";
 const CONDITIONS_STATE_KEY = "conditions-state";
