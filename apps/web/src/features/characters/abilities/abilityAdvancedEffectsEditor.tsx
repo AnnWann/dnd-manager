@@ -13,11 +13,9 @@ import type {
   AbilityEffectPersistence,
   AbilityKind,
   AbilityUsageResetKind,
-  AbilitySelfDamageCost,
   Trigger,
 } from "../../../models/abilities/Ability"
 import { getActivationOptionAbilities } from "../../../models/abilities/abilityActivation"
-import { DAMAGE_TYPE_OPTIONS } from "../../../models/combat/Damage"
 import type { CharacterConditionDuration, CharacterConditionGrant } from "../../../models/characters/CharacterCondition"
 import type { CharacterTemplate } from "../../../models/characters/CharacterTemplate"
 import { AbilityResourceCostsEditor } from "./abilityResourceCostsEditor"
@@ -65,7 +63,6 @@ export function AbilityAdvancedEffectsEditor({ ability, character, onChange }: {
           onChange={event => onChange({ ...ability, allowMultipleWeaponActivations: event.target.checked })} />
         Permitir infundir várias armas, mantendo um efeito separado para cada uma
       </label>
-      <SelfDamageEditor value={ability.selfDamageOnUse} onChange={selfDamageOnUse => onChange({ ...ability, selfDamageOnUse })} />
       <ConditionSection
         title="Condição ao usar"
         description="Aplicada automaticamente quando esta habilidade é usada."
@@ -178,10 +175,12 @@ export function AbilityAdvancedEffectsEditor({ ability, character, onChange }: {
                         <option value="long">Apenas descanso longo</option>
                       </Select>
                     </label>
-                    <SelfDamageEditor
-                      value={option.selfDamageOnUse}
-                      label="Dano próprio adicional desta opção (ex.: amplificação)"
-                      onChange={selfDamageOnUse => updateOption(option.id, { selfDamageOnUse })}
+                    <BonusesFields
+                      bonuses={option.bonuses ?? {}}
+                      character={character}
+                      allowOnUseHp
+                      description="Cura e dano instantâneos aplicados somente quando esta opção é escolhida."
+                      onChange={(bonuses) => updateOption(option.id, { bonuses })}
                     />
 
                     <label className="grid gap-1 text-xs text-textMuted">
@@ -321,14 +320,13 @@ function MiniAbilityEditor({ ability, character, onChange }: { ability: Ability;
                 <label className="grid gap-1 text-xs text-textMuted">Recupera<Select value={ability.usage.reset} onChange={(event) => onChange({ ...ability, usage: { ...ability.usage!, reset: event.target.value as AbilityUsageResetKind } })}>{USAGE_OPTIONS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</Select></label>
               </div>
             ) : <p className="text-xs text-textMuted">Sem contador próprio.</p>}
-            <SelfDamageEditor value={ability.selfDamageOnUse} onChange={selfDamageOnUse => onChange({ ...ability, selfDamageOnUse })} />
             <AbilityResourceCostsEditor ability={ability} character={character} onChange={onChange} />
           </div>
         ) : null}
 
         {tab === "effects" ? (
           <div className="grid gap-3">
-            <BonusesFields bonuses={ability.bonuses ?? {}} character={character} onChange={(bonuses) => onChange({ ...ability, bonuses })} />
+            <BonusesFields bonuses={ability.bonuses ?? {}} character={character} allowOnUseHp onChange={(bonuses) => onChange({ ...ability, bonuses })} />
             <ConditionSection
               title="Condição ao usar"
               description="É aplicada quando esta habilidade concedida é usada."
@@ -346,45 +344,6 @@ function MiniAbilityEditor({ ability, character, onChange }: { ability: Ability;
           </div>
         ) : null}
       </div>
-    </div>
-  )
-}
-
-function SelfDamageEditor({ value, onChange, label = "Dano próprio ao ativar" }: {
-  value?: AbilitySelfDamageCost
-  onChange: (cost: AbilitySelfDamageCost | undefined) => void
-  label?: string
-}) {
-  return (
-    <div className="grid gap-2 rounded-lg border border-border bg-bg-subtle p-3">
-      <label className="flex items-center gap-2 text-xs font-medium text-textH">
-        <input type="checkbox" checked={Boolean(value)}
-          onChange={event => onChange(event.target.checked ? { dice: "1d6", damageType: "necrotic" } : undefined)} />
-        {label}
-      </label>
-      {value ? (
-        <div className="grid gap-2 md:grid-cols-2">
-          <label className="grid gap-1 text-xs text-textMuted">
-            Dados do custo (NdM)
-            <Input value={value.dice} placeholder="1d6" onChange={event => onChange({ ...value, dice: event.target.value })} />
-          </label>
-          <label className="grid gap-1 text-xs text-textMuted">
-            Tipo do dano
-            <Select value={value.damageType} onChange={event => onChange({ ...value, damageType: event.target.value as AbilitySelfDamageCost["damageType"] })}>
-              {DAMAGE_TYPE_OPTIONS.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}
-            </Select>
-          </label>
-          <label className="flex items-center gap-2 text-xs text-textH md:col-span-2">
-            <input type="checkbox" checked={value.ignoreResistance !== false}
-              onChange={event => onChange({ ...value, ignoreResistance: event.target.checked })} />
-            Ignorar resistência, imunidade e vulnerabilidade
-          </label>
-          <p className="text-[11px] text-textMuted md:col-span-2">
-            O dano é descontado diretamente dos PV, sem consumir PV temporários. Por padrão ignora afinidades; desmarque para aplicar resistência, imunidade ou vulnerabilidade.
-            Em modo de dados físicos, o jogador informa o resultado antes da ativação.
-          </p>
-        </div>
-      ) : null}
     </div>
   )
 }
