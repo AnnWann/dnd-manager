@@ -164,6 +164,16 @@ type CentrallyRestorableReverse =
  * routing, lifecycle, unified timeline ordering and every undo path.
  */
 export class SessionActor extends BaseSessionActor {
+  private pauseStateCache: SessionPauseState | undefined;
+
+  private async readPauseState(): Promise<SessionPauseState> {
+    if (!this.pauseStateCache) {
+      this.pauseStateCache = (await this.ctx.storage.get<SessionPauseState>(SESSION_PAUSE_STATE_KEY))
+        ?? { paused: false, updatedAt: "", updatedBy: null };
+    }
+    return this.pauseStateCache;
+  }
+
   private readonly abilityRoute = bindDomainActor(AbilitySessionActor.prototype, this.ctx);
   private readonly magicRoute = bindDomainActor(MagicSessionActor.prototype, this.ctx);
   private readonly equipmentRoute = bindDomainActor(EquipmentSessionActor.prototype, this.ctx);
@@ -188,8 +198,7 @@ export class SessionActor extends BaseSessionActor {
       }
     });
     if (!socket) return response;
-    const pauseState = await this.ctx.storage.get<SessionPauseState>(SESSION_PAUSE_STATE_KEY);
-    sendVisibilityFiltered(socket, { type: "session.pause.state", state: pauseState ?? { paused: false, updatedAt: "", updatedBy: null } });
+    sendVisibilityFiltered(socket, { type: "session.pause.state", state: await this.readPauseState() });
 
     await Promise.all([
       this.sendAbilitySnapshot(socket),
@@ -213,6 +222,7 @@ export class SessionActor extends BaseSessionActor {
       }
       const state: SessionPauseState = { paused: sessionControl.paused, updatedAt: new Date().toISOString(), updatedBy: connection.userId };
       await this.ctx.storage.put(SESSION_PAUSE_STATE_KEY, state);
+      this.pauseStateCache = state;
       broadcast(this.ctx.getWebSockets(), { type: "session.pause.state", state });
       return;
     }
@@ -222,7 +232,7 @@ export class SessionActor extends BaseSessionActor {
       webSocket.close(1011, "Missing connection attachment");
       return;
     }
-    const storedPause = await this.ctx.storage.get<SessionPauseState>(SESSION_PAUSE_STATE_KEY);
+    const storedPause = await this.readPauseState();
     let messageType: string | undefined;
     try {
       const envelope: unknown = JSON.parse(raw);
