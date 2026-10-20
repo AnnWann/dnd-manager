@@ -1,9 +1,9 @@
-import type { DamageType } from "../combat/Damage"
+import { resolveDamage, type DamageType } from "../combat/Damage"
 import { applyAbilitySelfDamage, resolveAbilitySelfDamage } from "./abilitySelfDamage"
 import type { Attribute } from "../sheet/Attribute"
 import { abilityRequiresWeaponAttributeSelection, getAbilityAttackRiderDamageChoices, resolveAttackRiderAttributeSelection, resolveAttackRiderDamageChoice } from "../combat/AttackRider"
 import { evaluateCharacterSheetFormula } from "../../lib/customSystems/CharacterSheetFormula"
-import type { Bonus } from "../bonuses/Bonus"
+import type { Bonus, OnUseHpEffect } from "../bonuses/Bonus"
 import { resolveBonusCollectionRolls } from "../bonuses/BonusRoll"
 import type {
   CharacterCondition,
@@ -19,6 +19,7 @@ import type {
   Ability,
   AbilityActivationOption,
   AbilityEffectDuration,
+  AbilitySelfDamageCost,
   Usage,
 } from "./Ability"
 
@@ -152,6 +153,15 @@ export function useAbilityEffect(
     bonusRollValues,
   )
   const selectedOption = ability.activationOptions?.find(entry => entry.id === activationOptionId)
+  const optionRollPrefix = selectedOption ? `option:${selectedOption.id}:` : ""
+  const optionRollValues = Object.fromEntries(
+    Object.entries(bonusRollValues ?? {})
+      .filter(([key]) => selectedOption && key.startsWith(optionRollPrefix))
+      .map(([key, value]) => [key.slice(optionRollPrefix.length), value]),
+  )
+  const resolvedOptionRolls = selectedOption
+    ? resolveBonusCollectionRolls(character, selectedOption.bonuses, optionRollValues)
+    : { bonuses: undefined }
   const choices = getAbilityAttackRiderDamageChoices(ability, activationOptionId)
   if (choices.length && (!selectedDamageType || !choices.includes(selectedDamageType))) return character
   if (abilityRequiresWeaponAttributeSelection(ability, activationOptionId) && !selectedWeaponAttribute) return character
@@ -160,6 +170,9 @@ export function useAbilityEffect(
   if (selfDamage === null) return character
   const resolvedAbility: Ability = {
     ...ability,
+    activationOptions: ability.activationOptions?.map(option => option.id === selectedOption?.id
+      ? { ...option, bonuses: resolvedOptionRolls.bonuses }
+      : option),
     bonuses: {
       ...(resolvedRolls.bonuses ?? {}),
       attackRiders: resolveAttackRiderAttributeSelection(resolveAttackRiderDamageChoice(resolvedRolls.bonuses?.attackRiders ?? [], selectedDamageType), selectedWeaponAttribute),
@@ -229,6 +242,25 @@ export function useAbilityEffect(
     }
   }
 
+  // These effects change HP only on activation, not while bonuses remain active.
+  const instantHpEffects = [
+    ...(resolvedAbility.bonuses?.onUseHp ?? []),
+    ...(resolvedOptionRolls.bonuses?.onUseHp ?? []),
+  ]
+  for (const effect of instantHpEffects) {
+    const amount = Math.max(0, Math.trunc(resolveBonuses(character, [effect.bonus])[0].value))
+    if (!Number.isFinite(amount) || amount === 0) continue
+    if (effect.kind === "heal") {
+      next = next.heal(amount)
+      continue
+    }
+    const damage = effect.ignoreResistance
+      ? amount
+      : resolveDamage(amount, effect.damageType ?? "fire", next.get("sheet").damageAffinities).applied
+    next = effect.bypassTemporaryHp
+      ? next.setCurrentHp(next.get("sheet").HP.current - damage)
+      : next.takeDamage(damage)
+  }
   return applyAbilitySelfDamage(next, selfDamage)
 }
 
@@ -257,11 +289,29 @@ export function restoreAbilityUse(ability: Ability): Ability {
   return { ...ability, usage: { ...ability.usage, used: Math.max(0, ability.usage.used - 1) } }
 }
 
+/** Migrate legacy Crimson Rite costs when the ability is edited. */
+function migrateLegacySelfDamage(cost: AbilitySelfDamageCost): OnUseHpEffect {
+  return {
+    kind: "damage",
+    damageType: cost.damageType,
+    ignoreResistance: cost.ignoreResistance !== false,
+    bypassTemporaryHp: true,
+    bonus: { type: "add", value: 0, roll: { mode: "automatic", dice: cost.dice } },
+  }
+}
+
 export function normalizeAbilityActivation(ability: Ability): Ability {
   const duration = getAbilityEffectDuration(ability)
   const persistence = ability.effectPersistence ?? "untilEnd"
   const normalized: Ability = {
     ...ability,
+    selfDamageOnUse: undefined,
+    bonuses: ability.selfDamageOnUse
+      ? {
+          ...(ability.bonuses ?? {}),
+          onUseHp: [...(ability.bonuses?.onUseHp ?? []), migrateLegacySelfDamage(ability.selfDamageOnUse)],
+        }
+      : ability.bonuses,
     effectDuration: (ability.kind ?? "active") === "feature" ? ability.effectDuration : duration,
     effectDurationText: duration === "lasting" ? ability.effectDurationText?.trim() || undefined : undefined,
     effectPersistence: persistence,
@@ -287,6 +337,13 @@ export function normalizeAbilityActivation(ability: Ability): Ability {
         )
         return {
           ...option,
+          selfDamageOnUse: undefined,
+          bonuses: option.selfDamageOnUse
+            ? {
+                ...(option.bonuses ?? {}),
+                onUseHp: [...(option.bonuses?.onUseHp ?? []), migrateLegacySelfDamage(option.selfDamageOnUse)],
+              }
+            : option.bonuses,
           name: option.name.trim(),
           description: option.description?.trim() || normalizedAbilities[0]?.description?.trim() || undefined,
           duration: option.duration ?? option.condition?.duration ?? defaultOptionDuration(ability),
