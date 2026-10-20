@@ -405,7 +405,7 @@ function App() {
        onStatusChange:state=>{
          if(socket.current !== ws)return
          if(state === "reconnecting" || state === "error" || state === "disconnected") {
-           setCharacters({}); setAbilities({}); setHp({}); setConditions({}); setInventoryState(null); setRuntimeConfig(null)
+           setCharacters({}); setAbilities({}); setHp({}); setConditions({}); setInventoryState(null); setRuntimeConfig(null); setInitiativeState(null)
          }
          setStatus(state === "connected" ? "Conectado à sessão"
            : state === "reconnecting" ? "Reconectando à sessão..."
