@@ -14,7 +14,7 @@ import {
 import { useOptionalSessionRuntime } from "../features/session-runtime/useSessionRuntime"
 import { useInitiativeSession } from "../hooks/useInitiativeSession"
 import type { CompendiumCreature } from "../models/creatures/CompendiumCreature"
-import type { InitiativeEntry } from "../models/initiative/Initiative"
+import { createInitiativeEntry, type InitiativeEntry } from "../models/initiative/Initiative"
 
 export function OwnedCreaturesView() {
   const runtime = useOptionalSessionRuntime()
@@ -42,6 +42,42 @@ export function OwnedCreaturesView() {
   const viewingEntry = viewingCreature
     ? initiativeByCreatureId.get(viewingCreature.id)
     : undefined
+  const effectiveViewingEntry = viewingCreature && viewingCompanion
+    ? {
+        ...(viewingEntry ?? createInitiativeEntry({
+          id: "companion:" + viewingCreature.id,
+          sourceId: "compendium:" + viewingCreature.id,
+          sourceType: "monster",
+          name: viewingCreature.name,
+          side: viewingCreature.defaultSide,
+          initiative: 0,
+          initiativeBonus: viewingCreature.initiativeBonus,
+          armorClass: viewingCreature.armorClass,
+          currentHp: viewingCompanion.currentHp,
+          maxHp: viewingCompanion.maxHp,
+          temporaryHp: viewingCompanion.temporaryHp,
+        })),
+        currentHp: viewingCompanion.currentHp,
+        maxHp: viewingCompanion.maxHp,
+        temporaryHp: viewingCompanion.temporaryHp,
+        conditions: viewingCompanion.conditions ?? viewingEntry?.conditions ?? [],
+        creatureFeatureResources: Object.fromEntries(allCreatureFeatures(viewingCreature)
+          .filter(feature => feature.usage)
+          .map(feature => [feature.id, {
+            max: feature.usage!.max, used: viewingCompanion.featureUses[feature.id] ?? 0,
+          }])),
+        creatureSpellResources: {
+          slots: Object.fromEntries(Object.entries(viewingCreature.spellcasting?.slots ?? {})
+            .map(([level, max]) => [level, { max: max ?? 0, current: viewingCompanion.spellSlots[level] ?? max ?? 0 }])),
+          perDay: Object.fromEntries((viewingCreature.spellcasting?.spells ?? [])
+            .filter(spell => spell.usage.type === "perDay")
+            .map(spell => [spell.spellIndex, {
+              max: spell.usage.type === "perDay" ? spell.usage.uses : 0,
+              used: viewingCompanion.spellPerDay?.[spell.spellIndex] ?? 0,
+            }])),
+        },
+      } as InitiativeEntry
+    : viewingEntry
 
   return (
     <div className="grid gap-4">
@@ -102,7 +138,7 @@ export function OwnedCreaturesView() {
           <CreatureQuickSheet
             data={{
               ...quickSheetFromCompendiumCreature(
-                viewingCreature, viewingEntry, { enableRolls: true },
+                viewingCreature, effectiveViewingEntry, { enableRolls: true },
               ),
               currentHp: viewingCompanion?.currentHp,
               maxHp: viewingCompanion?.maxHp,
