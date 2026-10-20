@@ -1,4 +1,4 @@
-import { Users } from "lucide-react"
+import { Pause, Play, Users } from "lucide-react"
 import { useMemo } from "react"
 
 import type { CampaignSessionMember } from "../../api/campaign-session"
@@ -52,8 +52,29 @@ export function SessionPresenceIndicator({
         ? "Conectando"
         : "Offline"
 
+  const paused = runtime.pauseState?.paused === true
+
   return (
-    <details className="relative">
+    <div className="flex items-center gap-2">
+      {runtime.role === "MASTER" ? (
+        <button type="button"
+          disabled={!connected || !runtime.pauseState}
+          onClick={() => runtime.setSessionPaused(!paused)}
+          aria-label={paused ? "Retomar sessão" : "Pausar sessão"}
+          title={paused ? "Retomar ações dos jogadores" : "Bloquear alterações e rolagens dos jogadores"}
+          className={paused
+            ? "inline-flex items-center gap-1.5 rounded-lg border border-amber-500 px-3 py-2 text-xs text-amber-400 disabled:opacity-50"
+            : "inline-flex items-center gap-1.5 rounded-lg border border-border px-3 py-2 text-xs text-textH hover:bg-bg-subtle disabled:opacity-50"}
+        >
+          {paused ? <Play className="h-4 w-4" /> : <Pause className="h-4 w-4" />}
+          <span>{paused ? "Retomar" : "Pausar"}</span>
+        </button>
+      ) : paused ? (
+        <span role="status" className="inline-flex items-center gap-1.5 rounded-lg border border-amber-500 px-3 py-2 text-xs font-medium text-amber-400">
+          <Pause className="h-4 w-4" /> Sessão pausada
+        </span>
+      ) : null}
+      <details className="relative">
       <summary
         className="inline-flex cursor-pointer list-none items-center gap-2 rounded-lg border border-border bg-bg px-3 py-2 text-xs font-medium text-textH transition hover:bg-bg-subtle [&::-webkit-details-marker]:hidden"
         title="Usuários conectados à sessão"
@@ -104,5 +125,6 @@ export function SessionPresenceIndicator({
         </div>
       </div>
     </details>
+    </div>
   )
 }

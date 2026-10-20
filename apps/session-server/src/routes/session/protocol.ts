@@ -2,6 +2,7 @@ import type { SessionHpOperation as SharedSessionHpOperation, SessionRestOperati
 import type { SessionDieSides as SharedSessionDieSides, SessionHitDicePool as SharedSessionHitDicePool, SessionHitDiceState as SharedSessionHitDiceState, SessionAttribute as SharedSessionAttribute, SessionAttributesState as SharedSessionAttributesState, SessionSavingThrowsState as SharedSessionSavingThrowsState, SessionSkill as SharedSessionSkill, SessionSkillProficiency as SharedSessionSkillProficiency, SessionSkillsState as SharedSessionSkillsState, SessionStatsState as SharedSessionStatsState, SessionConditionDuration as SharedSessionConditionDuration, SessionCondition as SharedSessionCondition, SessionConditionsState as SharedSessionConditionsState, SessionConditionSeed as SharedSessionConditionSeed, SessionHpState as SharedSessionHpState, SessionHpSeed as SharedSessionHpSeed, SessionHitDiceOperation as SharedSessionHitDiceOperation, SessionCalculatedStatOperation as SharedSessionCalculatedStatOperation, SessionSimpleStatOperation as SharedSessionSimpleStatOperation, SessionStatOperation as SharedSessionStatOperation, SessionAttributeOperation as SharedSessionAttributeOperation, SessionSavingThrowOperation as SharedSessionSavingThrowOperation, SessionSkillOperation as SharedSessionSkillOperation, SessionConditionOperation as SharedSessionConditionOperation, SessionConcentrationOperation as SharedSessionConcentrationOperation, SessionLoggedOperation as SharedSessionLoggedOperation } from "../../../../../packages/session-protocol/src/sessionCore"
 import { routeForSheetOperation, type CharacterSheetRoute } from "../characters/sheet";
 import type { SessionActionRollRequest, SessionActionRollResult, SessionCreatureRollRequest, SessionDiceRollRequest, SessionDiceRollResult } from "../../../../web/src/shared/session-runtime/diceRollProtocol";
+import type { CompanionOperation, CompanionServerMessage } from "../../../../web/src/shared/session-runtime/companionRuntime";
 import { parseManualDiceExpression } from "../../../../web/src/shared/session-runtime/manualDiceExpression";
 
 export type SessionRole = "MASTER" | "PLAYER";
@@ -138,7 +139,8 @@ export type ClientSessionMessage =
   | { type: "session.log.undo"; logId: string }
   | { type: "session.dice.roll"; request: SessionDiceRollRequest }
   | { type: "session.action.roll"; request: SessionActionRollRequest }
-  | { type: "session.creature.roll"; request: SessionCreatureRollRequest };
+  | { type: "session.creature.roll"; request: SessionCreatureRollRequest }
+  | { type: "session.companions.operation"; operation: CompanionOperation };
 
 export type ServerSessionMessage =
   | { type: "session.ready"; sessionId: string; clientId: string; serverTime: number }
@@ -152,6 +154,7 @@ export type ServerSessionMessage =
   | { type: "session.hp.log"; records: SessionHpLogRecord[] }
   | { type: "session.dice.result"; result: SessionDiceRollResult }
   | { type: "session.action.result"; result: SessionActionRollResult }
+  | CompanionServerMessage
   | { type: "session.customSystem.notice"; characterId: string; title: string; message: string }
   | { type: "session.error"; code: string; message: string };
 
@@ -198,6 +201,25 @@ export function parseClientSessionMessage(raw: string): ClientSessionMessage | n
       return isActionRollRequest(value.request)
         ? { type: value.type, request: value.request }
         : null;
+    case "session.companions.operation": {
+      const operation = value.operation;
+      if (!isRecord(operation) || !nonEmpty(operation.creatureId) || operation.creatureId.length > 200) return null;
+      if (operation.type === "hp") {
+        return (operation.mode === "damage" || operation.mode === "heal" || operation.mode === "temporary" || operation.mode === "set")
+          && Number.isInteger(operation.amount) && operation.amount >= 0 && operation.amount <= 100000
+          ? { type: value.type, operation: operation as CompanionOperation } : null;
+      }
+      if (operation.type === "feature") {
+        return nonEmpty(operation.featureId) && (operation.delta === -1 || operation.delta === 1)
+          ? { type: value.type, operation: operation as CompanionOperation } : null;
+      }
+      if (operation.type === "spellSlot") {
+        return Number.isInteger(operation.level) && operation.level >= 1 && operation.level <= 9
+          && (operation.delta === -1 || operation.delta === 1)
+          ? { type: value.type, operation: operation as CompanionOperation } : null;
+      }
+      return null;
+    }
     case "session.creature.roll":
       return isCreatureRollRequest(value.request)
         ? { type: value.type, request: value.request }
@@ -267,6 +289,9 @@ function isActionRollRequest(value: unknown): value is SessionActionRollRequest 
   if (!nonEmpty(value.characterId) || value.characterId.length > 120) return false;
   if (!diceRollMode(value.mode) || !rollVisibility(value.visibility) || !isRecord(value.source) || !nonEmpty(value.source.type)) return false;
   if (value.targetEntryId !== undefined && (!nonEmpty(value.targetEntryId) || value.targetEntryId.length > 200)) return false;
+  if (value.targetRefs !== undefined && (!Array.isArray(value.targetRefs) || value.targetRefs.length > 20 ||
+    !value.targetRefs.every((ref: unknown) => typeof ref === "string" && /^(character|initiative|companion):[^:]{1,200}$/.test(ref)))) return false;
+  if (value.pointLabel !== undefined && (typeof value.pointLabel !== "string" || value.pointLabel.length > 160)) return false;
   switch (value.source.type) {
     case "weapon":
       return nonEmpty(value.source.weaponId) && value.source.weaponId.length <= 160;

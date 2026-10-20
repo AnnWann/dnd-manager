@@ -54,7 +54,14 @@ export const DAMAGE_TYPE_OPTIONS: Array<{ value: DamageType; label: string }> = 
   { value: "thunder", label: "Trovão" },
 ]
 
-export function damageTypeLabel(type: DamageType | "healing" | undefined): string {
+/** Types of HP effects; healing is deliberately excluded from affinities and damage rules. */
+export type HpEffectType = DamageType | "healing"
+export const HP_EFFECT_TYPE_OPTIONS: Array<{ value: HpEffectType; label: string }> = [
+  { value: "healing", label: "Cura (PV recuperados)" },
+  ...DAMAGE_TYPE_OPTIONS,
+]
+
+export function damageTypeLabel(type: HpEffectType | undefined): string {
   if (type === "healing") return "Cura"
   return DAMAGE_TYPE_OPTIONS.find((entry) => entry.value === type)?.label ?? "Sem tipo"
 }

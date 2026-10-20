@@ -9,6 +9,7 @@ import type {
   Bonus,
   BonusCollection,
   BonusTarget,
+  OnUseHpEffect,
   ScopedBonusKey,
 } from "../../../models/bonuses/Bonus"
 import type { CharacterTemplate } from "../../../models/characters/CharacterTemplate"
@@ -29,6 +30,7 @@ import { FormulaVariablePicker } from "../../customSystems/FormulaVariablePicker
 import { listCharacterFormulaVariables } from "../../../lib/customSystems/CharacterFormulaVariables"
 import { validateCharacterSheetFormula } from "../../../lib/customSystems/CharacterSheetFormula"
 import { attributeShort } from "../../../lib/attributeShorts"
+import { validateBonusRollDiceExpression } from "../../../models/bonuses/BonusRoll"
 
 const ATTRIBUTES: Array<{ value: Attribute; label: string }> = [
   { value: "str", label: "FOR" },
@@ -132,12 +134,16 @@ export function BonusesFields({
   description = "Bônus aplicados enquanto esta habilidade estiver disponível.",
   character,
   owningWeapon,
+  allowOnUseHp = false,
+  onlyOnUseHp = false,
 }: {
   bonuses: BonusCollection
   onChange: (bonuses: BonusCollection) => void
   description?: string
   character?: CharacterTemplate
   owningWeapon?: { id: string; name: string }
+  allowOnUseHp?: boolean
+  onlyOnUseHp?: boolean
 }) {
   const [dialogOpen, setDialogOpen] = useState(false)
   const entries = flattenBonuses(bonuses)
@@ -183,15 +189,17 @@ export function BonusesFields({
         </div>
       )}
 
-      <AttackRidersEditor
+      {!onlyOnUseHp ? <AttackRidersEditor
         riders={bonuses.attackRiders ?? []}
         character={character}
         onChange={attackRiders => onChange({ ...bonuses, attackRiders })}
-      />
+      /> : null}
       <AddBonusDialog
         open={dialogOpen}
         character={character}
         owningWeapon={owningWeapon}
+        allowOnUseHp={allowOnUseHp}
+        onlyOnUseHp={onlyOnUseHp}
         onClose={() => setDialogOpen(false)}
         onAdd={(entry) => {
           if (entry.target === "damageAffinity") {
@@ -202,6 +210,8 @@ export function BonusesFields({
                 entry.affinity,
               ],
             })
+          } else if (entry.target === "onUseHp") {
+            onChange({ ...bonuses, onUseHp: [...(bonuses.onUseHp ?? []), entry.effect] })
           } else if (entry.target === "attribute" || entry.target === "attributeModifier") {
             onChange({
               ...bonuses,
@@ -249,6 +259,18 @@ export function flattenBonuses(
   bonuses: BonusCollection,
 ): FlatBonusEntry[] {
   const entries: FlatBonusEntry[] = []
+  ;(bonuses.onUseHp ?? []).forEach((effect, index) => {
+    const value = effect.bonus.roll?.dice ?? effect.bonus.formula?.trim() ?? String(effect.bonus.value)
+    const detail = effect.kind === "damage" ? ` (${damageTypeLabel(effect.damageType ?? "fire")})` : ""
+    entries.push({
+      id: `onUseHp-${index}`,
+      label: `${effect.kind === "heal" ? "Cura" : "Dano"} ao usar${detail}: ${value}`,
+      remove: (current) => ({
+        ...current,
+        onUseHp: (current.onUseHp ?? []).filter((_, currentIndex) => currentIndex !== index),
+      }),
+    })
+  })
 
   for (const option of TARGET_OPTIONS) {
     if (option.value === "damageAffinity") {
@@ -357,10 +379,16 @@ function formatBonus(bonus: Bonus): string {
   return `+ (${value})`
 }
 
+type BonusDialogTarget = BonusTarget | "onUseDamage" | "onUseHeal"
+
 type AddBonusEntry =
   | {
       target: "damageAffinity"
       affinity: DamageAffinity
+    }
+  | {
+      target: "onUseHp"
+      effect: OnUseHpEffect
     }
   | {
       target: Exclude<BonusTarget, "damageAffinity">
@@ -375,16 +403,20 @@ function AddBonusDialog({
   open,
   character,
   owningWeapon,
+  allowOnUseHp = false,
+  onlyOnUseHp = false,
   onClose,
   onAdd,
 }: {
   open: boolean
   character?: CharacterTemplate
   owningWeapon?: { id: string; name: string }
+  allowOnUseHp?: boolean
+  onlyOnUseHp?: boolean
   onClose: () => void
   onAdd: (entry: AddBonusEntry) => void
 }) {
-  const [target, setTarget] = useState<BonusTarget>("armorClass")
+  const [target, setTarget] = useState<BonusDialogTarget>(onlyOnUseHp ? "onUseDamage" : "armorClass")
   const [attribute, setAttribute] = useState<Attribute>("str")
   const [scopeAttribute, setScopeAttribute] = useState<"all" | Attribute>("all")
   const [scopeSkill, setScopeSkill] = useState<"all" | Skill>("all")
@@ -394,22 +426,28 @@ function AddBonusDialog({
   const [useFormula, setUseFormula] = useState(false)
   const [formula, setFormula] = useState("")
   const [damageType, setDamageType] = useState<DamageType>("fire")
+  const [useDice, setUseDice] = useState(false)
+  const [dice, setDice] = useState("1d6")
+  const [ignoreResistance, setIgnoreResistance] = useState(false)
+  const [bypassTemporaryHp, setBypassTemporaryHp] = useState(false)
   const [affinityKind, setAffinityKind] = useState<DamageAffinityKind>("resistance")
   const [affinityQualifier, setAffinityQualifier] = useState<DamageAffinityQualifier>("any")
 
   if (!open) return null
 
   const isDamageAffinity = target === "damageAffinity"
+  const isHpOnUse = target === "onUseDamage" || target === "onUseHeal"
+  const diceError = isHpOnUse && useDice ? validateBonusRollDiceExpression(dice) : undefined
   const needsAttribute =
     target === "attribute" || target === "attributeModifier"
-  const supportsAttributeScope = isScopedTarget(target)
+  const supportsAttributeScope = !isHpOnUse && isScopedTarget(target as BonusTarget)
   const supportsSkillScope = target === "skillCheckBonus"
-  const formulaError = !isDamageAffinity && useFormula
+  const formulaError = !isDamageAffinity && !useDice && useFormula
     ? validateCharacterSheetFormula(formula, character)
     : undefined
 
   function close() {
-    setTarget("armorClass")
+    setTarget(onlyOnUseHp ? "onUseDamage" : "armorClass")
     setAttribute("str")
     setScopeAttribute("all")
     setScopeSkill("all")
@@ -419,6 +457,10 @@ function AddBonusDialog({
     setUseFormula(false)
     setFormula("")
     setDamageType("fire")
+    setUseDice(false)
+    setDice("1d6")
+    setIgnoreResistance(false)
+    setBypassTemporaryHp(false)
     setAffinityKind("resistance")
     setAffinityQualifier("any")
     onClose()
@@ -455,14 +497,70 @@ function AddBonusDialog({
         <div className="grid gap-3 py-4">
           <label className="grid gap-1">
             <span className="text-xs font-medium text-textH">Afeta</span>
-            <Select value={target} onChange={(event) => setTarget(event.target.value as BonusTarget)}>
-              {TARGET_OPTIONS.map((option) => (
+            <Select value={target} onChange={(event) => setTarget(event.target.value as BonusDialogTarget)}>
+              {!onlyOnUseHp ? TARGET_OPTIONS.map((option) => (
                 <option key={option.value} value={option.value}>{option.label}</option>
-              ))}
+              )) : null}
+              {allowOnUseHp ? <option value="onUseDamage">Dano (ao usar a habilidade)</option> : null}
+              {allowOnUseHp ? <option value="onUseHeal">Cura (ao usar a habilidade)</option> : null}
             </Select>
           </label>
 
-          {isDamageAffinity ? (
+          {isHpOnUse ? (
+            <div className="grid gap-3">
+              <p className="text-[11px] text-textMuted">
+                Efeito instantâneo aplicado ao personagem que usa a habilidade, uma vez por ativação.
+              </p>
+              {target === "onUseDamage" ? (
+                <>
+                  <label className="grid gap-1 text-xs text-textMuted">
+                    Tipo de dano
+                    <Select value={damageType} onChange={event => setDamageType(event.target.value as DamageType)}>
+                      {DAMAGE_TYPE_OPTIONS.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}
+                    </Select>
+                  </label>
+                  <label className="flex items-center gap-2 text-xs text-textH">
+                    <input type="checkbox" checked={ignoreResistance} onChange={event => setIgnoreResistance(event.target.checked)} />
+                    Ignorar resistência, imunidade e vulnerabilidade
+                  </label>
+                  <label className="flex items-center gap-2 text-xs text-textH">
+                    <input type="checkbox" checked={bypassTemporaryHp} onChange={event => setBypassTemporaryHp(event.target.checked)} />
+                    Descontar diretamente dos PV (ignorar PV temporários)
+                  </label>
+                </>
+              ) : null}
+              <label className="flex items-center gap-2 text-xs text-textH">
+                <input type="checkbox" checked={useDice} onChange={event => setUseDice(event.target.checked)} />
+                Rolar dados ao ativar
+              </label>
+              {useDice ? (
+                <label className="grid gap-1 text-xs text-textMuted">
+                  Dados
+                  <Input value={dice} placeholder="1d6" onChange={event => setDice(event.target.value)} />
+                  {diceError ? <span className="text-danger">{diceError}</span> : null}
+                </label>
+              ) : (
+                <>
+                  <label className="flex items-center gap-2 text-xs text-textH">
+                    <input type="checkbox" checked={useFormula} onChange={event => setUseFormula(event.target.checked)} />
+                    Calcular valor por fórmula
+                  </label>
+                  {useFormula ? (
+                    <label className="grid gap-1 text-xs text-textMuted">
+                      Fórmula
+                      <Input value={formula} onChange={event => setFormula(event.target.value)} />
+                      {formulaError ? <span className="text-danger">{formulaError}</span> : null}
+                    </label>
+                  ) : (
+                    <label className="grid gap-1 text-xs text-textMuted">
+                      Valor fixo
+                      <Input type="number" min={0} value={value} onChange={event => setValue(Math.max(0, Number(event.target.value) || 0))} />
+                    </label>
+                  )}
+                </>
+              )}
+            </div>
+          ) : isDamageAffinity ? (
             <div className="grid gap-3">
               <label className="grid gap-1">
                 <span className="text-xs font-medium text-textH">Afinidade</span>
@@ -628,7 +726,7 @@ function AddBonusDialog({
           <Button variant="secondary" onClick={close}>Cancelar</Button>
           <Button
             variant="primary"
-            disabled={Boolean(formulaError)}
+            disabled={Boolean(formulaError || diceError)}
             onClick={() => {
               if (isDamageAffinity) {
                 onAdd({
@@ -637,6 +735,25 @@ function AddBonusDialog({
                     kind: affinityKind,
                     damageType,
                     qualifier: affinityQualifier,
+                  },
+                })
+                return
+              }
+
+              if (isHpOnUse) {
+                onAdd({
+                  target: "onUseHp",
+                  effect: {
+                    kind: target === "onUseHeal" ? "heal" : "damage",
+                    bonus: {
+                      type: "add",
+                      value: Math.max(0, value),
+                      formula: !useDice && useFormula ? formula.trim() : undefined,
+                      roll: useDice ? { mode: "automatic", dice: dice.trim() } : undefined,
+                    },
+                    damageType: target === "onUseDamage" ? damageType : undefined,
+                    ignoreResistance: target === "onUseDamage" ? ignoreResistance : undefined,
+                    bypassTemporaryHp: target === "onUseDamage" ? bypassTemporaryHp : undefined,
                   },
                 })
                 return

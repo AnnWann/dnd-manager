@@ -3,8 +3,9 @@ import { Plus, Trash2 } from "lucide-react"
 import { Button } from "../../../components/ui/Button"
 import { Input } from "../../../components/ui/Input"
 import { Select } from "../../../components/ui/Select"
-import { DAMAGE_TYPE_OPTIONS, type DamageType } from "../../../models/combat/Damage"
+import { HP_EFFECT_TYPE_OPTIONS, type HpEffectType } from "../../../models/combat/Damage"
 import type { AbilityRollDefinition } from "../../../models/abilities/AbilityRoll"
+import type { AbilityTargeting } from "../../../models/abilities/Ability"
 import { validateAbilityRoll } from "../../../models/abilities/AbilityRoll"
 import type { Attribute } from "../../../models/sheet/Attribute"
 import type { Skill } from "../../../models/sheet/Skills"
@@ -28,7 +29,7 @@ const MODES: Array<[AbilityRollDefinition["kind"], string]> = [
   ["abilityCheck", "Teste de habilidade ou perícia"],
   ["savingThrow", "Teste de resistência do usuário"],
   ["targetSave", "Teste de resistência do alvo (CD)"],
-  ["damage", "Somente dano"],
+  ["damage", "Somente dano/cura"],
 ]
 
 function defaultRoll(kind: AbilityRollDefinition["kind"] = "attack"): AbilityRollDefinition {
@@ -53,9 +54,11 @@ function Field({ label, children }: { label: string; children: ReactNode }) {
   return <label className="grid min-w-0 gap-1 text-xs text-textMuted"><span>{label}</span>{children}</label>
 }
 
-export function AbilityRollEditor({ roll, onChange }: {
+export function AbilityRollEditor({ roll, onChange, targeting, onTargetingChange }: {
   roll?: AbilityRollDefinition
   onChange: (next: AbilityRollDefinition | undefined) => void
+  targeting?: AbilityTargeting
+  onTargetingChange?: (next: AbilityTargeting | undefined) => void
 }) {
   function patch(values: Partial<AbilityRollDefinition>) {
     if (!roll) return
@@ -83,6 +86,41 @@ export function AbilityRollEditor({ roll, onChange }: {
         </p>
       </div>
 
+      {onTargetingChange ? (
+        <section className="grid gap-3 rounded-xl border border-border bg-bg-subtle p-3">
+          <div className="text-xs font-semibold text-textH">Aplicação automática em alvos</div>
+          <p className="text-xs text-textMuted">Opcional. Sem configuração, a rolagem continua apenas informativa. Alvos podem ser personagens, participantes da iniciativa ou acompanhantes.</p>
+          <Field label="Aplicar efeitos">
+            <Select value={targeting?.mode ?? "none"} onChange={event => {
+              const mode = event.target.value as AbilityTargeting["mode"]
+              onTargetingChange(mode === "none" ? undefined : {
+                mode, maxTargets: mode === "self" ? 1 : (targeting?.maxTargets ?? 1),
+                radiusFeet: mode === "point" ? (targeting?.radiusFeet ?? 10) : undefined,
+              })
+            }}>
+              <option value="none">Não configurar alvos (somente rolar)</option>
+              <option value="self">Somente em si mesmo</option>
+              <option value="targets">Alvos selecionados</option>
+              <option value="point">Ponto / área (selecionar afetados)</option>
+            </Select>
+          </Field>
+          {targeting?.mode === "targets" || targeting?.mode === "point" ? (
+            <div className="grid gap-2 sm:grid-cols-2">
+              <Field label="Máximo de afetados">
+                <Input type="number" min={1} max={20} value={targeting.maxTargets ?? 1}
+                  onChange={event => onTargetingChange({ ...targeting, maxTargets: Math.max(1, Math.min(20, Number(event.target.value) || 1)) })} />
+              </Field>
+              {targeting.mode === "point" ? (
+                <Field label="Raio da área (pés)">
+                  <Input type="number" min={0} max={1000} value={targeting.radiusFeet ?? 10}
+                    onChange={event => onTargetingChange({ ...targeting, radiusFeet: Math.max(0, Math.min(1000, Number(event.target.value) || 0)) })} />
+                </Field>
+              ) : null}
+            </div>
+          ) : null}
+          {targeting?.mode === "point" ? <p className="text-[11px] text-textMuted">O ponto é descritivo; sem coordenadas de tokens, os afetados são escolhidos manualmente.</p> : null}
+        </section>
+      ) : null}
       {roll ? <>
         {hasD20 ? <div className="grid gap-3 sm:grid-cols-2">
           <Field label="Atributo">
@@ -149,7 +187,7 @@ export function AbilityRollEditor({ roll, onChange }: {
         <section className="grid gap-3 rounded-xl border border-border bg-bg-subtle p-3">
           <div className="flex items-center justify-between gap-2">
             <div>
-              <h4 className="text-xs font-semibold text-textH">Componentes de dano</h4>
+              <h4 className="text-xs font-semibold text-textH">Componentes de dano e cura</h4>
               <p className="mt-1 text-xs text-textMuted">Cada componente possui dados e tipo independentes. Críticos dobram apenas os dados habilitados.</p>
             </div>
             <Button size="sm" variant="secondary" onClick={() => patch({ damage: [...(roll.damage ?? []), newDamage()] })}>
@@ -171,9 +209,9 @@ export function AbilityRollEditor({ roll, onChange }: {
                   <Input value={damage.dice} placeholder="1d6" onChange={event => updateDamage({ dice: event.target.value })} />
                 </Field>
                 <Field label="Tipo de dano">
-                  <Select value={damage.damageType ?? ""} onChange={event => updateDamage({ damageType: (event.target.value || undefined) as DamageType | undefined })}>
+                  <Select value={damage.damageType ?? ""} onChange={event => updateDamage({ damageType: (event.target.value || undefined) as HpEffectType | undefined })}>
                     <option value="">Não especificado</option>
-                    {DAMAGE_TYPE_OPTIONS.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}
+                    {HP_EFFECT_TYPE_OPTIONS.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}
                   </Select>
                 </Field>
               </div>

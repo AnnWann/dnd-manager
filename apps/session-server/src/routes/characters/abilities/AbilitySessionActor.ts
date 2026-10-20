@@ -21,7 +21,14 @@ import {
   type CharacterTemplateProps,
 } from "../../../../../web/src/models/characters/CharacterTemplate";
 import { normalizeDamageAffinities } from "../../../../../web/src/models/combat/Damage";
-import { listBonusRollRequirements, listResolvedBonusRolls } from "../../../../../web/src/models/bonuses/BonusRoll";
+import { evaluateCharacterSheetFormula } from "../../../../../web/src/lib/customSystems/CharacterSheetFormula";
+import type { CompanionState } from "../../../../../web/src/shared/session-runtime/companionRuntime";
+import type { SessionInitiativeState } from "../../initiative/initiativeProtocol";
+import { areSelectedTargetsDistinct, applyHpToReferences, validateAbilityTargets, type MutableHpTargets } from "./abilityTargeting";
+import { abilityTargetGrants, applyConditionToReferences, createTargetCondition, type MutableConditionsTargets } from "./abilityTargetConditions";
+import { getEffectiveDamageAffinities } from "../../../../../web/src/models/characters/characterDamageAffinities";
+import { normalizeInitiativeSession } from "../../../../../web/src/models/initiative/Initiative";
+import { isValidBonusRollValue, listBonusRollRequirements, listResolvedBonusRolls } from "../../../../../web/src/models/bonuses/BonusRoll";
 import { SessionActor as BaseSessionActor } from "../../session/SessionActor";
 import {
   parseAbilityClientMessage,
@@ -37,6 +44,7 @@ import type {
   SessionHpState,
 } from "../../session/protocol";
 import {
+  characterScope,
   commitSessionMutation,
   createSessionLogRecord,
   readSessionLog,
@@ -46,6 +54,8 @@ import {
   readRuntimeConfig,
 } from "../../session/runtimeConfigAccess";
 
+const COMPANIONS_STATE_KEY = "companions-state";
+const INITIATIVE_STATE_KEY = "initiative-state";
 const ABILITIES_STATE_KEY = "abilities-state";
 const HP_STATE_KEY = "hp-state";
 const CONDITIONS_STATE_KEY = "conditions-state";
@@ -181,6 +191,37 @@ export class SessionActor extends BaseSessionActor {
     }
 
     const digitalDiceEnabled = isDigitalDiceRollingEnabled(runtimeConfig);
+    const abilityBeforeUse = operation.type === "character.ability.use"
+      ? findAbilityForSource(current, operation.source) : undefined;
+    const targetRefs = operation.type === "character.ability.use"
+      ? validateAbilityTargets(abilityBeforeUse?.targeting, operation.targetRefs, operation.characterId) : [];
+    if (targetRefs === null) {
+      this.sendAbilityError(webSocket, "ABILITY_TARGETS_INVALID", "A seleção de alvos não corresponde à configuração da habilidade.");
+      return;
+    }
+    if (operation.type === "character.ability.use" && targetRefs.length) {
+      const storedInitiative = await this.ctx.storage.get<SessionInitiativeState>(INITIATIVE_STATE_KEY);
+      const initiative = storedInitiative?.initialized ? normalizeInitiativeSession(storedInitiative.session as any) : undefined;
+      const invalidTarget = targetRefs.find(ref => {
+        const [kind, id] = [ref.slice(0, ref.indexOf(":")), ref.slice(ref.indexOf(":") + 1)];
+        if (kind === "character") return !hpState[id] || (connection.role !== "MASTER" &&
+          !connection.visibleCharacterIds?.includes(id) && hpState[id].ownerUserId !== connection.userId);
+        if (kind === "companion") return !(runtimeConfig?.config.creatureCompendium.some(creature => creature.id === id && creature.ownerUserId));
+        if (kind === "initiative") {
+          const entry = initiative?.entries.find(entry => entry.id === id);
+          return !entry || (connection.role !== "MASTER" && entry.hidden);
+        }
+        return true;
+      });
+      if (!areSelectedTargetsDistinct(targetRefs, storedInitiative, runtimeConfig?.config.creatureCompendium ?? [])) {
+        this.sendAbilityError(webSocket, "ABILITY_TARGET_DUPLICATE", "A mesma criatura foi selecionada mais de uma vez.");
+        return;
+      }
+      if (invalidTarget) {
+        this.sendAbilityError(webSocket, "ABILITY_TARGET_UNAVAILABLE", "Um dos alvos selecionados não está disponível nesta sessão.");
+        return;
+      }
+    }
     if (operation.type === "character.ability.use") {
       const ability = findAbilityForSource(current, operation.source);
       if (!ability) {
@@ -209,10 +250,14 @@ export class SessionActor extends BaseSessionActor {
       && !digitalDiceEnabled
     ) {
       const ability = findAbilityForSource(current, operation.source);
-      const requirements = listBonusRollRequirements(ability?.bonuses);
+      const requirements = [
+        ...listBonusRollRequirements(ability?.bonuses),
+        ...listBonusRollRequirements(ability?.activationOptions?.find(entry => entry.id === operation.activationOptionId)?.bonuses)
+          .map(entry => ({ ...entry, key: `option:${operation.activationOptionId}:${entry.key}` })),
+      ];
       const missing = requirements.filter((requirement) => {
         const value = operation.bonusRollValues?.[requirement.key];
-        return typeof value !== "number" || !Number.isFinite(value);
+        return typeof value !== "number" || !isValidBonusRollValue(requirement.dice, value);
       });
       if (missing.length > 0) {
         this.sendAbilityError(
@@ -232,6 +277,17 @@ export class SessionActor extends BaseSessionActor {
       const ability = findAbilityForSource(current, operation.source)!;
       const requirements = getAbilitySelfDamageRollRequirements(ability, operation.activationOptionId);
       const values = { ...(operation.bonusRollValues ?? {}) };
+      if (digitalDiceEnabled) {
+        const bonusRequirements = [
+          ...listBonusRollRequirements(ability.bonuses),
+          ...listBonusRollRequirements(ability.activationOptions?.find(entry => entry.id === operation.activationOptionId)?.bonuses)
+            .map(entry => ({ ...entry, key: `option:${operation.activationOptionId}:${entry.key}` })),
+        ];
+        // The client may provide manual rolls, but never override digital automatic dice.
+        for (const requirement of bonusRequirements) {
+          if (requirement.mode === "automatic") delete values[requirement.key];
+        }
+      }
       for (const requirement of requirements) {
         if (digitalDiceEnabled) {
           const match = /^(\\d{1,2})d(4|6|8|10|12|20)$/i.exec(requirement.dice.trim())!;
@@ -262,7 +318,17 @@ export class SessionActor extends BaseSessionActor {
 
     const currentJson = current.toJSON();
     const nextJson = next.toJSON();
-    if (JSON.stringify(currentJson) === JSON.stringify(nextJson)) {
+    const selectedBefore = operation.type === "character.ability.use"
+      ? abilityBeforeUse?.activationOptions?.find(option => option.id === operation.activationOptionId) : undefined;
+    const hasRecipientEffects = operation.type === "character.ability.use"
+      && targetRefs.length > 0 && Boolean(abilityBeforeUse)
+      && (abilityBeforeUse!.targeting?.mode === "targets" || abilityBeforeUse!.targeting?.mode === "point")
+      && Boolean(
+        abilityBeforeUse!.bonuses?.onUseHp?.length || selectedBefore?.bonuses?.onUseHp?.length
+        || abilityBeforeUse!.bonuses?.temporaryHp?.length || selectedBefore?.bonuses?.temporaryHp?.length
+        || abilityTargetGrants(abilityBeforeUse!, selectedBefore).length
+      );
+    if (JSON.stringify(currentJson) === JSON.stringify(nextJson) && !hasRecipientEffects) {
       this.sendAbilityError(webSocket, "ABILITY_OPERATION_REJECTED", "The ability could not be changed in its current state.");
       return;
     }
@@ -283,10 +349,107 @@ export class SessionActor extends BaseSessionActor {
     if (hpChanged) hpState[operation.characterId] = nextHp;
     if (conditionsChanged) conditionsState[operation.characterId] = nextConditions;
 
+    let mutatedTargets: MutableConditionsTargets | undefined;
+    let targetReverse: {
+      hp: Record<string, SessionHpState>;
+      conditions: Record<string, SessionConditionsState>;
+      companions: Record<string, CompanionState>;
+      initiative?: SessionInitiativeState;
+      changedCharacters?: string[];
+      changedConditions?: string[];
+      changedCompanions?: string[];
+    } | undefined;
+    if (operation.type === "character.ability.use"
+      && (abilityBeforeUse?.targeting?.mode === "targets" || abilityBeforeUse?.targeting?.mode === "point")) {
+      const afterAbility = findAbilityForSource(next, operation.source);
+      const afterOption = afterAbility?.activationOptions?.find(entry => entry.id === operation.activationOptionId);
+      const effects = [...(afterAbility?.bonuses?.onUseHp ?? []), ...(afterOption?.bonuses?.onUseHp ?? [])];
+      const grants = afterAbility ? abilityTargetGrants(afterAbility, afterOption) : [];
+      const temporaryBonuses = [...(afterAbility?.bonuses?.temporaryHp ?? []), ...(afterOption?.bonuses?.temporaryHp ?? [])];
+      if ((effects.length || grants.length || temporaryBonuses.length) && targetRefs.length) {
+        const storedCompanions = (await this.ctx.storage.get<Record<string, CompanionState>>(COMPANIONS_STATE_KEY)) ?? {};
+        const storedInitiative = await this.ctx.storage.get<SessionInitiativeState>(INITIATIVE_STATE_KEY);
+        targetReverse = {
+          hp: structuredClone(hpState),
+          conditions: structuredClone(conditionsState),
+          companions: structuredClone(storedCompanions),
+          initiative: storedInitiative ? structuredClone(storedInitiative) : undefined,
+        };
+        const affinities: MutableHpTargets["affinities"] = {};
+        for (const [id, targetAbility] of Object.entries(abilityState)) {
+          if (!hpState[id] || !targetAbility?.initialized) continue;
+          try {
+            affinities[id] = getEffectiveDamageAffinities(
+              hydrateAuthoritativeCharacter(targetAbility, hpState[id], conditionsState[id] ?? conditions),
+            );
+          } catch { affinities[id] = []; }
+        }
+        mutatedTargets = {
+          hp: hpState, conditions: conditionsState, companions: storedCompanions, initiative: storedInitiative,
+          changedConditions: new Set(),
+          creatures: runtimeConfig?.config.creatureCompendium ?? [],
+          affinities, changedCharacters: new Set(), changedCompanions: new Set(),
+          initiativeChanged: false,
+        };
+        for (const effect of effects) {
+          const amount = effect.bonus.rollResult?.total
+            ?? (effect.bonus.formula?.trim()
+              ? evaluateCharacterSheetFormula(effect.bonus.formula, current)
+              : effect.bonus.value);
+          if (amount === undefined || !Number.isFinite(amount)) {
+            this.sendAbilityError(webSocket, "TARGET_EFFECT_INVALID", "Não foi possível calcular o valor do efeito.");
+            return;
+          }
+          if (!applyHpToReferences(mutatedTargets, targetRefs, effect, amount)) {
+            this.sendAbilityError(webSocket, "ABILITY_TARGET_UNAVAILABLE", "Um dos alvos não existe mais.");
+            return;
+          }
+        }
+        for (const bonus of temporaryBonuses) {
+          const amount = bonus.rollResult?.total
+            ?? (bonus.formula?.trim() ? evaluateCharacterSheetFormula(bonus.formula, current) : bonus.value);
+          if (amount === undefined || !Number.isFinite(amount)) {
+            this.sendAbilityError(webSocket, "TARGET_EFFECT_INVALID", "Bônus de PV temporários inválido.");
+            return;
+          }
+          if (!applyHpToReferences(mutatedTargets, targetRefs, { kind: "temporary" }, amount)) {
+            this.sendAbilityError(webSocket, "ABILITY_TARGET_UNAVAILABLE", "Um dos alvos não existe mais.");
+            return;
+          }
+        }
+        for (const grant of grants) {
+          if (!applyConditionToReferences(mutatedTargets, targetRefs, createTargetCondition(operation.characterId, afterAbility!, grant))) {
+            this.sendAbilityError(webSocket, "TARGET_CONDITION_INVALID", "Não foi possível aplicar a condição aos alvos.");
+            return;
+          }
+        }
+        targetReverse.changedConditions = [...mutatedTargets.changedConditions];
+        targetReverse.changedCharacters = [...mutatedTargets.changedCharacters];
+        targetReverse.changedCompanions = [...mutatedTargets.changedCompanions];
+        if (mutatedTargets.changedConditions.has(operation.characterId)) {
+          const sheet = (nextAbilityState.character as any).sheet;
+          if (sheet) sheet.conditions = conditionsState[operation.characterId].conditions;
+        }
+        if (mutatedTargets.changedCharacters.has(operation.characterId)) {
+          const latest = hpState[operation.characterId];
+          const sheet = (nextAbilityState.character as any).sheet;
+          if (sheet?.HP) sheet.HP = { ...sheet.HP, current: latest.current, temporary: latest.temporary };
+        }
+      }
+    }
+
     let loggedOperation = operationForApply;
     if (operation.type === "character.ability.use") {
       const resolvedAbility = findAbilityForSource(next, operation.source);
-      const bonusRollResults = listResolvedBonusRolls(resolvedAbility?.bonuses);
+      const selectedOption = resolvedAbility?.activationOptions?.find(entry => entry.id === operation.activationOptionId);
+      const bonusRollResults = [
+        ...listResolvedBonusRolls(resolvedAbility?.bonuses),
+        ...listResolvedBonusRolls(selectedOption?.bonuses).map(result => ({
+          ...result,
+          key: `option:${selectedOption!.id}:${result.key}`,
+          label: `${selectedOption!.name} — ${result.label}`,
+        })),
+      ];
       if (bonusRollResults.length > 0 || selfDamageResults.length > 0) {
         loggedOperation = { ...operation, bonusRollValues: operationForApply.type === "character.ability.use" ? operationForApply.bonusRollValues : operation.bonusRollValues, bonusRollResults: [...bonusRollResults, ...selfDamageResults] };
       }
@@ -295,6 +458,11 @@ export class SessionActor extends BaseSessionActor {
     const record = createSessionLogRecord({
       actorId: connection.userId,
       operation: loggedOperation,
+      affectedScopes: [
+        characterScope(operation.characterId),
+        ...[...new Set([...(mutatedTargets?.changedCharacters ?? []), ...(mutatedTargets?.changedConditions ?? [])])].filter(id => id !== operation.characterId).map(characterScope),
+        ...(mutatedTargets?.changedCompanions.size || mutatedTargets?.initiativeChanged ? ["initiative:shared"] : []),
+      ],
       reverseOperation: {
         type: "character.ability.restore",
         characterId: operation.characterId,
@@ -302,6 +470,7 @@ export class SessionActor extends BaseSessionActor {
           ability: storedAbility,
           hp,
           conditions,
+          targetReverse,
         },
       },
     });
@@ -309,8 +478,10 @@ export class SessionActor extends BaseSessionActor {
     await commitSessionMutation(this.ctx.storage, this.ctx.getWebSockets(), {
       writes: {
         [ABILITIES_STATE_KEY]: abilityState,
-        ...(hpChanged ? { [HP_STATE_KEY]: hpState } : {}),
-        ...(conditionsChanged ? { [CONDITIONS_STATE_KEY]: conditionsState } : {}),
+        ...(hpChanged || mutatedTargets?.changedCharacters.size ? { [HP_STATE_KEY]: hpState } : {}),
+        ...(conditionsChanged || mutatedTargets?.changedConditions.size ? { [CONDITIONS_STATE_KEY]: conditionsState } : {}),
+        ...(mutatedTargets?.changedCompanions.size ? { [COMPANIONS_STATE_KEY]: mutatedTargets.companions } : {}),
+        ...(mutatedTargets?.initiativeChanged && mutatedTargets.initiative ? { [INITIATIVE_STATE_KEY]: mutatedTargets.initiative } : {}),
       },
       record,
       currentLog: log,
@@ -318,9 +489,28 @@ export class SessionActor extends BaseSessionActor {
     });
 
     this.broadcastAbility({ type: "session.abilities.updated", character: nextAbilityState });
-    if (hpChanged) this.broadcastRaw({ type: "session.hp.updated", character: nextHp });
-    if (conditionsChanged) {
-      this.broadcastRaw({ type: "session.conditions.updated", character: nextConditions });
+    if (hpChanged || mutatedTargets?.changedCharacters.has(operation.characterId)) this.broadcastRaw({ type: "session.hp.updated", character: hpState[operation.characterId] });
+    for (const id of mutatedTargets?.changedCharacters ?? []) {
+      if (id !== operation.characterId) this.broadcastRaw({ type: "session.hp.updated", character: hpState[id] });
+    }
+    if (mutatedTargets?.initiativeChanged && mutatedTargets.initiative) this.broadcastRaw({
+      type: "session.initiative.updated", state: mutatedTargets.initiative,
+    });
+    for (const id of mutatedTargets?.changedCompanions ?? []) {
+      const creature = runtimeConfig?.config.creatureCompendium.find(candidate => candidate.id === id);
+      if (!creature?.ownerUserId) continue;
+      for (const socket of this.ctx.getWebSockets()) {
+        const viewer = this.readConnection(socket);
+        if (viewer && (viewer.role === "MASTER" || viewer.userId === creature.ownerUserId)) {
+          this.sendAbility(socket, { type: "session.companions.updated", companion: mutatedTargets!.companions[id] });
+        }
+      }
+    }
+    if (conditionsChanged || mutatedTargets?.changedConditions.has(operation.characterId)) {
+      this.broadcastRaw({ type: "session.conditions.updated", character: conditionsState[operation.characterId] });
+    }
+    for (const id of mutatedTargets?.changedConditions ?? []) {
+      if (id !== operation.characterId) this.broadcastRaw({ type: "session.conditions.updated", character: conditionsState[id] });
     }
   }
 

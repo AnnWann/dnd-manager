@@ -1,4 +1,4 @@
-import type { DamageType } from "../combat/Damage"
+import type { HpEffectType } from "../combat/Damage"
 import type { Attribute } from "../sheet/Attribute"
 import type { Skill } from "../sheet/Skills"
 
@@ -9,7 +9,7 @@ export type AbilityRollDamage = {
   id: string
   label?: string
   dice: string
-  damageType?: DamageType
+  damageType?: HpEffectType
   /** Add the configured ability attribute modifier to this damage component. */
   addAttributeModifier?: boolean
   /** Whether critical hits double these dice. Default: true. */

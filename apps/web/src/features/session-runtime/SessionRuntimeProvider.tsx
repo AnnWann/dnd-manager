@@ -10,6 +10,8 @@ import {
 } from "react"
 import { SessionSocket, type SessionRuntimeStatus } from "./sessionSocket"
 import { ACTION_ROLL_REQUEST_EVENT, CREATURE_ROLL_REQUEST_EVENT, DICE_ROLL_REQUEST_EVENT, publishServerActionRoll, publishServerDiceRoll } from "../../lib/diceRoller"
+import type { CompanionOperation, CompanionState } from "../../shared/session-runtime/companionRuntime"
+import type { SessionPauseState } from "../../shared/session-runtime/sessionPause"
 import type { SessionActionRollRequest, SessionCreatureRollRequest, SessionDiceRollRequest } from "../../shared/session-runtime/diceRollProtocol"
 import { toSheetOperationMessage } from "./sheetRoutes"
 import type {
@@ -91,6 +93,10 @@ export type SessionRuntimeContextValue = {
   inventoryState: SessionSharedInventoryState | null
   missionState: SessionMissionState | null
   initiativeState: SessionInitiativeState | null
+  pauseState: SessionPauseState | null
+  setSessionPaused: (paused: boolean) => boolean
+  companionsById: Readonly<Record<string, CompanionState>>
+  dispatchCompanionOperation: (operation: CompanionOperation) => boolean
   publishRuntimeConfig: (snapshot: SessionRuntimeConfigSnapshot) => boolean
   initializeAbilities: (characters: SessionAbilitySeed[]) => boolean
   initializeHp: (characters: SessionHpSeed[]) => boolean
@@ -163,6 +169,7 @@ function SessionRuntimeProviderInner({ sessionId, userId, role, children }: {
   children: ReactNode
 }) {
   const [status, setStatus] = useState<SessionRuntimeStatus>("disconnected")
+  const [pauseState, setPauseState] = useState<SessionPauseState | null>(null)
   const [presence, setPresence] = useState<SessionRuntimePresenceUser[]>([])
   const [lastHeartbeatAckAt, setLastHeartbeatAckAt] = useState<number | null>(null)
   const [runtimeConfigSnapshot, setRuntimeConfigSnapshot] = useState<SessionRuntimeConfigSnapshot | null>(null)
@@ -180,6 +187,7 @@ function SessionRuntimeProviderInner({ sessionId, userId, role, children }: {
   const [inventoryState, setInventoryState] = useState<SessionSharedInventoryState | null>(null)
   const [missionState, setMissionState] = useState<SessionMissionState | null>(null)
   const [initiativeState, setInitiativeState] = useState<SessionInitiativeState | null>(null)
+  const [companionsById, setCompanionsById] = useState<Record<string, CompanionState>>({})
   const [hpLog, setHpLog] = useState<SessionLogRecord[]>([])
   const [customNotice, setCustomNotice] = useState<{title:string;message:string}|null>(null)
   const socketRef = useRef<SessionSocket | null>(null)
@@ -188,6 +196,7 @@ function SessionRuntimeProviderInner({ sessionId, userId, role, children }: {
 
   useEffect(() => {
     setPresence([])
+    setPauseState(null)
     setLastHeartbeatAckAt(null)
     setRuntimeConfigSnapshot(null)
     setHpByCharacterId({})
@@ -198,6 +207,7 @@ function SessionRuntimeProviderInner({ sessionId, userId, role, children }: {
     setInventoryState(null)
     setMissionState(null)
     setInitiativeState(null)
+    setCompanionsById({})
     setHpLog([])
 
     if (!baseUrl) {
@@ -214,6 +224,7 @@ function SessionRuntimeProviderInner({ sessionId, userId, role, children }: {
       clientId,
       onStatusChange: setStatus,
       onMessage: (message) => {
+        if (message.type === "session.pause.state") { setPauseState(message.state); return }
         if (message.type === "session.config.snapshot") {
           setRuntimeConfigSnapshot(message.snapshot)
           return
@@ -290,6 +301,14 @@ function SessionRuntimeProviderInner({ sessionId, userId, role, children }: {
         }
         if (message.type === "session.initiative.snapshot" || message.type === "session.initiative.updated") {
           setInitiativeState(message.state)
+          return
+        }
+        if (message.type === "session.companions.snapshot") {
+          setCompanionsById(Object.fromEntries(message.companions.map(companion => [companion.creatureId, companion])))
+          return
+        }
+        if (message.type === "session.companions.updated") {
+          setCompanionsById(current => ({ ...current, [message.companion.creatureId]: message.companion }))
           return
         }
         if (message.type === "session.hp.log") {
@@ -396,6 +415,10 @@ function SessionRuntimeProviderInner({ sessionId, userId, role, children }: {
     socketRef.current?.send({ type: "session.inventory.operation", operation }) ?? false, [])
   const dispatchMissionOperation = useCallback((operation: SessionMissionOperation) =>
     socketRef.current?.send({ type: "session.missions.operation", operation }) ?? false, [])
+  const setSessionPaused = useCallback((paused: boolean) =>
+    role === "MASTER" && (socketRef.current?.send({ type: "session.pause.set", paused }) ?? false), [role])
+  const dispatchCompanionOperation = useCallback((operation: CompanionOperation) =>
+    socketRef.current?.send({ type: "session.companions.operation", operation }) ?? false, [])
   const dispatchInitiativeOperation = useCallback((operation: SessionInitiativeOperation) =>
     socketRef.current?.send({ type: "session.initiative.operation", operation }) ?? false, [])
   const dispatchProficiencyOperation = useCallback((operation: SessionProficiencyOperation) =>
@@ -437,7 +460,7 @@ function SessionRuntimeProviderInner({ sessionId, userId, role, children }: {
   const value = useMemo<SessionRuntimeContextValue>(() => ({
     status, sessionId, clientId, role, presence, lastHeartbeatAckAt, runtimeConfigSnapshot,
     hpByCharacterId, conditionsByCharacterId, abilitiesByCharacterId, sessionCharactersById, characterSnapshotReady,
-    inventoryState, missionState, initiativeState,
+    inventoryState, missionState, initiativeState, pauseState, setSessionPaused, companionsById, dispatchCompanionOperation,
     publishRuntimeConfig,
     initializeHp, initializeConditions, initializeAbilities, initializeInventory, initializeMissions, initializeInitiative,
     dispatchSheetOperation, dispatchHpOperation, dispatchConditionOperation,
@@ -446,13 +469,13 @@ function SessionRuntimeProviderInner({ sessionId, userId, role, children }: {
     dispatchRaceOperation, dispatchProfileOperation, dispatchCustomClassOperation, dispatchCustomSystemOperation,
     dispatchCharacterLifecycleOperation,
   }), [
-    abilitiesByCharacterId, characterSnapshotReady, clientId, conditionsByCharacterId,
+    abilitiesByCharacterId, characterSnapshotReady, clientId, conditionsByCharacterId, companionsById, dispatchCompanionOperation,
     dispatchAbilityOperation, dispatchCharacterLifecycleOperation, dispatchConditionOperation, dispatchConcentrationOperation,
     dispatchCustomClassOperation, dispatchCustomSystemOperation, dispatchEquipmentOperation, dispatchHpOperation,
     dispatchInitiativeOperation, dispatchInventoryOperation, dispatchMagicOperation, dispatchMissionOperation,
     dispatchProficiencyOperation, dispatchProfileOperation, dispatchRaceOperation, dispatchSheetOperation,
     hpByCharacterId, initializeAbilities, initializeConditions, initializeHp, initializeInitiative, initializeInventory, initializeMissions,
-    initiativeState, inventoryState, lastHeartbeatAckAt, missionState, presence, publishRuntimeConfig, role, runtimeConfigSnapshot,
+    initiativeState, inventoryState, lastHeartbeatAckAt, missionState, pauseState, setSessionPaused, presence, publishRuntimeConfig, role, runtimeConfigSnapshot,
     sessionCharactersById, sessionId, status,
   ])
 

@@ -27,6 +27,8 @@ import {
   type CharacterTemplateProps,
 } from "../../../../web/src/models/characters/CharacterTemplate";
 import { getCurrentMaxHp } from "../../../../web/src/models/characters/characterHp";
+import { getEffectiveDamageAffinities } from "../../../../web/src/models/characters/characterDamageAffinities";
+import { areSelectedTargetsDistinct, applyHpToReferences, validateAbilityTargets, type MutableHpTargets } from "../characters/abilities/abilityTargeting";
 import { hasProficiency } from "../../../../web/src/models/characters/characterProficiencies";
 import { getUnarmedAttackProfile } from "../../../../web/src/models/characters/unarmedAttack";
 import type { Ability } from "../../../../web/src/models/abilities/Ability";
@@ -45,6 +47,8 @@ import { abilityShortPtBr } from "../../../../web/src/i18n/ptBR";
 import type { Skill } from "../../../../web/src/models/sheet/Skills";
 import {
   initiativeEntryDisplayName,
+  createInitiativeEntry,
+  createInitiativeSession,
   normalizeInitiativeSession,
   synchronizeSharedCombatantState,
   updateInitiativeEntry,
@@ -112,10 +116,14 @@ import {
 } from "./visibilityDelivery";
 import { resolveCreatureSpellCastAction } from "./creatureSpellCastResolution";
 import type { SessionInitiativeState } from "../../../../web/src/features/session-runtime/initiativeSessionProtocol";
+import { allCreatureFeatures, defaultCompanionState, type CompanionOperation, type CompanionState } from "../../../../web/src/shared/session-runtime/companionRuntime";
+import { applyHitPointDamage } from "../../../../../packages/game-core/src/hitPoints";
+import { resolveDamage } from "../../../../web/src/models/combat/Damage";
 
 const CONNECTION_TIMEOUT_MS = 90_000;
 const CLOSE_CODE_TIMEOUT = 4000;
 const CLOSE_CODE_REPLACED = 4001;
+const COMPANIONS_STATE_KEY = "companions-state";
 const HP_STATE_KEY = "hp-state";
 const CONDITIONS_STATE_KEY = "conditions-state";
 const ABILITIES_STATE_KEY = "abilities-state";
@@ -150,7 +158,7 @@ export class SessionActor extends DurableObject<Env> {
     refreshConnectionVisibility(server, await readRuntimeConfig(this.ctx.storage));
 
     this.send(server, { type: "session.ready", sessionId: connection.sessionId, clientId: connection.clientId, serverTime: Date.now() });
-    await Promise.all([this.sendHpSnapshot(server), this.sendConditionsSnapshot(server)]);
+    await Promise.all([this.sendHpSnapshot(server), this.sendConditionsSnapshot(server), this.sendCompanionsSnapshot(server)]);
     if (connection.role === "MASTER") await this.sendHpLog(server);
     this.broadcastPresence();
     await this.scheduleNextAlarm();
@@ -224,6 +232,9 @@ export class SessionActor extends DurableObject<Env> {
       case "session.creature.roll":
         await this.handleCreatureRoll(webSocket, connection, parsed.request);
         break;
+      case "session.companions.operation":
+        await this.handleCompanionOperation(webSocket, connection, parsed.operation);
+        break;
       case "session.log.undo":
         this.sendError(webSocket, "UNDO_ROUTING_ERROR", "Session undo must be handled by the composed session actor.");
         break;
@@ -258,6 +269,138 @@ export class SessionActor extends DurableObject<Env> {
     }
     this.broadcastPresence(now);
     await this.scheduleNextAlarm(now);
+  }
+
+  private async sendCompanionsSnapshot(webSocket: WebSocket): Promise<void> {
+    const connection = this.getConnection(webSocket);
+    if (!connection) return;
+    const [config, saved] = await Promise.all([
+      readRuntimeConfig(this.ctx.storage),
+      this.ctx.storage.get<Record<string, CompanionState>>(COMPANIONS_STATE_KEY),
+    ]);
+    const companions = (config?.config.creatureCompendium ?? [])
+      .filter(creature => Boolean(creature.ownerUserId) &&
+        (connection.role === "MASTER" || creature.ownerUserId === connection.userId))
+      .map(creature => saved?.[creature.id] ?? defaultCompanionState(creature));
+    this.send(webSocket, { type: "session.companions.snapshot", companions });
+  }
+
+  private broadcastCompanionState(companion: CompanionState, ownerUserId: string): void {
+    for (const socket of this.ctx.getWebSockets()) {
+      const connection = this.getConnection(socket);
+      if (!connection || (connection.role !== "MASTER" && connection.userId !== ownerUserId)) continue;
+      this.send(socket, { type: "session.companions.updated", companion });
+    }
+  }
+
+  private async persistCompanionResources(creature: CompendiumCreature, entry: InitiativeEntry): Promise<void> {
+    if (!creature.ownerUserId) return;
+    const stored = (await this.ctx.storage.get<Record<string, CompanionState>>(COMPANIONS_STATE_KEY)) ?? {};
+    const previous = stored[creature.id] ?? defaultCompanionState(creature);
+    const featureUses = Object.fromEntries(Object.entries(entry.creatureFeatureResources ?? {})
+      .map(([id, resource]) => [id, resource.used]));
+    const spellSlots = Object.fromEntries(Object.entries(entry.creatureSpellResources?.slots ?? {})
+      .map(([level, resource]) => [level, resource?.current ?? 0]));
+    const spellPerDay = Object.fromEntries(Object.entries(entry.creatureSpellResources?.perDay ?? {})
+      .map(([index, resource]) => [index, resource?.used ?? 0]));
+    const next: CompanionState = {
+      ...previous, featureUses: { ...previous.featureUses, ...featureUses },
+      spellSlots: { ...previous.spellSlots, ...spellSlots },
+      spellPerDay: { ...previous.spellPerDay, ...spellPerDay },
+      revision: previous.revision + 1,
+    };
+    stored[creature.id] = next;
+    await this.ctx.storage.put(COMPANIONS_STATE_KEY, stored);
+    this.broadcastCompanionState(next, creature.ownerUserId);
+  }
+
+  private async handleCompanionOperation(
+    webSocket: WebSocket,
+    connection: SessionConnection,
+    operation: CompanionOperation,
+  ): Promise<void> {
+    const config = await readRuntimeConfig(this.ctx.storage);
+    const creature = config?.config.creatureCompendium.find(item => item.id === operation.creatureId);
+    if (!creature?.ownerUserId) {
+      this.sendError(webSocket, "COMPANION_NOT_FOUND", "Este acompanhante não está atribuído a um jogador.");
+      return;
+    }
+    if (connection.role !== "MASTER" && connection.userId !== creature.ownerUserId) {
+      this.sendError(webSocket, "COMPANION_ACCESS_DENIED", "Você não controla este acompanhante.");
+      return;
+    }
+    const states = (await this.ctx.storage.get<Record<string, CompanionState>>(COMPANIONS_STATE_KEY)) ?? {};
+    const current = states[creature.id] ?? defaultCompanionState(creature);
+    let next: CompanionState = { ...current, revision: current.revision + 1 };
+    if (operation.type === "hp") {
+      const amount = operation.amount;
+      if (operation.mode === "set") {
+        next = { ...next, currentHp: Math.min(current.maxHp, amount) };
+      } else if (operation.mode === "heal") {
+        next = { ...next, currentHp: Math.min(current.maxHp, current.currentHp + amount) };
+      } else if (operation.mode === "temporary") {
+        next = { ...next, temporaryHp: Math.max(current.temporaryHp, amount) };
+      } else {
+        const applied = resolveDamage(amount, operation.damageType, creature.damageAffinities).applied;
+        const hp = applyHitPointDamage({ current: current.currentHp, temporary: current.temporaryHp }, applied);
+        next = { ...next, currentHp: hp.current, temporaryHp: hp.temporary };
+      }
+    } else if (operation.type === "feature") {
+      const feature = allCreatureFeatures(creature).find(entry => entry.id === operation.featureId);
+      if (!feature?.usage) {
+        this.sendError(webSocket, "COMPANION_FEATURE_INVALID", "Habilidade sem contador de usos.");
+        return;
+      }
+      const max = Math.max(0, feature.usage.max);
+      const used = current.featureUses[feature.id] ?? 0;
+      const updated = used - operation.delta;
+      if (updated < 0 || updated > max) {
+        this.sendError(webSocket, "COMPANION_FEATURE_LIMIT", "Limite de usos da habilidade atingido.");
+        return;
+      }
+      next = { ...next, featureUses: { ...current.featureUses, [feature.id]: updated } };
+    } else {
+      const maximum = creature.spellcasting?.slots[operation.level as 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9] ?? 0;
+      const available = current.spellSlots[String(operation.level)] ?? maximum;
+      const updated = available + operation.delta;
+      if (updated < 0 || updated > maximum) {
+        this.sendError(webSocket, "COMPANION_SLOT_LIMIT", "Espaços de magia insuficientes.");
+        return;
+      }
+      next = { ...next, spellSlots: { ...current.spellSlots, [String(operation.level)]: updated } };
+    }
+    states[creature.id] = next;
+    const initiativeState = await this.ctx.storage.get<SessionInitiativeState>("initiative-state");
+    if (initiativeState?.initialized) {
+      const initiative = normalizeInitiativeSession(initiativeState.session as Partial<InitiativeSession>);
+      if (initiative.entries.some(entry => entry.sourceId === `compendium:${creature.id}`)) {
+        const entries = initiative.entries.map(entry => {
+          if (entry.sourceId !== `compendium:${creature.id}`) return entry;
+          return {
+            ...entry,
+            currentHp: next.currentHp,
+            maxHp: next.maxHp,
+            temporaryHp: next.temporaryHp,
+            creatureFeatureResources: Object.fromEntries(allCreatureFeatures(creature)
+              .filter(feature => feature.usage)
+              .map(feature => [feature.id, { used: next.featureUses[feature.id] ?? 0, max: feature.usage!.max }])),
+            creatureSpellResources: {
+              ...entry.creatureSpellResources,
+              slots: Object.fromEntries(Object.entries(creature.spellcasting?.slots ?? {})
+                .map(([level, max]) => [level, { current: next.spellSlots[level] ?? max ?? 0, max: max ?? 0 }])),
+              perDay: entry.creatureSpellResources?.perDay ?? {},
+            },
+          };
+        });
+        const updated = { ...initiativeState,
+          session: { ...initiative, entries, updatedAt: Date.now() } as unknown as Record<string, unknown>,
+          revision: initiativeState.revision + 1 };
+        await this.ctx.storage.put("initiative-state", updated);
+        broadcastVisibilityFiltered(this.ctx.getWebSockets(), { type: "session.initiative.updated", state: updated });
+      }
+    }
+    await this.ctx.storage.put(COMPANIONS_STATE_KEY, states);
+    this.broadcastCompanionState(next, creature.ownerUserId);
   }
 
   private async handleCreatureRoll(
@@ -302,6 +445,31 @@ export class SessionActor extends DurableObject<Env> {
         this.sendError(webSocket, "CREATURE_ENTRY_NOT_FOUND", "The requested initiative combatant does not match this creature.");
         return;
       }
+    }
+
+    if (!entry && !request.initiativeEntryId && creature.ownerUserId) {
+      const saved = (await this.ctx.storage.get<Record<string, CompanionState>>(COMPANIONS_STATE_KEY)) ?? {};
+      const state = saved[creature.id] ?? defaultCompanionState(creature);
+      entry = createInitiativeEntry({
+        sourceId: `compendium:${creature.id}`,
+        sourceType: "monster", name: creature.name,
+        initiative: 0, initiativeBonus: creature.initiativeBonus,
+        side: "ally", armorClass: creature.armorClass, currentHp: state.currentHp,
+        maxHp: state.maxHp, temporaryHp: state.temporaryHp,
+        creatureFeatureResources: Object.fromEntries(allCreatureFeatures(creature)
+          .filter(feature => feature.usage)
+          .map(feature => [feature.id, { used: state.featureUses[feature.id] ?? 0, max: feature.usage!.max }])),
+        creatureSpellResources: {
+          slots: Object.fromEntries(Object.entries(creature.spellcasting?.slots ?? {})
+            .map(([level, max]) => [level, { current: state.spellSlots[level] ?? max ?? 0, max: max ?? 0 }])),
+          perDay: Object.fromEntries((creature.spellcasting?.spells ?? [])
+            .filter(spell => spell.usage.type === "perDay")
+            .map(spell => [spell.spellIndex, {
+              used: state.spellPerDay?.[spell.spellIndex] ?? 0,
+              max: spell.usage.type === "perDay" ? spell.usage.uses : 0,
+            }])),
+        },
+      });
     }
 
     if (request.source.type === "spell") {
@@ -410,7 +578,16 @@ export class SessionActor extends DurableObject<Env> {
             type: "session.initiative.updated",
             state: nextState,
           });
+          const updatedEntry = nextInitiative.entries.find(candidate => candidate.id === entry.id);
+          if (updatedEntry) await this.persistCompanionResources(creature, updatedEntry);
         }
+      } else if (!announcing && entry && creature.ownerUserId) {
+        const virtual = { ...createInitiativeSession(), entries: [entry] };
+        const updated = consumeCreatureSpellResource(
+          virtual, entry.id, creature, configuredSpell, castLevel,
+          spell.displayName || spell.name, spell.concentration, spell.index,
+        ).entries[0];
+        if (updated) await this.persistCompanionResources(creature, updated);
       }
 
       this.broadcast({
@@ -472,6 +649,18 @@ export class SessionActor extends DurableObject<Env> {
         type: "session.initiative.updated",
         state: updatedState,
       });
+      const updatedEntry = next.entries.find(candidate => candidate.id === entry.id);
+      if (updatedEntry) await this.persistCompanionResources(creature, updatedEntry);
+    } else if (spendsFeatureUse && entry && feature?.usage && creature.ownerUserId) {
+      const existingUsed = entry.creatureFeatureResources?.[feature.id]?.used ?? 0;
+      const updated = {
+        ...entry,
+        creatureFeatureResources: {
+          ...(entry.creatureFeatureResources ?? {}),
+          [feature.id]: { max: feature.usage.max, used: existingUsed + 1 },
+        },
+      };
+      await this.persistCompanionResources(creature, updated);
     }
 
     this.broadcast(
@@ -531,6 +720,120 @@ export class SessionActor extends DurableObject<Env> {
       return;
     }
 
+    if (request.source.type === "ability" && isDigitalDiceRollingEnabled(runtimeConfig)) {
+      const abilityId = request.source.abilityId;
+      const rolledAbility = [
+        ...(character.getCharacterAbilities() ?? []),
+        ...(character.get("sheet").race.naturalAbilities ?? []),
+        ...getEquippedItems(character).flatMap(item => item.abilities ?? []),
+        ...getCharacterConditions(character).flatMap(condition => condition.grantedAbilities ?? []),
+      ].find(candidate => candidate.id === abilityId || candidate.originalAbilityId === abilityId);
+      const targeting = rolledAbility?.targeting;
+      const targets = validateAbilityTargets(targeting, request.targetRefs, characterId);
+      if (targets === null) {
+        this.sendError(webSocket, "ACTION_TARGETS_INVALID", "Os alvos não correspondem à configuração da habilidade.");
+        return;
+      }
+      if (targets.length && rolledAbility?.roll?.damage?.length && resolved.result.damages?.length) {
+        const combat = await this.ctx.storage.get<SessionInitiativeState>("initiative-state");
+        const savedCompanions = (await this.ctx.storage.get<Record<string, CompanionState>>(COMPANIONS_STATE_KEY)) ?? {};
+        const initiative = combat?.initialized ? normalizeInitiativeSession(combat.session as Partial<InitiativeSession>) : undefined;
+        const affinities: MutableHpTargets["affinities"] = {};
+        const hydratedCharacters = new Map<string, CharacterTemplate>();
+        for (const id of new Set(targets.filter(ref => ref.startsWith("character:")).map(ref => ref.slice("character:".length)))) {
+          const sheet = abilities[id], targetHp = hpState[id], targetConditions = conditionsState[id];
+          if (!targetHp || !sheet?.initialized || !targetConditions?.initialized) continue;
+          try {
+            const target = hydrateCharacterForRest(sheet, targetHp, targetConditions);
+            hydratedCharacters.set(id, target);
+            affinities[id] = getEffectiveDamageAffinities(target);
+          } catch { affinities[id] = []; }
+        }
+        const validRefs = targets.every(ref => {
+          const colon = ref.indexOf(":");
+          const [kind, id] = [ref.slice(0, colon), ref.slice(colon + 1)];
+          if (kind === "character") return Boolean(hpState[id]) &&
+            (connection.role === "MASTER" || hpState[id].ownerUserId === connection.userId || connection.visibleCharacterIds?.includes(id));
+          if (kind === "companion") return Boolean(runtimeConfig?.config.creatureCompendium.some(creature => creature.id === id && creature.ownerUserId));
+          if (kind === "initiative") {
+            const entry = initiative?.entries.find(entry => entry.id === id);
+            return Boolean(entry && (connection.role === "MASTER" || !entry.hidden));
+          }
+          return false;
+        });
+        if (!areSelectedTargetsDistinct(targets, combat, runtimeConfig?.config.creatureCompendium ?? [])) {
+          this.sendError(webSocket, "ACTION_TARGETS_DUPLICATE", "A mesma criatura foi selecionada mais de uma vez.");
+          return;
+        }
+        if (!validRefs) {
+          this.sendError(webSocket, "ACTION_TARGETS_UNAVAILABLE", "Um alvo não está disponível para esta operação.");
+          return;
+        }
+        const targetsState: MutableHpTargets = {
+          hp: hpState, companions: savedCompanions, initiative: combat,
+          creatures: runtimeConfig?.config.creatureCompendium ?? [],
+          affinities, changedCharacters: new Set(), changedCompanions: new Set(), initiativeChanged: false,
+        };
+        for (const ref of targets) {
+          const colon = ref.indexOf(":");
+          const [kind, id] = [ref.slice(0,colon),ref.slice(colon+1)];
+          const entry = kind === "initiative" ? initiative?.entries.find(entry => entry.id === id) : undefined;
+          const targetCharacter = kind === "character" ? hydratedCharacters.get(id)
+            : entry?.sourceType === "character" && entry.sourceId ? hydratedCharacters.get(entry.sourceId) : undefined;
+          const targetCreature = kind === "companion"
+            ? runtimeConfig?.config.creatureCompendium.find(creature => creature.id === id)
+            : entry?.sourceId?.startsWith("compendium:")
+              ? runtimeConfig?.config.creatureCompendium.find(creature => creature.id === entry.sourceId!.slice("compendium:".length))
+              : undefined;
+          const ac = entry?.armorClass ?? targetCharacter?.getEffectiveArmorClass() ?? targetCreature?.armorClass;
+          const attack = resolved.result.attack;
+          if (attack && ac !== undefined && attack.natural !== 20 &&
+            (attack.natural === 1 || attack.total < ac)) {
+            resolved.result.details = [...(resolved.result.details ?? []), `Errou ${entry?.name ?? targetCreature?.name ?? targetCharacter?.get("name") ?? id} (CA ${ac})`];
+            continue;
+          }
+          let saveFactor = 1;
+          if (resolved.result.save) {
+            const attribute = resolved.result.save.attribute;
+            const saveBonus = targetCharacter?.getSavingThrowBonus(attribute)
+              ?? (targetCreature ? getCreatureEffectiveSaveBonus(targetCreature, attribute, entry?.conditions ?? [], entry) : undefined);
+            if (saveBonus === undefined) {
+              this.sendError(webSocket, "TARGET_SAVE_UNAVAILABLE", "Não foi possível determinar a resistência de um alvo.");
+              return;
+            }
+            const save = rollActionD20("normal", saveBonus);
+            const success = save.total >= resolved.result.save.dc;
+            saveFactor = success ? resolved.result.save.onSuccess === "full" ? 1
+              : resolved.result.save.onSuccess === "half" ? 0.5 : 0 : 1;
+            resolved.result.details = [...(resolved.result.details ?? []),
+              `${entry?.name ?? targetCreature?.name ?? targetCharacter?.get("name") ?? id}: resistência ${save.total} vs CD ${resolved.result.save.dc} (${success ? "sucesso" : "falha"})`];
+          }
+          for (const damage of resolved.result.damages) {
+            const effect = {
+              kind: damage.damageType === "healing" ? "heal" as const : "damage" as const,
+              damageType: damage.damageType === "healing" ? undefined : damage.damageType as import("../../../../web/src/models/combat/Damage").DamageType | undefined,
+            };
+            if (!applyHpToReferences(targetsState, [ref], effect, Math.floor(Math.max(0, damage.total) * saveFactor))) {
+              this.sendError(webSocket, "ACTION_TARGETS_INVALID", "Não foi possível aplicar a rolagem ao alvo.");
+              return;
+            }
+          }
+        }
+        const writes: Record<string, unknown> = {};
+        if (targetsState.changedCharacters.size) writes[HP_STATE_KEY] = hpState;
+        if (targetsState.changedCompanions.size) writes[COMPANIONS_STATE_KEY] = savedCompanions;
+        if (targetsState.initiativeChanged && targetsState.initiative) writes["initiative-state"] = targetsState.initiative;
+        if (Object.keys(writes).length) await this.ctx.storage.put(writes);
+        for (const id of targetsState.changedCharacters) this.broadcast({ type: "session.hp.updated", character: hpState[id] });
+        if (targetsState.initiativeChanged && targetsState.initiative) {
+          broadcastVisibilityFiltered(this.ctx.getWebSockets(), { type: "session.initiative.updated", state: targetsState.initiative });
+        }
+        for (const id of targetsState.changedCompanions) {
+          const owner = runtimeConfig?.config.creatureCompendium.find(creature => creature.id === id)?.ownerUserId;
+          if (owner) this.broadcastCompanionState(savedCompanions[id], owner);
+        }
+      }
+    }
     this.broadcast({ type: "session.action.result", result: resolved.result });
   }
 

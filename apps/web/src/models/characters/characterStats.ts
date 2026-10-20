@@ -99,7 +99,8 @@ export function getActiveAbilities(
     ...getCharacterConditions(character)
       .filter(isConditionActive)
       .flatMap((condition) => condition.grantedAbilities ?? []),
-  ].filter(isAbilityBenefitsActive)
+  ].filter((ability) => isAbilityBenefitsActive(ability)
+    && ability.targeting?.mode !== "targets" && ability.targeting?.mode !== "point")
 }
 
 export function getEquipmentBonuses(

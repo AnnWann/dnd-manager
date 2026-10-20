@@ -42,6 +42,8 @@ import {
   type SessionRuntimeConfigClientMessage,
   type SessionRuntimeConfigServerMessage,
 } from "./runtimeConfigSessionProtocol"
+import type { CompanionClientMessage, CompanionServerMessage } from "../../shared/session-runtime/companionRuntime"
+import { parseSessionPauseServerMessage, type SessionPauseClientMessage, type SessionPauseServerMessage } from "../../shared/session-runtime/sessionPause"
 import { setRuntimeCustomSystemOverride } from "../../lib/customSystems/creationCustomSystemsBridge"
 import type { SessionSheetOperationMessage } from "./sheetRoutes"
 
@@ -63,6 +65,8 @@ export type SessionSocketOptions = {
       | SessionMissionServerMessage
       | SessionInitiativeServerMessage
       | SessionRuntimeConfigServerMessage
+      | CompanionServerMessage
+      | SessionPauseServerMessage
   ) => void
 }
 
@@ -81,6 +85,8 @@ type SessionOutgoingMessage = | ClientSessionMessage
     | SessionCustomSystemClientMessage
     | { type: "session.magic.operation"; operation: SessionMagicOperation }
     | { type: "session.equipment.operation"; operation: SessionEquipmentOperation }
+    | CompanionClientMessage
+    | SessionPauseClientMessage
 type SessionIncomingMessage = Parameters<SessionSocketOptions["onMessage"]>[0]
 type DecodedSessionMessage = {
   message: SessionIncomingMessage
@@ -96,12 +102,15 @@ function decodeSessionMessage(raw: string): DecodedSessionMessage | null {
   const missionMessage = parseMissionServerMessage(raw)
   const initiativeMessage = parseInitiativeServerMessage(raw)
   const abilityMessage = parseAbilityServerMessage(raw)
-  const message = runtimeConfigMessage ?? lifecycleMessage ?? inventoryMessage ?? missionMessage ?? initiativeMessage ?? abilityMessage ?? parseServerSessionMessage(raw)
+  const companionMessage = parseCompanionServerMessage(raw)
+  const pauseMessage = parseSessionPauseServerMessage(raw)
+  const message = pauseMessage ?? runtimeConfigMessage ?? lifecycleMessage ?? inventoryMessage ?? missionMessage ?? initiativeMessage ?? abilityMessage ?? companionMessage ?? parseServerSessionMessage(raw)
   return message ? { message, abilityMessage, lifecycleMessage, runtimeConfigMessage } : null
 }
 
 export class SessionSocket {
   private readonly transport: SessionMessageClient<SessionOutgoingMessage, DecodedSessionMessage>
+  private paused = false
   private pendingMagicOperations: SessionMagicOperation[] = []
   private magicFlushQueued = false
   private latestAbilityStates = new Map<string, SessionAbilityState>()
@@ -128,6 +137,8 @@ export class SessionSocket {
 
   send(message: SessionOutgoingMessage): boolean {
     if (!this.transport.connected) return false
+    // Do not buffer operations created while paused; the server is authoritative.
+    if (this.paused && this.options.role !== "MASTER" && message.type !== "session.heartbeat" && message.type !== "session.ping") return false
 
     if (message.type === "session.magic.operation") {
       if (message.operation.type === "character.spell.cast") {
@@ -150,6 +161,7 @@ export class SessionSocket {
   }
 
   private clearLocalState(): void {
+    this.paused = false
     this.pendingMagicOperations = []
     this.magicFlushQueued = false
     this.latestAbilityStates.clear()
@@ -157,6 +169,10 @@ export class SessionSocket {
   }
 
   private handleMessage({ message, abilityMessage, lifecycleMessage, runtimeConfigMessage }: DecodedSessionMessage): void {
+      if (message.type === "session.pause.state") {
+        this.paused = message.state.paused
+        if (this.paused) this.pendingMagicOperations = []
+      }
       if (abilityMessage?.type === "session.abilities.snapshot") {
         this.latestAbilityStates = new Map(
           abilityMessage.characters.map((character) => [character.characterId, character]),
@@ -203,6 +219,10 @@ export class SessionSocket {
 
   private flushMagicOperations(): void {
     this.magicFlushQueued = false
+    if (this.paused && this.options.role !== "MASTER") {
+      this.pendingMagicOperations = []
+      return
+    }
     const transport = this.transport
     const pending = this.pendingMagicOperations.splice(0)
     if (!pending.length || !transport.connected) return
@@ -233,4 +253,17 @@ function parseInventoryServerMessage(raw: string): SessionInventoryServerMessage
   } catch {
     return null
   }
+}
+
+function parseCompanionServerMessage(raw: string): CompanionServerMessage | null {
+  try {
+    const message = JSON.parse(raw) as Record<string, unknown>
+    if (message?.type === "session.companions.snapshot" && Array.isArray(message.companions)) {
+      return message as CompanionServerMessage
+    }
+    if (message?.type === "session.companions.updated" && message.companion && typeof message.companion === "object") {
+      return message as CompanionServerMessage
+    }
+  } catch { /* another protocol */ }
+  return null
 }

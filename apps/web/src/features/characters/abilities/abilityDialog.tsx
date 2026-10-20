@@ -123,13 +123,13 @@ export function AbilityDialog({
   onSave,
 }: Props) {
   const [draft, setDraft] = useState<Ability>(() =>
-    withFixedCategory(ability ?? createEmptyAbility(), fixedCategory),
+    withFixedCategory(normalizeAbilityActivation(ability ?? createEmptyAbility()), fixedCategory),
   )
   const [tab, setTab] = useState<EditorTab>("basic")
 
   useEffect(() => {
     if (!open) return
-    setDraft(withFixedCategory(ability ?? createEmptyAbility(), fixedCategory))
+    setDraft(withFixedCategory(normalizeAbilityActivation(ability ?? createEmptyAbility()), fixedCategory))
     setTab("basic")
   }, [open, ability, fixedCategory])
 
@@ -164,9 +164,9 @@ export function AbilityDialog({
     (draft.grantedSpells?.length ?? 0) + (draft.grantedProficiencies?.length ?? 0)
   const hasAdvancedEffects =
     Boolean(draft.conditionOnUse) ||
-    Boolean(draft.selfDamageOnUse) ||
+    Boolean(draft.bonuses?.onUseHp?.length) ||
     Boolean(draft.allowMultipleWeaponActivations) ||
-    Boolean(draft.activationOptions?.some(option => option.selfDamageOnUse)) ||
+    Boolean(draft.activationOptions?.some(option => option.bonuses?.onUseHp?.length)) ||
     (draft.activationOptions?.length ?? 0) > 0 ||
     Object.values(draft.bonuses ?? {}).some((value) => Array.isArray(value) && value.length > 0)
   const hasConfiguredResource =
@@ -601,7 +601,7 @@ export function AbilityDialog({
                 title="Rolagem da habilidade"
                 description="Escolha os testes e danos efetuados ao usar a habilidade. Modificadores da ficha são calculados automaticamente."
               />
-              <AbilityRollEditor roll={draft.roll} onChange={roll => setDraft(current => ({ ...current, roll }))} />
+              <AbilityRollEditor roll={draft.roll} onChange={roll => setDraft(current => ({ ...current, roll }))} targeting={draft.targeting} onTargetingChange={targeting => setDraft(current => ({ ...current, targeting }))} />
             </div>
           ) : null}
 
@@ -618,6 +618,7 @@ export function AbilityDialog({
                 <BonusesFields
                   bonuses={draft.bonuses ?? {}}
                   character={character}
+                  allowOnUseHp
                   onChange={(bonuses) => setDraft({ ...draft, bonuses })}
                 />
                 <div className="mt-3">

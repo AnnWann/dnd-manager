@@ -1,4 +1,8 @@
 import { SessionActor as BaseSessionActor } from "./SessionActor";
+import { readRuntimeConfig } from "./runtimeConfigAccess";
+import { isSessionPlayerOperationBlocked, parseSessionPauseMessage, type SessionPauseState } from "../../../../web/src/shared/session-runtime/sessionPause";
+import type { CompanionState } from "../../../../web/src/shared/session-runtime/companionRuntime";
+import type { SessionInitiativeState } from "../initiative/initiativeProtocol";
 import { SessionActor as AbilitySessionActor } from "../characters/abilities/AbilitySessionActor";
 import { SessionActor as MagicSessionActor } from "../characters/spells/MagicSessionActor";
 import { SessionActor as EquipmentSessionActor } from "../characters/equipment/EquipmentSessionActor";
@@ -52,6 +56,9 @@ import {
   sendVisibilityFiltered,
 } from "./visibilityDelivery";
 
+const SESSION_PAUSE_STATE_KEY = "session-pause-state";
+const COMPANIONS_STATE_KEY = "companions-state";
+const INITIATIVE_STATE_KEY = "initiative-state";
 const ABILITIES_STATE_KEY = "abilities-state";
 const HP_STATE_KEY = "hp-state";
 const CONDITIONS_STATE_KEY = "conditions-state";
@@ -92,6 +99,15 @@ type AbilityReverse = {
     ability: SessionAbilityState;
     hp: SessionHpState;
     conditions: SessionConditionsState;
+    targetReverse?: {
+      hp: Record<string, SessionHpState>;
+      conditions: Record<string, SessionConditionsState>;
+      companions: Record<string, CompanionState>;
+      initiative?: SessionInitiativeState;
+      changedCharacters?: string[];
+      changedConditions?: string[];
+      changedCompanions?: string[];
+    };
   };
 };
 
@@ -148,6 +164,16 @@ type CentrallyRestorableReverse =
  * routing, lifecycle, unified timeline ordering and every undo path.
  */
 export class SessionActor extends BaseSessionActor {
+  private pauseStateCache: SessionPauseState | undefined;
+
+  private async readPauseState(): Promise<SessionPauseState> {
+    if (!this.pauseStateCache) {
+      this.pauseStateCache = (await this.ctx.storage.get<SessionPauseState>(SESSION_PAUSE_STATE_KEY))
+        ?? { paused: false, updatedAt: "", updatedBy: null };
+    }
+    return this.pauseStateCache;
+  }
+
   private readonly abilityRoute = bindDomainActor(AbilitySessionActor.prototype, this.ctx);
   private readonly magicRoute = bindDomainActor(MagicSessionActor.prototype, this.ctx);
   private readonly equipmentRoute = bindDomainActor(EquipmentSessionActor.prototype, this.ctx);
@@ -172,6 +198,7 @@ export class SessionActor extends BaseSessionActor {
       }
     });
     if (!socket) return response;
+    sendVisibilityFiltered(socket, { type: "session.pause.state", state: await this.readPauseState() });
 
     await Promise.all([
       this.sendAbilitySnapshot(socket),
@@ -186,6 +213,38 @@ export class SessionActor extends BaseSessionActor {
     message: string | ArrayBuffer,
   ): Promise<void> {
     const raw = typeof message === "string" ? message : new TextDecoder().decode(message);
+    const sessionControl = parseSessionPauseMessage(raw);
+    if (sessionControl) {
+      const connection = readSessionConnection(webSocket);
+      if (!connection || connection.role !== "MASTER") {
+        sendError(webSocket, "MASTER_REQUIRED", "Somente o mestre pode pausar ou retomar a sessão.");
+        return;
+      }
+      const state: SessionPauseState = { paused: sessionControl.paused, updatedAt: new Date().toISOString(), updatedBy: connection.userId };
+      await this.ctx.storage.put(SESSION_PAUSE_STATE_KEY, state);
+      this.pauseStateCache = state;
+      broadcast(this.ctx.getWebSockets(), { type: "session.pause.state", state });
+      return;
+    }
+
+    const connection = readSessionConnection(webSocket);
+    if (!connection) {
+      webSocket.close(1011, "Missing connection attachment");
+      return;
+    }
+    const storedPause = await this.readPauseState();
+    let messageType: string | undefined;
+    try {
+      const envelope: unknown = JSON.parse(raw);
+      if (envelope && typeof envelope === "object" && !Array.isArray(envelope)) {
+        const type = (envelope as { type?: unknown }).type;
+        if (typeof type === "string") messageType = type;
+      }
+    } catch { /* malformed packets are rejected by normal routing */ }
+    if (isSessionPlayerOperationBlocked(Boolean(storedPause?.paused), connection.role, messageType)) {
+      sendError(webSocket, "SESSION_PAUSED", "A sessão está pausada pelo mestre. Apenas ações do mestre podem alterar a sessão.");
+      return;
+    }
 
     const undoLogId = parseUndoLogId(raw);
     if (undoLogId) {
@@ -399,6 +458,35 @@ export class SessionActor extends BaseSessionActor {
         writes[ABILITIES_STATE_KEY] = abilities;
         writes[HP_STATE_KEY] = hp;
         writes[CONDITIONS_STATE_KEY] = conditions;
+        if (reverse.snapshot.targetReverse) {
+          const targets = reverse.snapshot.targetReverse;
+          const currentCompanions = (await this.ctx.storage.get<Record<string, CompanionState>>(COMPANIONS_STATE_KEY)) ?? {};
+          const currentInitiative = await this.ctx.storage.get<SessionInitiativeState>(INITIATIVE_STATE_KEY);
+          const inverseTargets = {
+            hp: Object.fromEntries((targets.changedCharacters ?? []).map(id => [id, hp[id]]).filter(([,state]) => state)),
+            conditions: Object.fromEntries((targets.changedConditions ?? []).map(id => [id, conditions[id]]).filter(([,state]) => state)),
+            companions: Object.fromEntries((targets.changedCompanions ?? []).map(id => [id, currentCompanions[id]]).filter(([,state]) => state)),
+            initiative: targets.initiative && currentInitiative ? currentInitiative : undefined,
+            changedCharacters: targets.changedCharacters,
+            changedConditions: targets.changedConditions,
+            changedCompanions: targets.changedCompanions,
+          };
+          (inverseReverse as AbilityReverse).snapshot.targetReverse = inverseTargets;
+          for (const id of targets.changedCharacters ?? []) {
+            if (id !== characterId && targets.hp[id]) hp[id] = targets.hp[id];
+          }
+          writes[HP_STATE_KEY] = hp;
+          for (const id of targets.changedConditions ?? []) {
+            if (id !== characterId && targets.conditions[id]) conditions[id] = targets.conditions[id];
+          }
+          if (targets.changedConditions?.length) writes[CONDITIONS_STATE_KEY] = conditions;
+          for (const id of targets.changedCompanions ?? []) {
+            if (targets.companions[id]) currentCompanions[id] = targets.companions[id];
+            else delete currentCompanions[id];
+          }
+          if (targets.changedCompanions?.length) writes[COMPANIONS_STATE_KEY] = currentCompanions;
+          if (targets.initiative) writes[INITIATIVE_STATE_KEY] = targets.initiative;
+        }
         break;
       }
       case "session.rest.restore": {
@@ -529,6 +617,28 @@ export class SessionActor extends BaseSessionActor {
       undoneAt: now,
     });
     await this.broadcastAuthoritativeStateForReverse(reverse);
+    if (reverse.type === "character.ability.restore" && reverse.snapshot.targetReverse) {
+      for (const id of reverse.snapshot.targetReverse.changedCharacters ?? []) {
+        if (id !== characterId && hp[id]) broadcast(this.ctx.getWebSockets(), { type: "session.hp.updated", character: hp[id] });
+      }
+      for (const id of reverse.snapshot.targetReverse.changedConditions ?? []) {
+        if (id !== characterId && conditions[id]) broadcast(this.ctx.getWebSockets(), { type: "session.conditions.updated", character: conditions[id] });
+      }
+      if (reverse.snapshot.targetReverse.initiative) {
+        broadcast(this.ctx.getWebSockets(), { type: "session.initiative.updated", state: reverse.snapshot.targetReverse.initiative });
+      }
+      const config = await readRuntimeConfig(this.ctx.storage);
+      const persistedCompanions = (await this.ctx.storage.get<Record<string, CompanionState>>(COMPANIONS_STATE_KEY)) ?? {};
+      for (const id of reverse.snapshot.targetReverse.changedCompanions ?? []) {
+        const owner = config?.config?.creatureCompendium?.find(creature => creature.id === id)?.ownerUserId;
+        for (const socket of this.ctx.getWebSockets()) {
+          const viewer = readSessionConnection(socket);
+          if (viewer && (viewer.role === "MASTER" || (owner && viewer.userId === owner))) {
+            send(socket, { type: "session.companions.updated", companion: persistedCompanions[id] });
+          }
+        }
+      }
+    }
   }
 
   private async handleCharacterLifecycleOperation(

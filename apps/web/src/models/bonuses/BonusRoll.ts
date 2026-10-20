@@ -78,6 +78,10 @@ export function listBonusRollRequirements(
     )
   })
 
+  ;(bonuses.onUseHp ?? []).forEach((entry, index) => {
+    pushRequirement(result, `onUseHp:${index}`, entry.kind === "heal" ? "Cura ao usar" : "Dano ao usar", entry.bonus)
+  })
+
   if (bonuses.attack?.bonus) {
     pushRequirement(result, "legacy:attack", "attack", bonuses.attack.bonus)
   }
@@ -113,8 +117,8 @@ export function resolveBonusCollectionRolls(
         ? rollBonusDice(dice)
         : supplied
 
-    if (typeof diceValue !== "number" || !Number.isFinite(diceValue)) {
-      throw new Error(`Informe o resultado da rolagem de ${label} antes de usar a habilidade.`)
+    if (typeof diceValue !== "number" || !isValidBonusRollValue(dice, diceValue)) {
+      throw new Error(`Informe um resultado válido para a rolagem de ${label} (${dice}).`)
     }
 
     const formula = bonus.roll.formula?.trim()
@@ -187,6 +191,12 @@ export function resolveBonusCollectionRolls(
       ),
     }))
   }
+  if (bonuses.onUseHp) {
+    next.onUseHp = bonuses.onUseHp.map((entry, index) => ({
+      ...entry,
+      bonus: resolve(`onUseHp:${index}`, entry.kind === "heal" ? "Cura ao usar" : "Dano ao usar", entry.bonus),
+    }))
+  }
   if (bonuses.attack?.bonus) {
     next.attack = {
       ...bonuses.attack,
@@ -218,6 +228,7 @@ export function listResolvedBonusRolls(
   ;(bonuses.skillCheckBonus ?? []).forEach((entry) => collect(entry.bonus))
   ;(bonuses.attribute ?? []).forEach((entry) => collect(entry.bonus))
   ;(bonuses.attributeModifier ?? []).forEach((entry) => collect(entry.bonus))
+  ;(bonuses.onUseHp ?? []).forEach((entry) => collect(entry.bonus))
   if (bonuses.attack?.bonus) collect(bonuses.attack.bonus)
   if (bonuses.damage?.bonus) collect(bonuses.damage.bonus)
 
@@ -230,6 +241,15 @@ export function validateBonusRollDiceExpression(expression: string): string | un
   if (parsed.count < 1 || parsed.count > 100) return "A rolagem deve usar entre 1 e 100 dados."
   if (parsed.sides < 2 || parsed.sides > 1000) return "Cada dado deve ter entre 2 e 1000 lados."
   return undefined
+}
+
+/** Reject impossible or fractional submitted dice totals, including fixed modifiers. */
+export function isValidBonusRollValue(expression: string, value: number): boolean {
+  if (!Number.isInteger(value) || validateBonusRollDiceExpression(expression)) return false
+  const parsed = parseDiceExpression(expression)
+  if (!parsed) return false
+  return value >= parsed.count + parsed.modifier
+    && value <= parsed.count * parsed.sides + parsed.modifier
 }
 
 function pushRequirement(

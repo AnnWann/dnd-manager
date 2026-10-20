@@ -8,6 +8,8 @@ import {
   readSessionLog,
 } from "../session/sessionLog";
 import { readRuntimeConfig } from "../session/runtimeConfigAccess";
+import type { CompanionState } from "../../../../web/src/shared/session-runtime/companionRuntime";
+import { synchronizeCompanionInitiative } from "./companionInitiativeSync";
 import { broadcastVisibilityFiltered } from "../session/visibilityDelivery";
 import { runCustomSystemAutomations } from "../../../../web/src/lib/customSystems/CustomAutomationRuntime";
 import type { CustomSystemEventType } from "../../../../web/src/models/customSystems/CustomAutomationDefinition";
@@ -61,6 +63,7 @@ import {
 export const INITIATIVE_STATE_KEY = "initiative-state";
 export const INITIATIVE_SHARED_SCOPE = "initiative:shared";
 const ABILITIES_STATE_KEY = "abilities-state";
+const COMPANIONS_STATE_KEY = "companions-state";
 const HP_STATE_KEY = "hp-state";
 const CONDITIONS_STATE_KEY = "conditions-state";
 
@@ -245,6 +248,10 @@ export class SessionActor {
       }
     }
 
+    const storedCompanions = (await this.ctx.storage.get<Record<string, CompanionState>>(COMPANIONS_STATE_KEY)) ?? {};
+    const companionSync = synchronizeCompanionInitiative(current, nextSession, runtimeConfig, storedCompanions);
+    nextSession = companionSync.session;
+
     nextSession = projectInitiativeSessionFromCharacterState(
       nextSession,
       { abilities, hp, conditions },
@@ -289,6 +296,7 @@ export class SessionActor {
     });
 
     const writes: Record<string, unknown> = { [INITIATIVE_STATE_KEY]: state };
+    if (companionSync.changedIds.length) writes[COMPANIONS_STATE_KEY] = companionSync.companions;
     if (changedAbilityIds.size) writes[ABILITIES_STATE_KEY] = abilities;
     if (sourceSync.changedHpIds.size) writes[HP_STATE_KEY] = hp;
     if (sourceSync.changedConditionIds.size) writes[CONDITIONS_STATE_KEY] = conditions;
@@ -299,6 +307,17 @@ export class SessionActor {
       maxRecords: MAX_CHARACTER_STATE_LOG_RECORDS,
     });
     broadcastVisibilityFiltered(this.ctx.getWebSockets(), { type: "session.initiative.updated", state });
+    for (const creatureId of companionSync.changedIds) {
+      const creature = runtimeConfig?.config.creatureCompendium.find(item => item.id === creatureId);
+      if (!creature?.ownerUserId) continue;
+      const payload = JSON.stringify({ type: "session.companions.updated", companion: companionSync.companions[creatureId] });
+      for (const socket of this.ctx.getWebSockets()) {
+        try {
+          const recipient = socket.deserializeAttachment() as SessionConnection | null;
+          if (recipient && (recipient.role === "MASTER" || recipient.userId === creature.ownerUserId)) socket.send(payload);
+        } catch { /* stale socket */ }
+      }
+    }
     for (const characterId of changedAbilityIds) {
       broadcastVisibilityFiltered(this.ctx.getWebSockets(), {
         type: "session.abilities.updated",
