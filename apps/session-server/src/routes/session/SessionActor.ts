@@ -28,7 +28,7 @@ import {
 } from "../../../../web/src/models/characters/CharacterTemplate";
 import { getCurrentMaxHp } from "../../../../web/src/models/characters/characterHp";
 import { getEffectiveDamageAffinities } from "../../../../web/src/models/characters/characterDamageAffinities";
-import { applyHpToReferences, validateAbilityTargets, type MutableHpTargets } from "../characters/abilities/abilityTargeting";
+import { areSelectedTargetsDistinct, applyHpToReferences, validateAbilityTargets, type MutableHpTargets } from "../characters/abilities/abilityTargeting";
 import { hasProficiency } from "../../../../web/src/models/characters/characterProficiencies";
 import { getUnarmedAttackProfile } from "../../../../web/src/models/characters/unarmedAttack";
 import type { Ability } from "../../../../web/src/models/abilities/Ability";
@@ -761,6 +761,10 @@ export class SessionActor extends DurableObject<Env> {
           }
           return false;
         });
+        if (!areSelectedTargetsDistinct(targets, combat, runtimeConfig?.config.creatureCompendium ?? [])) {
+          this.sendError(webSocket, "ACTION_TARGETS_DUPLICATE", "A mesma criatura foi selecionada mais de uma vez.");
+          return;
+        }
         if (!validRefs) {
           this.sendError(webSocket, "ACTION_TARGETS_UNAVAILABLE", "Um alvo não está disponível para esta operação.");
           return;
