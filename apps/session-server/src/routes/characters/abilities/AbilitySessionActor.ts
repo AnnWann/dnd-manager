@@ -25,6 +25,7 @@ import { evaluateCharacterSheetFormula } from "../../../../../web/src/lib/custom
 import type { CompanionState } from "../../../../../web/src/shared/session-runtime/companionRuntime";
 import type { SessionInitiativeState } from "../../initiative/initiativeProtocol";
 import { applyHpToReferences, validateAbilityTargets, type MutableHpTargets } from "./abilityTargeting";
+import { abilityTargetGrants, applyConditionToReferences, createTargetCondition, type MutableConditionsTargets } from "./abilityTargetConditions";
 import { getEffectiveDamageAffinities } from "../../../../../web/src/models/characters/characterDamageAffinities";
 import { normalizeInitiativeSession } from "../../../../../web/src/models/initiative/Initiative";
 import { isValidBonusRollValue, listBonusRollRequirements, listResolvedBonusRolls } from "../../../../../web/src/models/bonuses/BonusRoll";
@@ -335,12 +336,14 @@ export class SessionActor extends BaseSessionActor {
     if (hpChanged) hpState[operation.characterId] = nextHp;
     if (conditionsChanged) conditionsState[operation.characterId] = nextConditions;
 
-    let mutatedTargets: MutableHpTargets | undefined;
+    let mutatedTargets: MutableConditionsTargets | undefined;
     let targetReverse: {
       hp: Record<string, SessionHpState>;
+      conditions: Record<string, SessionConditionsState>;
       companions: Record<string, CompanionState>;
       initiative?: SessionInitiativeState;
       changedCharacters?: string[];
+      changedConditions?: string[];
       changedCompanions?: string[];
     } | undefined;
     if (operation.type === "character.ability.use"
@@ -348,11 +351,13 @@ export class SessionActor extends BaseSessionActor {
       const afterAbility = findAbilityForSource(next, operation.source);
       const afterOption = afterAbility?.activationOptions?.find(entry => entry.id === operation.activationOptionId);
       const effects = [...(afterAbility?.bonuses?.onUseHp ?? []), ...(afterOption?.bonuses?.onUseHp ?? [])];
-      if (effects.length && targetRefs.length) {
+      const grants = afterAbility ? abilityTargetGrants(afterAbility, afterOption) : [];
+      if ((effects.length || grants.length) && targetRefs.length) {
         const storedCompanions = (await this.ctx.storage.get<Record<string, CompanionState>>(COMPANIONS_STATE_KEY)) ?? {};
         const storedInitiative = await this.ctx.storage.get<SessionInitiativeState>(INITIATIVE_STATE_KEY);
         targetReverse = {
           hp: structuredClone(hpState),
+          conditions: structuredClone(conditionsState),
           companions: structuredClone(storedCompanions),
           initiative: storedInitiative ? structuredClone(storedInitiative) : undefined,
         };
@@ -366,7 +371,8 @@ export class SessionActor extends BaseSessionActor {
           } catch { affinities[id] = []; }
         }
         mutatedTargets = {
-          hp: hpState, companions: storedCompanions, initiative: storedInitiative,
+          hp: hpState, conditions: conditionsState, companions: storedCompanions, initiative: storedInitiative,
+          changedConditions: new Set(),
           creatures: runtimeConfig?.config.creatureCompendium ?? [],
           affinities, changedCharacters: new Set(), changedCompanions: new Set(),
           initiativeChanged: false,
@@ -385,8 +391,19 @@ export class SessionActor extends BaseSessionActor {
             return;
           }
         }
+        for (const grant of grants) {
+          if (!applyConditionToReferences(mutatedTargets, targetRefs, createTargetCondition(operation.characterId, afterAbility!, grant))) {
+            this.sendAbilityError(webSocket, "TARGET_CONDITION_INVALID", "Não foi possível aplicar a condição aos alvos.");
+            return;
+          }
+        }
+        targetReverse.changedConditions = [...mutatedTargets.changedConditions];
         targetReverse.changedCharacters = [...mutatedTargets.changedCharacters];
         targetReverse.changedCompanions = [...mutatedTargets.changedCompanions];
+        if (mutatedTargets.changedConditions.has(operation.characterId)) {
+          const sheet = (nextAbilityState.character as any).sheet;
+          if (sheet) sheet.conditions = conditionsState[operation.characterId].conditions;
+        }
         if (mutatedTargets.changedCharacters.has(operation.characterId)) {
           const latest = hpState[operation.characterId];
           const sheet = (nextAbilityState.character as any).sheet;
@@ -417,7 +434,7 @@ export class SessionActor extends BaseSessionActor {
       operation: loggedOperation,
       affectedScopes: [
         characterScope(operation.characterId),
-        ...[...(mutatedTargets?.changedCharacters ?? [])].filter(id => id !== operation.characterId).map(characterScope),
+        ...[...new Set([...(mutatedTargets?.changedCharacters ?? []), ...(mutatedTargets?.changedConditions ?? [])])].filter(id => id !== operation.characterId).map(characterScope),
         ...(mutatedTargets?.changedCompanions.size || mutatedTargets?.initiativeChanged ? ["initiative:shared"] : []),
       ],
       reverseOperation: {
@@ -436,9 +453,9 @@ export class SessionActor extends BaseSessionActor {
       writes: {
         [ABILITIES_STATE_KEY]: abilityState,
         ...(hpChanged || mutatedTargets?.changedCharacters.size ? { [HP_STATE_KEY]: hpState } : {}),
+        ...(conditionsChanged || mutatedTargets?.changedConditions.size ? { [CONDITIONS_STATE_KEY]: conditionsState } : {}),
         ...(mutatedTargets?.changedCompanions.size ? { [COMPANIONS_STATE_KEY]: mutatedTargets.companions } : {}),
         ...(mutatedTargets?.initiativeChanged && mutatedTargets.initiative ? { [INITIATIVE_STATE_KEY]: mutatedTargets.initiative } : {}),
-        ...(conditionsChanged ? { [CONDITIONS_STATE_KEY]: conditionsState } : {}),
       },
       record,
       currentLog: log,
@@ -463,8 +480,11 @@ export class SessionActor extends BaseSessionActor {
         }
       }
     }
-    if (conditionsChanged) {
-      this.broadcastRaw({ type: "session.conditions.updated", character: nextConditions });
+    if (conditionsChanged || mutatedTargets?.changedConditions.has(operation.characterId)) {
+      this.broadcastRaw({ type: "session.conditions.updated", character: conditionsState[operation.characterId] });
+    }
+    for (const id of mutatedTargets?.changedConditions ?? []) {
+      if (id !== operation.characterId) this.broadcastRaw({ type: "session.conditions.updated", character: conditionsState[id] });
     }
   }
 
