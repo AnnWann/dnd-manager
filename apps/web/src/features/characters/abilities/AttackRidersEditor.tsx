@@ -96,6 +96,12 @@ export function AttackRidersEditor({ riders, character, onChange, defaultScope =
               ))}
             </div>
           </div> : null}
+          {rider.scope === "weapon" && rider.damage && rider.weaponSelection === "onActivation" ? (
+            <p className="text-[11px] text-textMuted">
+              Este dano é acrescentado apenas aos ataques feitos com a arma escolhida durante a ativação.
+              Se o efeito for instantâneo (custo de PV, por exemplo), configure-o em Bônus → Dano ao usar.
+            </p>
+          ) : null}
           {rider.damage ? <div className="grid gap-2 sm:grid-cols-2">
             <label className="grid gap-1 text-xs text-textMuted">Dados (ex.: 1d6 ou 2d8+1)
               <Input value={rider.damage.dice} onChange={e => patch(rider.id, { damage: { ...rider.damage!, dice: e.target.value } })} />
@@ -106,6 +112,16 @@ export function AttackRidersEditor({ riders, character, onChange, defaultScope =
                 <option value="">Mesmo tipo da arma</option>
                 {DAMAGE_TYPE_OPTIONS.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}
               </Select>
+            </label>
+            <label className="flex items-center gap-2 text-xs text-textH sm:col-span-2">
+              <input type="checkbox" checked={rider.damage.magical === true} onChange={e =>
+                patch(rider.id, { damage: { ...rider.damage!, magical: e.target.checked } })} />
+              Dano mágico (considerar imunidades e resistências a dano não mágico)
+            </label>
+            <label className="flex items-center gap-2 text-xs text-textH sm:col-span-2">
+              <input type="checkbox" checked={rider.damage.ignoreResistance === true} onChange={e =>
+                patch(rider.id, { damage: { ...rider.damage!, ignoreResistance: e.target.checked } })} />
+              Ignorar resistência, imunidade e vulnerabilidade ao dano
             </label>
           </div> : null}
           {rider.scope === "weapon" ? <>
