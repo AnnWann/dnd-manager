@@ -136,7 +136,7 @@ export function SessionActionLog() {
     function prepend(entry: RollFeedEntry) {
       setRollFeed((current) => [
         entry,
-        ...current.filter((candidate) => candidate.result.id !== entry.result.id),
+        ...current.filter((candidate) => candidate.type === "self-damage" ? true : candidate.result.id !== entry.result.id),
       ].slice(0, MAX_DICE_ROLLS))
     }
     function onDiceRoll(event: Event) {
