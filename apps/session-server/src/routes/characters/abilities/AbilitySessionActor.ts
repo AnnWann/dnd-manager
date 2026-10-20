@@ -43,6 +43,7 @@ import type {
   SessionHpState,
 } from "../../session/protocol";
 import {
+  characterScope,
   commitSessionMutation,
   createSessionLogRecord,
   readSessionLog,
@@ -339,6 +340,8 @@ export class SessionActor extends BaseSessionActor {
       hp: Record<string, SessionHpState>;
       companions: Record<string, CompanionState>;
       initiative?: SessionInitiativeState;
+      changedCharacters?: string[];
+      changedCompanions?: string[];
     } | undefined;
     if (operation.type === "character.ability.use"
       && (abilityBeforeUse?.targeting?.mode === "targets" || abilityBeforeUse?.targeting?.mode === "point")) {
@@ -382,6 +385,8 @@ export class SessionActor extends BaseSessionActor {
             return;
           }
         }
+        targetReverse.changedCharacters = [...mutatedTargets.changedCharacters];
+        targetReverse.changedCompanions = [...mutatedTargets.changedCompanions];
         if (mutatedTargets.changedCharacters.has(operation.characterId)) {
           const latest = hpState[operation.characterId];
           const sheet = (nextAbilityState.character as any).sheet;
@@ -410,6 +415,11 @@ export class SessionActor extends BaseSessionActor {
     const record = createSessionLogRecord({
       actorId: connection.userId,
       operation: loggedOperation,
+      affectedScopes: [
+        characterScope(operation.characterId),
+        ...[...(mutatedTargets?.changedCharacters ?? [])].filter(id => id !== operation.characterId).map(characterScope),
+        ...(mutatedTargets?.changedCompanions.size || mutatedTargets?.initiativeChanged ? ["initiative:shared"] : []),
+      ],
       reverseOperation: {
         type: "character.ability.restore",
         characterId: operation.characterId,
