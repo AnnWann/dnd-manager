@@ -74,7 +74,7 @@ export function getActiveAttackRiders(character: CharacterTemplate, context: Att
   return riders
     .filter(rider => rider.scope === "all" || rider.scope === context.scope)
     // An activation-bound rider must only apply to the infused weapon.
-    .filter(rider => rider.weaponSelection !== "onActivation" || Boolean(rider.weaponId))
+    .filter(rider => !rider.weaponSelection || Boolean(rider.weaponId))
     .filter(rider => !rider.weaponId || (context.scope === "weapon" && rider.weaponId === context.weaponId))
     .filter(rider => !rider.targetEntryId || rider.targetEntryId === context.targetEntryId)
 }
