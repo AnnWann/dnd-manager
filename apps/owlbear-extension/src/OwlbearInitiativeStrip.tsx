@@ -121,9 +121,10 @@ export function OwlbearInitiativeStrip({
             onClick={() => setSelectedId(current => current === entry.id ? null : entry.id)}
             className={`owlbear-initiative-card${active ? " is-active" : ""}${selectedId === entry.id && isMaster ? " is-selected" : ""}${entry.defeated ? " is-defeated" : ""}`}
           >
-            {entry.imageUrl ? <img className="owlbear-initiative-avatar" src={entry.imageUrl} alt="" /> : <span className="owlbear-initiative-avatar avatar-fallback" aria-hidden="true">{name.slice(0, 1)}</span>}
-            <span className="owlbear-initiative-name">{name}</span>
-            <strong className="owlbear-initiative-value">{entry.initiative}</strong>
+            {entry.imageUrl
+              ? <img className="owlbear-initiative-avatar" src={entry.imageUrl} alt="" />
+              : <span className="owlbear-initiative-avatar avatar-fallback" aria-hidden="true">{name.slice(0, 1)}</span>}
+            <strong className="owlbear-initiative-value" aria-label={`Iniciativa ${entry.initiative}`}>{entry.initiative}</strong>
             {sharedTurns.length > 1 && <span className="owlbear-initiative-turn">{turnIndex + 1}/{sharedTurns.length}</span>}
             {entry.hidden && isMaster && <span className="owlbear-initiative-flag" title="Oculto dos jogadores">◌</span>}
           </button>

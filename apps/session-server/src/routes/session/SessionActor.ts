@@ -1020,12 +1020,12 @@ export class SessionActor extends DurableObject<Env> {
       const state: SessionInitiativeState = {
         initialized: true,
         revision: initialized ? (previous?.revision ?? 0) + 1 : 0,
-        session: projected as unknown as Record<string, unknown>,
+        session: projected,
       };
       await storage.put("initiative-state", state);
       return { state, initialized };
     });
-    this.broadcast({
+    this.broadcastSessionRaw({
       type: transaction.initialized ? "session.initiative.updated" : "session.initiative.snapshot",
       state: transaction.state,
     });

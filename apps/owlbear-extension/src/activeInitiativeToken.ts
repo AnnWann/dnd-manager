@@ -1,12 +1,13 @@
 import { useEffect } from "react"
 import OBR, { buildShape, type Item } from "@owlbear-rodeo/sdk"
 import type { InitiativeSession } from "../../web/src/models/initiative/Initiative"
-import { readTokenCharacterLink, readTokenCreatureLink } from "./tokenCharacterLink"
+import { readTokenCharacterLink, readTokenCreatureLink, readTokenCompendiumCreature } from "./tokenCharacterLink"
 
 type ActiveToken = {
   entryId: string
   combatantIds: ReadonlySet<string>
   sourceId?: string
+  catalogSourceId?: string
 }
 
 export function activeInitiativeToken(
@@ -23,7 +24,18 @@ export function activeInitiativeToken(
       ? session.entries.filter(entry => entry.combatantId === active.combatantId).map(entry => entry.id)
       : [active.id],
   )
-  return { entryId: active.id, combatantIds, sourceId: active.sourceType === "character" ? active.sourceId : undefined }
+  const sameSourceEntries = session.entries.filter(entry => entry.sourceId && entry.sourceId === active.sourceId)
+  const combatants = new Set(sameSourceEntries.map(entry => entry.combatantId || entry.id))
+  return {
+    entryId: active.id,
+    combatantIds,
+    sourceId: active.sourceType === "character" ? active.sourceId : undefined,
+    // Only a single combatant of this creature template can be inferred;
+    // otherwise catalog tokens would be ambiguous.
+    catalogSourceId: active.sourceId?.startsWith("compendium:") && combatants.size === 1
+      ? active.sourceId.slice("compendium:".length)
+      : undefined,
+  }
 }
 
 export function findActiveInitiativeItem(
@@ -40,12 +52,21 @@ export function findActiveInitiativeItem(
     return link?.sessionId === sessionId && token.combatantIds.has(link.entryId)
   })
   if (byCreature) return byCreature
-  if (!token.sourceId) return undefined
-  return items.find(item => {
+  if (token.sourceId) {
+    const character = items.find(item => {
+      if (item.visible === false) return false
+      const link = readTokenCharacterLink(item.metadata)
+      return link?.sessionId === sessionId && link.characterId === token.sourceId
+    })
+    if (character) return character
+  }
+  if (!token.catalogSourceId) return undefined
+  const candidates = items.filter(item => {
     if (item.visible === false) return false
-    const link = readTokenCharacterLink(item.metadata)
-    return link?.sessionId === sessionId && link.characterId === token.sourceId
+    const link = readTokenCompendiumCreature(item.metadata)
+    return link?.sessionId === sessionId && link.creatureId === token.catalogSourceId
   })
+  return candidates.length === 1 ? candidates[0] : undefined
 }
 
 /** A per-viewer, non-persistent outline following the active combatant.
@@ -74,15 +95,15 @@ export function useActiveInitiativeTokenMarker({
     let disposed = false
     let revision = 0
     let queue: Promise<void> = Promise.resolve()
-    let markerId: string | undefined
+    let markerIds: string[] = []
     let signature = ""
 
     async function clear(): Promise<void> {
-      const oldId = markerId
-      markerId = undefined
+      const oldIds = markerIds
+      markerIds = []
       signature = ""
-      if (oldId && await OBR.scene.isReady()) {
-        await OBR.scene.local.deleteItems([oldId])
+      if (oldIds.length && await OBR.scene.isReady()) {
+        await OBR.scene.local.deleteItems(oldIds)
       }
     }
 
@@ -90,7 +111,7 @@ export function useActiveInitiativeTokenMarker({
       if (disposed) return
       const sceneReady = await OBR.scene.isReady()
       if (!sceneReady) {
-        markerId = undefined
+        markerIds = []
         signature = ""
         return
       }
@@ -99,7 +120,10 @@ export function useActiveInitiativeTokenMarker({
         return
       }
       const tokens = await OBR.scene.items.getItems(
-        item => item.layer === "CHARACTER" || Boolean(readTokenCreatureLink(item.metadata)) || Boolean(readTokenCharacterLink(item.metadata)),
+        item => item.layer === "CHARACTER"
+          || Boolean(readTokenCreatureLink(item.metadata))
+          || Boolean(readTokenCharacterLink(item.metadata))
+          || Boolean(readTokenCompendiumCreature(item.metadata)),
       )
       const token = findActiveInitiativeItem(tokens, sessionId, active)
       if (!token) {
@@ -115,9 +139,12 @@ export function useActiveInitiativeTokenMarker({
       const margin = Math.max(5, Math.min(18, diameter * 0.09))
       const size = diameter + margin * 2
       const nextSignature = [token.id, bounds.center.x, bounds.center.y, size].join(":")
-      if (markerId && signature === nextSignature) return
+      if (markerIds.length && signature === nextSignature) return
       await clear()
       if (disposed) return
+      // World-space shape (not attached to another item): using attachedTo
+      // together with world coordinates double-translates the marker off-screen.
+      // The scene-items subscription keeps these non-interactive shapes aligned.
       const outline = buildShape()
         .name("Turno atual · D&D Manager")
         .shapeType("CIRCLE")
@@ -125,17 +152,32 @@ export function useActiveInitiativeTokenMarker({
         .height(size)
         .position({ x: bounds.center.x - size / 2, y: bounds.center.y - size / 2 })
         .layer("ATTACHMENT")
-        .attachedTo(token.id)
         .disableHit(true)
         .locked(true)
         .fillColor("#000000")
         .fillOpacity(0)
-        .strokeColor("#f5ca57")
-        .strokeOpacity(0.95)
-        .strokeWidth(Math.max(3, Math.min(10, diameter * 0.045)))
+        .strokeColor("#ffd35e")
+        .strokeOpacity(1)
+        .strokeWidth(Math.max(5, Math.min(13, diameter * 0.065)))
         .build()
-      await OBR.scene.local.addItems([outline])
-      markerId = outline.id
+      const arrowSize = Math.max(18, Math.min(36, diameter * 0.22))
+      const arrow = buildShape()
+        .name("Indicador do turno atual · D&D Manager")
+        .shapeType("TRIANGLE")
+        .width(arrowSize)
+        .height(arrowSize)
+        .rotation(180)
+        .position({ x: bounds.center.x - arrowSize / 2, y: bounds.center.y - size / 2 - arrowSize + 3 })
+        .layer("ATTACHMENT")
+        .disableHit(true)
+        .locked(true)
+        .fillColor("#ffd35e")
+        .fillOpacity(1)
+        .strokeColor("#271b0a")
+        .strokeWidth(Math.max(2, diameter * 0.015))
+        .build()
+      await OBR.scene.local.addItems([outline, arrow])
+      markerIds = [outline.id, arrow.id]
       signature = nextSignature
     }
 
@@ -159,5 +201,5 @@ export function useActiveInitiativeTokenMarker({
       unlistenScene()
       void queue.then(clear).catch(error => console.warn("[owlbear] failed to remove initiative token marker", error))
     }
-  }, [ready, sessionId, ids, active?.entryId, active?.sourceId])
+  }, [ready, sessionId, ids, active?.entryId, active?.sourceId, active?.catalogSourceId])
 }
