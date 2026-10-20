@@ -345,6 +345,35 @@ export class SessionActor extends DurableObject<Env> {
       next = { ...next, spellSlots: { ...current.spellSlots, [String(operation.level)]: updated } };
     }
     states[creature.id] = next;
+    const initiativeState = await this.ctx.storage.get<SessionInitiativeState>("initiative-state");
+    if (initiativeState?.initialized) {
+      const initiative = normalizeInitiativeSession(initiativeState.session as Partial<InitiativeSession>);
+      if (initiative.entries.some(entry => entry.sourceId === `compendium:${creature.id}`)) {
+        const entries = initiative.entries.map(entry => {
+          if (entry.sourceId !== `compendium:${creature.id}`) return entry;
+          return {
+            ...entry,
+            currentHp: next.currentHp,
+            maxHp: next.maxHp,
+            temporaryHp: next.temporaryHp,
+            creatureFeatureResources: Object.fromEntries(allCreatureFeatures(creature)
+              .filter(feature => feature.usage)
+              .map(feature => [feature.id, { used: next.featureUses[feature.id] ?? 0, max: feature.usage!.max }])),
+            creatureSpellResources: {
+              ...entry.creatureSpellResources,
+              slots: Object.fromEntries(Object.entries(creature.spellcasting?.slots ?? {})
+                .map(([level, max]) => [level, { current: next.spellSlots[level] ?? max ?? 0, max: max ?? 0 }])),
+              perDay: entry.creatureSpellResources?.perDay ?? {},
+            },
+          };
+        });
+        const updated = { ...initiativeState,
+          session: { ...initiative, entries, updatedAt: Date.now() } as unknown as Record<string, unknown>,
+          revision: initiativeState.revision + 1 };
+        await this.ctx.storage.put("initiative-state", updated);
+        this.broadcast({ type: "session.initiative.updated", state: updated });
+      }
+    }
     await this.ctx.storage.put(COMPANIONS_STATE_KEY, states);
     this.broadcastCompanionState(next, creature.ownerUserId);
   }
