@@ -417,6 +417,7 @@ export class SessionActor extends BaseSessionActor {
           ability: storedAbility,
           hp,
           conditions,
+          targetReverse,
         },
       },
     });
@@ -424,7 +425,9 @@ export class SessionActor extends BaseSessionActor {
     await commitSessionMutation(this.ctx.storage, this.ctx.getWebSockets(), {
       writes: {
         [ABILITIES_STATE_KEY]: abilityState,
-        ...(hpChanged ? { [HP_STATE_KEY]: hpState } : {}),
+        ...(hpChanged || mutatedTargets?.changedCharacters.size ? { [HP_STATE_KEY]: hpState } : {}),
+        ...(mutatedTargets?.changedCompanions.size ? { [COMPANIONS_STATE_KEY]: mutatedTargets.companions } : {}),
+        ...(mutatedTargets?.initiativeChanged && mutatedTargets.initiative ? { [INITIATIVE_STATE_KEY]: mutatedTargets.initiative } : {}),
         ...(conditionsChanged ? { [CONDITIONS_STATE_KEY]: conditionsState } : {}),
       },
       record,
@@ -433,7 +436,23 @@ export class SessionActor extends BaseSessionActor {
     });
 
     this.broadcastAbility({ type: "session.abilities.updated", character: nextAbilityState });
-    if (hpChanged) this.broadcastRaw({ type: "session.hp.updated", character: nextHp });
+    if (hpChanged || mutatedTargets?.changedCharacters.has(operation.characterId)) this.broadcastRaw({ type: "session.hp.updated", character: hpState[operation.characterId] });
+    for (const id of mutatedTargets?.changedCharacters ?? []) {
+      if (id !== operation.characterId) this.broadcastRaw({ type: "session.hp.updated", character: hpState[id] });
+    }
+    if (mutatedTargets?.initiativeChanged && mutatedTargets.initiative) this.broadcastRaw({
+      type: "session.initiative.updated", state: mutatedTargets.initiative,
+    });
+    for (const id of mutatedTargets?.changedCompanions ?? []) {
+      const creature = runtimeConfig?.config.creatureCompendium.find(candidate => candidate.id === id);
+      if (!creature?.ownerUserId) continue;
+      for (const socket of this.ctx.getWebSockets()) {
+        const viewer = this.readConnection(socket);
+        if (viewer && (viewer.role === "MASTER" || viewer.userId === creature.ownerUserId)) {
+          this.sendAbility(socket, { type: "session.companions.updated", companion: mutatedTargets!.companions[id] });
+        }
+      }
+    }
     if (conditionsChanged) {
       this.broadcastRaw({ type: "session.conditions.updated", character: nextConditions });
     }
