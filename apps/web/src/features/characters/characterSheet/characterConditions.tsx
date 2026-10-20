@@ -18,6 +18,7 @@ import {
   removeCharacterCondition,
   updateCharacterCondition,
 } from "../../../models/characters/characterConditionStorage"
+import { useOptionalSessionRuntime } from "../../session-runtime/useSessionRuntime"
 import { BonusesFields } from "../inventory/equipmentBonusFields"
 import {
   STANDARD_CONDITION_PRESETS,
@@ -62,6 +63,7 @@ export function CharacterConditions({
   updateCharacter,
 }: Props) {
   const conditions = getCharacterConditions(character)
+  const runtime = useOptionalSessionRuntime()
   const [creating, setCreating] = useState(false)
   const [editing, setEditing] = useState<CharacterCondition | null>(null)
 
@@ -73,6 +75,38 @@ export function CharacterConditions({
     )
     setCreating(false)
     setEditing(null)
+  }
+
+  function removeCondition(condition: CharacterCondition) {
+    if (runtime?.status === "connected") {
+      const abilityId = condition.sourceAbilityId
+      const root = condition.id.split(":grant:")[0]
+      const otherGrants = conditions.filter(entry =>
+        entry.id !== condition.id
+        && entry.id.startsWith(`${root}:grant:`)
+        && entry.sourceAbilityId === abilityId)
+      const endAbility = Boolean(abilityId && condition.sourceAbilityLocation
+        && (condition.id === root || otherGrants.length === 0))
+      const source = condition.sourceAbilityLocation === "character" && abilityId
+        ? { type: "character" as const, abilityId }
+        : condition.sourceAbilityLocation === "race" && abilityId
+          ? { type: "race" as const, abilityId }
+          : condition.sourceAbilityLocation === "equipment" && abilityId && condition.sourceItemId
+            ? { type: "equipment" as const, abilityId, itemId: condition.sourceItemId }
+            : undefined
+      if (endAbility && source) {
+        runtime.dispatchAbilityOperation({
+          type: "character.ability.deactivate", characterId: character.get("id"), source,
+        })
+        return
+      }
+      runtime.dispatchConditionOperation({
+        type: "character.condition.remove", characterId: character.get("id"),
+        conditionId: condition.id,
+      })
+      return
+    }
+    updateCharacter(character.get("id"), current => removeCharacterCondition(current, condition.id))
   }
 
   return (
@@ -156,11 +190,7 @@ export function CharacterConditions({
                           size="sm"
                           variant="ghost"
                           title="Remover condição"
-                          onClick={() =>
-                            updateCharacter(character.get("id"), (current) =>
-                              removeCharacterCondition(current, condition.id),
-                            )
-                          }
+                          onClick={() => removeCondition(condition)}
                         >
                           <Trash2 className="h-4 w-4" />
                         </Button>
