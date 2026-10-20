@@ -1,13 +1,18 @@
 import { MagicProvider } from "../../web/src/contexts/magicContext"
+import { listMissingCreatureSpells } from "./owlbearSpellCatalog"
+import type { Spell } from "../../web/src/models/magic/spells/Spell"
 import { CreatureQuickSheet, quickSheetFromInitiativeEntry, quickSheetFromCompendiumCreature } from "../../web/src/features/creatures/CreatureQuickSheet"
 import { useState } from "react"
 import type { CompendiumCreature } from "../../web/src/models/creatures/CompendiumCreature"
 import type { InitiativeEntry } from "../../web/src/models/initiative/Initiative"
 
-export function CreatureTokenInspector({ entry, creature, onOperation, connected }: {
+export function CreatureTokenInspector({ entry, creature, spells, serverSpellIndexes, creatureRollError, onOperation, connected }: {
   entry: InitiativeEntry
   creature?: CompendiumCreature
   connected: boolean
+  spells: Spell[]
+  serverSpellIndexes: ReadonlySet<string>
+  creatureRollError?: string
   onOperation: (operation: Record<string, unknown>) => boolean
 }) {
   const [amount,setAmount]=useState("1")
@@ -19,8 +24,25 @@ export function CreatureTokenInspector({ entry, creature, onOperation, connected
     else setError("")
   }
   const numericAmount=Number(amount)
+  const unavailableSpells = listMissingCreatureSpells(creature, spells)
+  const unsyncedSpells = creature?.spellcasting?.spells.filter(spell => !serverSpellIndexes.has(spell.spellIndex)) ?? []
   return <article className="grid gap-3 rounded-xl border border-border bg-bg p-4 text-textH">
-    <MagicProvider spells={[]}><CreatureQuickSheet data={creature ? quickSheetFromCompendiumCreature(creature,entry,{enableRolls:true}) : quickSheetFromInitiativeEntry(entry)} compact /></MagicProvider>
+    <MagicProvider spells={spells}>
+      <CreatureQuickSheet data={creature
+        ? quickSheetFromCompendiumCreature(creature,entry,{enableRolls:true,serverSpellIndexes})
+        : quickSheetFromInitiativeEntry(entry)} compact />
+    </MagicProvider>
+    {unavailableSpells.length ? <p role="alert" className="rounded-lg border border-border p-2 text-xs text-textMuted">
+      {unavailableSpells.length} magia(s) da criatura não têm definição disponível no Owlbear.
+      Verifique a biblioteca da campanha.
+    </p> : null}
+    {unsyncedSpells.length ? <p role="alert" className="rounded-lg border border-border p-2 text-xs text-textMuted">
+      {unsyncedSpells.length} magia(s) não estão sincronizadas com a configuração do servidor.
+      Atualize a configuração da campanha no D&D Manager para habilitar a conjuração.
+    </p> : null}
+    {creatureRollError ? <p role="alert" className="rounded-lg border border-danger p-2 text-xs text-danger">
+      Falha na rolagem: {creatureRollError}
+    </p> : null}
     <div className="flex items-center justify-between gap-3">
       <div className="min-w-0">
         <h2 className="truncate text-base font-semibold">{entry.customName??entry.realName??entry.name}</h2>
