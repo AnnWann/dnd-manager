@@ -93,6 +93,9 @@ export type SessionActionRollRequest = {
   source: SessionActionRollSource
   /** Initiative combatant selected as the target of this attack. */
   targetEntryId?: string
+  /** Optional recipients for automatic damage/healing. */
+  targetRefs?: string[]
+  pointLabel?: string
 }
 
 export type SessionResolvedD20Roll = {
