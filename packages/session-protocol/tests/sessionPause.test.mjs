@@ -2,6 +2,7 @@ import assert from "node:assert/strict"
 import test from "node:test"
 import {
   isSessionPlayerOperationBlocked,
+  shouldBlockPlayerSessionUI,
   parseSessionPauseMessage,
   parseSessionPauseServerMessage,
 } from "../../../apps/web/src/shared/session-runtime/sessionPause.ts"
@@ -35,4 +36,17 @@ test("pause state broadcast validates its shape for reconnections", () => {
   const state = { paused: true, updatedAt: "2026-10-20T10:00:00.000Z", updatedBy: "master-1" }
   assert.deepEqual(parseSessionPauseServerMessage(JSON.stringify({ type: "session.pause.state", state })), { type: "session.pause.state", state })
   assert.equal(parseSessionPauseServerMessage(JSON.stringify({ type: "session.pause.state", state: { paused: "yes" } })), null)
+})
+
+test("full-screen pause lock applies to players but never to the master", () => {
+  const paused = { paused: true, updatedAt: "2026-10-20T15:00:00Z", updatedBy: "master-1" }
+  const running = { ...paused, paused: false }
+  assert.equal(shouldBlockPlayerSessionUI("PLAYER", paused), true)
+  assert.equal(shouldBlockPlayerSessionUI("MASTER", paused), false)
+  assert.equal(shouldBlockPlayerSessionUI("PLAYER", running), false)
+  assert.equal(shouldBlockPlayerSessionUI("PLAYER", null), false)
+  assert.equal(shouldBlockPlayerSessionUI(null, paused), false)
+  // Server reconnects with a persisted paused snapshot: the visual lock remains.
+  const restored = parseSessionPauseServerMessage(JSON.stringify({ type: "session.pause.state", state: paused }))
+  assert.equal(shouldBlockPlayerSessionUI("PLAYER", restored?.state), true)
 })
