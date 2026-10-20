@@ -2,6 +2,11 @@ import { BookOpen, FileImage, PawPrint } from "lucide-react"
 import { useMemo, useState } from "react"
 
 import { Modal } from "../components/ui/Modal"
+import { Button } from "../components/ui/Button"
+import { Input } from "../components/ui/Input"
+import { Select } from "../components/ui/Select"
+import { allCreatureFeatures, defaultCompanionState, type CompanionState } from "../shared/session-runtime/companionRuntime"
+import { DAMAGE_TYPE_OPTIONS, type DamageType } from "../models/combat/Damage"
 import {
   CreatureQuickSheet,
   quickSheetFromCompendiumCreature,
@@ -15,6 +20,9 @@ export function OwnedCreaturesView() {
   const runtime = useOptionalSessionRuntime()
   const { session } = useInitiativeSession()
   const [viewingCreatureId, setViewingCreatureId] = useState<string>()
+  const [hpAmount, setHpAmount] = useState(1)
+  const [hpMode, setHpMode] = useState<"damage" | "heal" | "temporary" | "set">("damage")
+  const [damageType, setDamageType] = useState<DamageType>("bludgeoning")
 
   const creatures = runtime?.runtimeConfigSnapshot?.config.creatureCompendium ?? []
   const initiativeByCreatureId = useMemo(() => {
@@ -30,6 +38,7 @@ export function OwnedCreaturesView() {
   const viewingCreature = creatures.find(
     (creature) => creature.id === viewingCreatureId,
   )
+  const viewingCompanion = viewingCreature ? runtime?.companionsById[viewingCreature.id] ?? defaultCompanionState(viewingCreature) : undefined
   const viewingEntry = viewingCreature
     ? initiativeByCreatureId.get(viewingCreature.id)
     : undefined
@@ -51,16 +60,27 @@ export function OwnedCreaturesView() {
       </section>
 
       {creatures.length ? (
-        <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-          {creatures.map((creature) => (
-            <OwnedCreatureCard
-              key={creature.id}
-              creature={creature}
-              initiativeEntry={initiativeByCreatureId.get(creature.id)}
-              onOpen={() => setViewingCreatureId(creature.id)}
-            />
-          ))}
-        </section>
+        <div className="grid gap-6">
+          {(["familiar", "companion", "mount"] as const).map(kind => {
+            const group = creatures.filter(creature => (creature.controlKind ?? "familiar") === kind)
+            return group.length ? (
+              <section key={kind} className="grid gap-3">
+                <h2 className="text-sm font-semibold text-textH">{kind === "companion" ? "Acompanhantes" : kind === "mount" ? "Montarias" : "Familiares"}</h2>
+                <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+                  {group.map(creature => (
+                    <OwnedCreatureCard
+                      key={creature.id}
+                      creature={creature}
+                      companion={runtime?.companionsById[creature.id]}
+                      initiativeEntry={initiativeByCreatureId.get(creature.id)}
+                      onOpen={() => setViewingCreatureId(creature.id)}
+                    />
+                  ))}
+                </div>
+              </section>
+            ) : null
+          })}
+        </div>
       ) : (
         <section className="rounded-xl border border-dashed border-border bg-bg p-10 text-center">
           <BookOpen className="mx-auto h-10 w-10 text-textMuted" />
@@ -80,18 +100,73 @@ export function OwnedCreaturesView() {
           className="max-w-5xl"
         >
           <CreatureQuickSheet
-            data={quickSheetFromCompendiumCreature(
-              viewingCreature,
-              viewingEntry,
-              { enableRolls: true },
-            )}
+            data={{
+              ...quickSheetFromCompendiumCreature(
+                viewingCreature, viewingEntry, { enableRolls: true },
+              ),
+              currentHp: viewingCompanion?.currentHp,
+              maxHp: viewingCompanion?.maxHp,
+              temporaryHp: viewingCompanion?.temporaryHp,
+            }}
             preferImage={Boolean(viewingCreature.sheetImageUrl)}
           />
-          {!viewingEntry && viewingCreature.spellcasting ? (
-            <div className="mt-3 rounded-lg border border-border bg-bg-subtle px-3 py-2 text-xs text-textMuted">
-              Recursos de magia são controlados pela iniciativa. Adicione a criatura
-              ao combate para consumir espaços e usos por dia.
-            </div>
+          {viewingCompanion && runtime ? (
+            <section className="mt-4 grid gap-3 rounded-xl border border-border bg-bg-subtle p-3">
+              <div className="font-semibold text-sm text-textH">Estado persistente do acompanhante</div>
+              <p className="text-xs text-textMuted">PV e usos são mantidos pela sessão, mesmo fora da iniciativa.</p>
+              <div className="flex flex-wrap items-end gap-2">
+                <label className="grid gap-1 text-xs text-textMuted">Aplicar
+                  <Select value={hpMode} onChange={event => setHpMode(event.target.value as typeof hpMode)}>
+                    <option value="damage">Dano</option>
+                    <option value="heal">Cura</option>
+                    <option value="temporary">PV temporários</option>
+                    <option value="set">Definir PV</option>
+                  </Select>
+                </label>
+                <label className="grid gap-1 text-xs text-textMuted">Quantidade
+                  <Input type="number" min={0} value={hpAmount} onChange={event => setHpAmount(Math.max(0, Number(event.target.value) || 0))} />
+                </label>
+                {hpMode === "damage" ? (
+                  <label className="grid gap-1 text-xs text-textMuted">Tipo
+                    <Select value={damageType} onChange={event => setDamageType(event.target.value as DamageType)}>
+                      {DAMAGE_TYPE_OPTIONS.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}
+                    </Select>
+                  </label>
+                ) : null}
+                <Button variant="secondary" onClick={() => runtime.dispatchCompanionOperation({
+                  type: "hp", creatureId: viewingCreature.id, mode: hpMode, amount: hpAmount,
+                  damageType: hpMode === "damage" ? damageType : undefined,
+                })}>Aplicar</Button>
+              </div>
+              {allCreatureFeatures(viewingCreature).filter(feature => feature.usage).length ? (
+                <div className="grid gap-2">
+                  <span className="text-xs font-semibold text-textH">Usos das habilidades</span>
+                  {allCreatureFeatures(viewingCreature).filter(feature => feature.usage).map(feature => (
+                    <div key={feature.id} className="flex items-center justify-between gap-2 rounded-lg border border-border p-2 text-xs">
+                      <span>{feature.name}: {viewingCompanion.featureUses[feature.id] ?? 0}/{feature.usage!.max} usados</span>
+                      <div className="flex gap-2">
+                        <Button size="sm" variant="secondary" onClick={() => runtime.dispatchCompanionOperation({ type: "feature", creatureId: viewingCreature.id, featureId: feature.id, delta: -1 })}>Usar</Button>
+                        <Button size="sm" variant="secondary" onClick={() => runtime.dispatchCompanionOperation({ type: "feature", creatureId: viewingCreature.id, featureId: feature.id, delta: 1 })}>Restaurar</Button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : null}
+              {viewingCreature.spellcasting ? (
+                <div className="grid gap-2">
+                  <span className="text-xs font-semibold text-textH">Espaços de magia disponíveis</span>
+                  {Object.entries(viewingCreature.spellcasting.slots).map(([level, max]) => (
+                    <div key={level} className="flex items-center justify-between gap-2 rounded-lg border border-border p-2 text-xs">
+                      <span>Nível {level}: {viewingCompanion.spellSlots[level] ?? max ?? 0}/{max ?? 0}</span>
+                      <div className="flex gap-2">
+                        <Button size="sm" variant="secondary" onClick={() => runtime.dispatchCompanionOperation({ type: "spellSlot", creatureId: viewingCreature.id, level: Number(level), delta: -1 })}>Gastar</Button>
+                        <Button size="sm" variant="secondary" onClick={() => runtime.dispatchCompanionOperation({ type: "spellSlot", creatureId: viewingCreature.id, level: Number(level), delta: 1 })}>Restaurar</Button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : null}
+            </section>
           ) : null}
         </Modal>
       ) : null}
@@ -102,9 +177,11 @@ export function OwnedCreaturesView() {
 function OwnedCreatureCard({
   creature,
   initiativeEntry,
+  companion,
   onOpen,
 }: {
   creature: CompendiumCreature
+  companion?: CompanionState
   initiativeEntry?: InitiativeEntry
   onOpen: () => void
 }) {
@@ -149,7 +226,7 @@ function OwnedCreatureCard({
 
         <div className="grid grid-cols-3 gap-2 text-center">
           <MiniStat label="CA" value={String(initiativeEntry?.armorClass ?? creature.armorClass ?? "—")} />
-          <MiniStat label="PV" value={formatHp(initiativeEntry, creature)} />
+          <MiniStat label="PV" value={companion ? `${companion.currentHp}/${companion.maxHp}` : formatHp(initiativeEntry, creature)} />
           <MiniStat label="Init." value={signed(creature.initiativeBonus)} />
         </div>
       </div>
