@@ -248,6 +248,7 @@ function normalizeSystem(
   const abilityAcquisitionExceptions = normalizeAbilityAcquisitionExceptions(
     value.abilityAcquisitionExceptions,
   )
+  const formulaOverrides = normalizeFormulaOverrides(value.formulaOverrides)
   const installationSource =
     value.installationSource === 'master' || value.installationSource === 'automatic'
       ? value.installationSource
@@ -265,6 +266,7 @@ function normalizeSystem(
       ...(abilityAcquisitionExceptions
         ? { abilityAcquisitionExceptions }
         : {}),
+      ...(formulaOverrides ? { formulaOverrides } : {}),
       ...(installationSource ? { installationSource } : {}),
     },
     issues,
@@ -379,6 +381,18 @@ function normalizeAbilityAcquisitionExceptions(
   return Object.keys(result).length ? result : undefined
 }
 
+function normalizeFormulaOverrides(value: unknown): Record<string, string> | undefined {
+  if (!isRecord(value)) return undefined
+  const validKey = /^(?:field:[^:]+|resourceMaximum:[^:]+|abilityField:[^:]+:[^:]+)$/
+  const normalized: Record<string, string> = {}
+  for (const [key, raw] of Object.entries(value).slice(0, 200)) {
+    if (!validKey.test(key) || key.length > 500) continue
+    const formula = readOptionalFormula(raw)
+    if (formula) normalized[key] = formula.slice(0, 2048)
+  }
+  return Object.keys(normalized).length ? normalized : undefined
+}
+
 function mergeDuplicateSystemStates(
   first: CharacterCustomSystemState,
   second: CharacterCustomSystemState,
@@ -399,6 +413,7 @@ function mergeDuplicateSystemStates(
     resources: { ...first.resources, ...second.resources },
     abilities: [...abilities.values()],
     collections: { ...(first.collections ?? {}), ...(second.collections ?? {}) },
+    formulaOverrides: { ...(first.formulaOverrides ?? {}), ...(second.formulaOverrides ?? {}) },
     ...(Object.keys(abilityAcquisitionExceptions).length
       ? { abilityAcquisitionExceptions }
       : {}),
