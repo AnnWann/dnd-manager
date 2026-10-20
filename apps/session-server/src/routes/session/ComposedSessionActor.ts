@@ -1,4 +1,5 @@
 import { SessionActor as BaseSessionActor } from "./SessionActor";
+import { readRuntimeConfig } from "./runtimeConfigAccess";
 import type { CompanionState } from "../../../../web/src/shared/session-runtime/companionRuntime";
 import type { SessionInitiativeState } from "../initiative/initiativeProtocol";
 import { SessionActor as AbilitySessionActor } from "../characters/abilities/AbilitySessionActor";
@@ -570,7 +571,7 @@ export class SessionActor extends BaseSessionActor {
       if (reverse.snapshot.targetReverse.initiative) {
         broadcast(this.ctx.getWebSockets(), { type: "session.initiative.updated", state: reverse.snapshot.targetReverse.initiative });
       }
-      const config = await this.ctx.storage.get<{ config?: { creatureCompendium?: Array<{ id: string; ownerUserId?: string }> } }>("session-runtime-config");
+      const config = await readRuntimeConfig(this.ctx.storage);
       const persistedCompanions = (await this.ctx.storage.get<Record<string, CompanionState>>(COMPANIONS_STATE_KEY)) ?? {};
       for (const id of reverse.snapshot.targetReverse.changedCompanions ?? []) {
         const owner = config?.config?.creatureCompendium?.find(creature => creature.id === id)?.ownerUserId;
