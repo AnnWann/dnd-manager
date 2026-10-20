@@ -3,7 +3,7 @@ import { Plus, Trash2 } from "lucide-react"
 import { Button } from "../../../components/ui/Button"
 import { Input } from "../../../components/ui/Input"
 import { Select } from "../../../components/ui/Select"
-import { DAMAGE_TYPE_OPTIONS, type DamageType } from "../../../models/combat/Damage"
+import { HP_EFFECT_TYPE_OPTIONS, type HpEffectType } from "../../../models/combat/Damage"
 import type { AbilityRollDefinition } from "../../../models/abilities/AbilityRoll"
 import { validateAbilityRoll } from "../../../models/abilities/AbilityRoll"
 import type { Attribute } from "../../../models/sheet/Attribute"
@@ -28,7 +28,7 @@ const MODES: Array<[AbilityRollDefinition["kind"], string]> = [
   ["abilityCheck", "Teste de habilidade ou perícia"],
   ["savingThrow", "Teste de resistência do usuário"],
   ["targetSave", "Teste de resistência do alvo (CD)"],
-  ["damage", "Somente dano"],
+  ["damage", "Somente dano/cura"],
 ]
 
 function defaultRoll(kind: AbilityRollDefinition["kind"] = "attack"): AbilityRollDefinition {
@@ -149,7 +149,7 @@ export function AbilityRollEditor({ roll, onChange }: {
         <section className="grid gap-3 rounded-xl border border-border bg-bg-subtle p-3">
           <div className="flex items-center justify-between gap-2">
             <div>
-              <h4 className="text-xs font-semibold text-textH">Componentes de dano</h4>
+              <h4 className="text-xs font-semibold text-textH">Componentes de dano e cura</h4>
               <p className="mt-1 text-xs text-textMuted">Cada componente possui dados e tipo independentes. Críticos dobram apenas os dados habilitados.</p>
             </div>
             <Button size="sm" variant="secondary" onClick={() => patch({ damage: [...(roll.damage ?? []), newDamage()] })}>
@@ -171,9 +171,9 @@ export function AbilityRollEditor({ roll, onChange }: {
                   <Input value={damage.dice} placeholder="1d6" onChange={event => updateDamage({ dice: event.target.value })} />
                 </Field>
                 <Field label="Tipo de dano">
-                  <Select value={damage.damageType ?? ""} onChange={event => updateDamage({ damageType: (event.target.value || undefined) as DamageType | undefined })}>
+                  <Select value={damage.damageType ?? ""} onChange={event => updateDamage({ damageType: (event.target.value || undefined) as HpEffectType | undefined })}>
                     <option value="">Não especificado</option>
-                    {DAMAGE_TYPE_OPTIONS.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}
+                    {HP_EFFECT_TYPE_OPTIONS.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}
                   </Select>
                 </Field>
               </div>
