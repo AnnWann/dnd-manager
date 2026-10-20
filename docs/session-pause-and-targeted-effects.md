@@ -24,7 +24,7 @@ Em **Editar habilidade → Rolagem → Aplicação automática em alvos**, selec
 | Alvos selecionados | Pede a seleção de até **N** afetados antes da ativação |
 | Ponto / área | Pede uma referência descritiva para o centro e a seleção de até **N** afetados |
 
-Os alvos disponíveis incluem **personagens**, **participantes da iniciativa** e **familiares, acompanhantes ou montarias persistentes**. O limite de afetados é validado pelo servidor, que também rejeita referências inválidas ou duplicadas. Caso dois identificadores se refiram à mesma criatura ou personagem, escolha apenas um deles para não aplicar o mesmo dano duas vezes.
+Os alvos disponíveis incluem **personagens**, **participantes da iniciativa** e **familiares, acompanhantes ou montarias persistentes**. O limite de afetados é validado pelo servidor, que também rejeita referências inválidas ou duplicadas. Se o mesmo personagem ou criatura for escolhido por mais de uma referência (ficha e iniciativa, ou múltiplos turnos de uma criatura), o servidor rejeita a seleção para evitar efeitos duplicados.
 
 **Não existe geometria no VTT atual:** o raio informado é descritivo. O servidor não calcula distâncias, linha de visão ou quais tokens estão dentro da área. Quem utiliza a habilidade escolhe explicitamente os afetados.
 
