@@ -54,6 +54,8 @@ export type ActiveAttackRiderOrigin =
 export type ActiveAttackRiderEntry = {
   rider: AttackRider
   origin: ActiveAttackRiderOrigin
+  /** Same rider has already been applied by another old effect. Never roll twice. */
+  suppressedDuplicate?: boolean
 }
 
 /**
@@ -63,6 +65,7 @@ export type ActiveAttackRiderEntry = {
 export function getActiveAttackRiderEntries(
   character: CharacterTemplate,
   context: AttackRiderContext,
+  options?: { includeDuplicates?: boolean },
 ): ActiveAttackRiderEntry[] {
   const activeConditions = getCharacterConditions(character)
     .filter(condition => condition.duration.remaining !== 0 || !["rounds", "turns", "minutes", "hours", "days"].includes(condition.duration.type))
@@ -118,13 +121,14 @@ export function getActiveAttackRiderEntries(
     .filter(({ rider }) => !rider.weaponSelection || Boolean(rider.weaponId))
     .filter(({ rider }) => !rider.weaponId || (context.scope === "weapon" && rider.weaponId === context.weaponId))
     .filter(({ rider }) => !rider.targetEntryId || rider.targetEntryId === context.targetEntryId)
-    .filter(({ rider }) => {
-      // A persistent rite has one stable rider ID. Do not roll it twice when
-      // legacy state contains the same granted ability under two projections.
+    .flatMap(entry => {
+      // The weapon panel can reveal and delete suppressed historical effects,
+      // while dice rollers receive only the first effective instance.
+      const { rider } = entry
       const key = `${rider.id}:${rider.weaponId ?? "*"}:${rider.targetEntryId ?? "*"}`
-      if (seen.has(key)) return false
+      if (seen.has(key)) return options?.includeDuplicates ? [{ ...entry, suppressedDuplicate: true }] : []
       seen.add(key)
-      return true
+      return [entry]
     })
 }
 
