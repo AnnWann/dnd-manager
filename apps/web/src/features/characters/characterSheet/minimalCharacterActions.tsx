@@ -12,6 +12,7 @@ import { Input } from "../../../components/ui/Input"
 import { Select } from "../../../components/ui/Select"
 import { abilityRequiresWeaponAttributeSelection, getAbilityAttackRiderDamageChoices, optionRequiresWeaponSelection } from "../../../models/combat/AttackRider"
 import { getCharacterConditions } from "../../../models/characters/characterConditionStorage"
+import { shouldRequestSeparateAbilityActionRoll } from "../../../models/abilities/shouldRollAbilityAction"
 import { Modal } from "../../../components/ui/Modal"
 import { useMagicContext } from "../../../contexts/magicContext"
 import { cn } from "../../../lib/cn"
@@ -391,16 +392,9 @@ export function MinimalCharacterActions({
         return
       }
 
-      // Bonus/HP dice already belong to the authoritative ability-use log.
-      // Only request a separate action roll for abilities that actually
-      // configure an attack/check and have no activation bonus dice.
-      const chosenOption = entry.ability?.activationOptions?.find(option => option.id === optionId)
-      const hasActivationDice = Boolean(entry.ability && (
-        listBonusRollRequirements(entry.ability.bonuses).length > 0
-        || listBonusRollRequirements(chosenOption?.bonuses).length > 0
-        || abilityHasSelfDamage(entry.ability)
-      ))
-      if (action === "use" && entry.ability?.roll && !hasActivationDice) announce(entry)
+      if (action === "use" && entry.ability && shouldRequestSeparateAbilityActionRoll(entry.ability, optionId)) {
+        announce(entry)
+      }
       setAbilityResourceEntry(null)
       setSelected(null)
       return
