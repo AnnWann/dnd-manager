@@ -1,7 +1,7 @@
 import { applyHitPointDamage } from "../../../../../../packages/game-core/src/hitPoints"
 import type { AbilityTargeting } from "../../../../../web/src/models/abilities/Ability"
 import type { OnUseHpEffect } from "../../../../../web/src/models/bonuses/Bonus"
-import { resolveDamage, type DamageAffinity } from "../../../../../web/src/models/combat/Damage"
+import { normalizeDamageAffinities, resolveDamage, type DamageAffinity } from "../../../../../web/src/models/combat/Damage"
 import type { CompendiumCreature } from "../../../../../web/src/models/creatures/CompendiumCreature"
 import { normalizeInitiativeSession, updateInitiativeEntry, synchronizeSharedCombatantState, type InitiativeSession } from "../../../../../web/src/models/initiative/Initiative"
 import { defaultCompanionState, type CompanionState } from "../../../../../web/src/shared/session-runtime/companionRuntime"
@@ -110,7 +110,8 @@ export function applyHpToReferences(
     } else if (kind === "companion") {
       const creature = targets.creatures.find(entry => entry.id === id)!
       const prev = targets.companions[id] ?? defaultCompanionState(creature)
-      const nextHp = applyDamageOrHealing(prev.currentHp, prev.temporaryHp, prev.maxHp, effect, amount, creature.damageAffinities)
+      const affinities = normalizeDamageAffinities([...(creature.damageAffinities ?? []), ...(prev.conditions ?? []).flatMap(condition => condition.bonuses?.damageAffinities ?? [])]);
+      const nextHp = applyDamageOrHealing(prev.currentHp, prev.temporaryHp, prev.maxHp, effect, amount, affinities)
       const next = { ...prev, currentHp: nextHp.current, temporaryHp: nextHp.temporary, revision: prev.revision + 1 }
       targets.companions[id] = next
       targets.changedCompanions.add(id)
@@ -134,7 +135,8 @@ export function applyHpToReferences(
       const creatureId = entry.sourceId?.startsWith("compendium:") ? entry.sourceId.slice("compendium:".length) : undefined
       const creature = targets.creatures.find(item => item.id === creatureId)
       const prevCurrent = entry.currentHp ?? entry.maxHp ?? 0
-      const next = applyDamageOrHealing(prevCurrent, entry.temporaryHp ?? 0, entry.maxHp ?? prevCurrent, effect, amount, creature?.damageAffinities)
+      const affinities = normalizeDamageAffinities([...(creature?.damageAffinities ?? []), ...(entry.conditions ?? []).flatMap(condition => condition.bonuses?.damageAffinities ?? [])]);
+      const next = applyDamageOrHealing(prevCurrent, entry.temporaryHp ?? 0, entry.maxHp ?? prevCurrent, effect, amount, affinities)
       let updated = updateInitiativeEntry(session, id, old => ({ ...old, currentHp: next.current, temporaryHp: next.temporary }))
       updated = synchronizeSharedCombatantState(updated, id)
       targets.initiative = { ...targets.initiative, session: updated as unknown as Record<string, unknown>, revision: targets.initiative.revision + 1 }
