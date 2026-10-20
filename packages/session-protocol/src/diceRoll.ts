@@ -113,6 +113,8 @@ export type SessionResolvedDamageRoll = {
   critical: boolean
   label?: string
   damageType?: string
+  magical?: boolean
+  ignoreResistance?: boolean
   /** Original effective dice expression, useful for manual/physical rolls. */
   expression?: string
 }
