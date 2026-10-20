@@ -50,6 +50,7 @@ export function reconcileConfiguredCustomSystemStates(
       systemVersion: definition.version,
       enabled: configured.enabled,
       abilityAcquisitionExceptions: configured.abilityAcquisitionExceptions,
+      formulaOverrides: configured.formulaOverrides,
       installationSource: configured.installationSource,
     }]
   })
@@ -107,6 +108,11 @@ function migrateRuntimeState(
         )
       : [],
     abilityAcquisitionExceptions: state.abilityAcquisitionExceptions,
+    formulaOverrides: Object.fromEntries(Object.entries(state.formulaOverrides ?? {}).filter(([key]) =>
+      definition.fields.some((field) => field.type === 'formula' && key === `field:${field.id}`)
+      || definition.resources.some((resource) => Boolean(resource.maximumFormula) && key === `resourceMaximum:${resource.id}`)
+      || definition.abilityTypes.some((type) => type.fields.some((field) => field.type === 'formula' && key === `abilityField:${type.id}:${field.id}`)),
+    )),
     installationSource: state.installationSource,
   }
 }
