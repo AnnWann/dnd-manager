@@ -61,6 +61,7 @@ export function synchronizeCompanionInitiative(
       || entry.temporaryHp !== previousEntry.temporaryHp
       || JSON.stringify(entry.creatureFeatureResources) !== JSON.stringify(previousEntry.creatureFeatureResources)
       || JSON.stringify(entry.creatureSpellResources?.slots) !== JSON.stringify(previousEntry.creatureSpellResources?.slots)
+      || JSON.stringify(entry.creatureSpellResources?.perDay) !== JSON.stringify(previousEntry.creatureSpellResources?.perDay)
     if (!updated) return entry
     const featureUses = Object.fromEntries(Object.entries(entry.creatureFeatureResources ?? {})
       .map(([id, resource]) => [id, resource.used]))
