@@ -13,6 +13,7 @@ import { getChannelDivinityPool } from "../../../../../web/src/models/characters
 import { getKiPool } from "../../../../../web/src/models/characters/characterKi";
 import {
   getCharacterConditions,
+  removeCharacterCondition,
   withCharacterConditions,
 } from "../../../../../web/src/models/characters/characterConditionStorage";
 import { spendGrantedSpellAbilityUse } from "../../../../../web/src/models/characters/characterGrantedSpells";
@@ -635,6 +636,18 @@ function applyAbilityOperation(
   character: CharacterTemplate,
   operation: SessionAbilityOperation,
 ): CharacterTemplate | null {
+  if (operation.type === "character.ability.effect.remove") {
+    const condition = getCharacterConditions(character).find(entry => entry.id === operation.conditionId);
+    if (!condition) return null;
+    // This operation only removes visible attack/weapon effects. Ordinary
+    // conditions remain managed by the conditions domain.
+    const riders = [
+      ...(condition.bonuses?.attackRiders ?? []),
+      ...(condition.grantedAbilities ?? []).flatMap(ability => ability.bonuses?.attackRiders ?? []),
+    ];
+    if (!riders.length) return null;
+    return removeCharacterCondition(character, condition.id);
+  }
   if (operation.type === "character.ability.save") {
     return character.saveAbility(operation.ability as unknown as Ability);
   }
