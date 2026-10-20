@@ -88,3 +88,20 @@ test("removing the root condition cascades to all weapons", () => {
   assert.equal(active(cleaned, "w1").length, 0)
   assert.equal(active(cleaned, "w2").length, 0)
 })
+
+test("legacy duplicate conditions on one weapon are collapsed, without losing other weapons", () => {
+  const base = character().useAbility("rite", "storm", undefined, "w1").useAbility("rite", "storm", undefined, "w2")
+  const original = getCharacterConditions(base)
+  const w1 = original.find(condition => condition.id.endsWith(":w1"))
+  assert.ok(w1)
+  const duplicate = { ...w1, id: w1.id + ":legacy-duplicate",
+    createdAt: new Date(Date.parse(w1.createdAt) + 1000).toISOString() }
+  // Simulate an older persisted sheet that already contained two copies.
+  const legacy = base.withSheet("conditions", [...original, duplicate])
+  const canonical = getCharacterConditions(legacy)
+  assert.equal(canonical.filter(condition => condition.sourceAbilityId === "rite" && condition.sourceAbilityOptionId?.includes("abilities")).length, 2)
+  assert.equal(active(legacy, "w1").length, 1)
+  assert.equal(active(legacy, "w2").length, 1)
+  const ended = legacy.deactivateAbility("rite")
+  assert.equal(getCharacterConditions(ended).filter(condition => condition.sourceAbilityId === "rite").length, 0)
+})
