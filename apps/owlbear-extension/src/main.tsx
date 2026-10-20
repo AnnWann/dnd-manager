@@ -515,9 +515,26 @@ function App() {
    const {session,role,connected,rollingEnabled}=initiativeBridge.current
    initiativeChannel.current?.postMessage({type:"state",value:{session,role,connected,rollingEnabled}})
  },[initiativeState,role,status,runtimeConfig,abilities,hp,conditions])
- const boundCreature=role==="MASTER" && selectedToken?.creatureLink?.sessionId===sessionId
-  ? initiativeEntries.find(entry=>entry.id===selectedToken.creatureLink?.entryId) : undefined
- const catalogCreature=role==="MASTER"&&selectedToken?.catalogSessionId===sessionId&&selectedToken?.catalogId?availableCreatures.find(c=>c.id===selectedToken.catalogId):undefined
+ const catalogCreature=role==="MASTER"&&selectedToken?.catalogSessionId===sessionId&&selectedToken?.catalogId
+  ? availableCreatures.find(c=>c.id===selectedToken.catalogId):undefined
+ const linkedCreature=role==="MASTER"&&selectedToken?.creatureLink?.sessionId===sessionId
+  ? initiativeEntries.find(entry=>entry.id===selectedToken.creatureLink?.entryId):undefined
+ // A unique boss has multiple turns but a single combatantId. Resolve the
+ // catalog token to that combatant automatically instead of showing spell previews.
+ const catalogEntries=catalogCreature
+  ? initiativeEntries.filter(entry=>entry.sourceId==="compendium:"+catalogCreature.id):[]
+  : []
+ const matchingCombatants=new Set(catalogEntries.map(entry=>entry.combatantId||entry.id))
+ const inferredCreature=!linkedCreature&&catalogCreature&&matchingCombatants.size===1
+  ? catalogEntries[0]:undefined
+ const boundCreature=linkedCreature??inferredCreature
+ useEffect(()=>{
+   if(!inferredCreature||!selectedToken?.id||!sessionId||status!=="Conectado à sessão"||role!=="MASTER")return
+   // Persist an unambiguous identity so active-turn token markers and resource
+   // consumption use the exact combatant, including bosses with several turns.
+   void setTokenCreatureLink(selectedToken.id,{sessionId,entryId:inferredCreature.id})
+     .catch(error=>setTokenLinkError("Não foi possível associar criatura da iniciativa: "+String(error)))
+ },[inferredCreature?.id,selectedToken?.id,sessionId,status,role])
  const addCatalogToInitiative=()=>{
    if(!catalogCreature||status!=="Conectado à sessão"||role!=="MASTER"||!selectedToken||pendingCreatureAdd)return
    if (!initiativeSession) { setError("Crie a iniciativa antes de adicionar criaturas."); return }
@@ -634,7 +651,9 @@ function App() {
  </div>}
  <div role="tabpanel" hidden={activeArea!=="dice"}><SessionDicePanel connected={status==="Conectado à sessão"} selectedCharacterId={selectedId || undefined} history={rollHistory} onRoll={request=>socket.current?.sendRaw(JSON.stringify({type:"session.dice.roll",request}))??false}/></div>
  {!isDicePopover && <div role="tabpanel" hidden={activeArea!=="sheet"}>
- {catalogCreature && !boundCreature ? <MagicProvider spells={sessionSpells}><div className="grid gap-3"><CreatureQuickSheet data={quickSheetFromCompendiumCreature(catalogCreature,undefined,{enableRolls:true,serverSpellIndexes})} compact/>{creatureRollError ? <p role="alert" className="text-xs text-danger">{creatureRollError}</p> : null}<button type="button" disabled={Boolean(pendingCreatureAdd)||!initiativeSession} onClick={addCatalogToInitiative} className="rounded-lg border border-accentBorder bg-accentBg px-3 py-2 text-sm font-semibold disabled:opacity-40">{pendingCreatureAdd?"Aguardando confirmação...":"Adicionar à iniciativa"}</button></div></MagicProvider> : boundCreature ? <CreatureTokenInspector key={boundCreature.id} entry={boundCreature} creature={findOwlbearInitiativeCreature(availableCreatures,boundCreature)} spells={sessionSpells} serverSpellIndexes={serverSpellIndexes} creatureRollError={creatureRollError} connected={status==="Conectado à sessão"} onOperation={operation=>socket.current?.sendRaw(JSON.stringify({type:"session.initiative.operation",operation}))??false}/> : selectedId && chosen && <article className="character-panel">
+ {catalogCreature && !boundCreature ? <MagicProvider spells={sessionSpells}><div className="grid gap-3"><CreatureQuickSheet data={quickSheetFromCompendiumCreature(catalogCreature,undefined,{enableRolls:false,serverSpellIndexes})} compact/>{catalogEntries.length>0 ? <p className="text-xs text-textMuted">Há várias criaturas deste tipo na iniciativa. Associe o token à instância correta para conjurar e consumir recursos.</p> : <p className="text-xs text-textMuted">Adicione esta criatura à iniciativa para habilitar conjuração e controle de recursos.</p>}{catalogEntries.length>0
+  ? <button type="button" onClick={()=>{if(selectedToken)void OBR.popover.open({id:ASSOC_POPOVER_ID,url:"/?panel=associate&tokenId="+encodeURIComponent(selectedToken.id),width:420,height:520,anchorReference:"POSITION",anchorPosition:{left:window.screen.availWidth/2,top:140},anchorOrigin:{horizontal:"CENTER",vertical:"TOP"},transformOrigin:{horizontal:"CENTER",vertical:"TOP"}}).catch(error=>setTokenLinkError(String(error)))}} className="rounded-lg border border-accentBorder bg-accentBg px-3 py-2 text-sm font-semibold">Associar token à criatura</button>
+  : <button type="button" disabled={Boolean(pendingCreatureAdd)||!initiativeSession} onClick={addCatalogToInitiative} className="rounded-lg border border-accentBorder bg-accentBg px-3 py-2 text-sm font-semibold disabled:opacity-40">{pendingCreatureAdd?"Aguardando confirmação...":"Adicionar à iniciativa"}</button>}</div></MagicProvider> : boundCreature ? <CreatureTokenInspector key={boundCreature.id} entry={boundCreature} creature={findOwlbearInitiativeCreature(availableCreatures,boundCreature)} spells={sessionSpells} serverSpellIndexes={serverSpellIndexes} creatureRollError={creatureRollError} connected={status==="Conectado à sessão"} onOperation={operation=>socket.current?.sendRaw(JSON.stringify({type:"session.initiative.operation",operation}))??false}/> : selectedId && chosen && <article className="character-panel">
  <CharacterSheetHeader name={String(raw.name ?? selectedId)} id={selectedId} />
  <NativeCharacterSheetHost
    characterId={selectedId} raw={raw} hp={health as unknown as Record<string, unknown>} conditions={conditions[selectedId]} runtimeConfig={runtimeConfig} inventoryState={inventoryState} spells={spellLibrary} role={role === "MASTER" ? "MASTER" : "PLAYER"}
