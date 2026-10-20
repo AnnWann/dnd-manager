@@ -45,15 +45,17 @@ export function requestD20Roll(input: {
   label: string
   source: SessionDiceD20Source
   mode?: SessionDiceRollMode
-}): void {
+}): string {
+  const requestId = createRequestId()
   publishRequest({
-    requestId: createRequestId(),
+    requestId,
     characterId: input.characterId,
     label: input.label,
     mode: input.mode ?? "normal",
     visibility: getRollVisibility(),
     source: input.source,
   })
+  return requestId
 }
 
 export function requestDamageRoll(input: {

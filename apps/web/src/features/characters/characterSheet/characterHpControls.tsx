@@ -3,12 +3,14 @@ import { HpMaximumButton } from "../../../../../../packages/game-ui/src/HpMaximu
 import { HpActionButtons } from "../../../../../../packages/game-ui/src/HpActionButtons"
 import { HpValue } from "../../../../../../packages/game-ui/src/HpValue"
 import { Select as SharedSelect } from "../../../components/ui/Select"
-import { useState } from "react"
+import { useEffect, useState } from "react"
 
 import { Button } from "../../../components/ui/Button"
 import { Input } from "../../../components/ui/Input"
 import { Modal } from "../../../components/ui/Modal"
 import { useOptionalSessionRuntime } from "../../session-runtime/useSessionRuntime"
+import { DICE_ROLL_RESULT_EVENT, requestD20Roll, rollModeFromEvent, rollModifierHint } from "../../../lib/diceRoller"
+import type { SessionDiceRollResult } from "../../../shared/session-runtime/diceRollProtocol"
 import { useCharacterWorkspace } from "../workspace/CharacterWorkspaceContext"
 import type { CharacterTemplate } from "../../../models/characters/CharacterTemplate"
 import {
@@ -77,6 +79,9 @@ export function CharacterHpControls({ character, updateCharacter, compact = fals
   const [healingTarget, setHealingTarget] = useState<HealingTarget>("current")
   const [damageParts, setDamageParts] = useState<CharacterDamagePart[]>(() => [createDamagePart()])
   const [pendingCheck, setPendingCheck] = useState<PendingCheck | null>(null)
+  const [concentrationRollRequestId, setConcentrationRollRequestId] = useState<string | null>(null)
+  const [concentrationRollResult, setConcentrationRollResult] = useState<SessionDiceRollResult | null>(null)
+  const [concentrationRollError, setConcentrationRollError] = useState<string | null>(null)
   const concentration = getConcentrationCondition(character)
   const characterId = character.get("id")
   const hp = character.get("sheet").HP
@@ -104,6 +109,47 @@ export function CharacterHpControls({ character, updateCharacter, compact = fals
   const hpDamage = Math.max(0, appliedDamage - absorbedTemporaryHp)
   const resultingTemporaryHp = Math.max(0, hp.temporary - absorbedTemporaryHp)
   const resultingCurrentHp = Math.max(0, hp.current - hpDamage)
+
+  useEffect(() => {
+    if (!pendingCheck || !concentrationRollRequestId) return
+
+    const receiveRoll = (event: Event) => {
+      const result = (event as CustomEvent<SessionDiceRollResult>).detail
+      if (result?.requestId !== concentrationRollRequestId
+        || result.characterId !== characterId || result.kind !== "save") return
+      setConcentrationRollResult(result)
+      setConcentrationRollRequestId(null)
+      setConcentrationRollError(null)
+    }
+    window.addEventListener(DICE_ROLL_RESULT_EVENT, receiveRoll)
+    const timeout = window.setTimeout(() => {
+      setConcentrationRollRequestId(null)
+      setConcentrationRollError("A rolagem não foi confirmada pelo servidor. Tente novamente ou registre o resultado manualmente.")
+    }, 20000)
+    return () => {
+      window.removeEventListener(DICE_ROLL_RESULT_EVENT, receiveRoll)
+      window.clearTimeout(timeout)
+    }
+  }, [pendingCheck, concentrationRollRequestId, characterId])
+
+  function closeConcentrationCheck() {
+    setPendingCheck(null)
+    setConcentrationRollRequestId(null)
+    setConcentrationRollResult(null)
+    setConcentrationRollError(null)
+  }
+
+  function rollConcentrationCheck(event: React.MouseEvent<HTMLButtonElement>) {
+    if (!pendingCheck || concentrationRollRequestId || runtime?.status !== "connected") return
+    setConcentrationRollResult(null)
+    setConcentrationRollError(null)
+    setConcentrationRollRequestId(requestD20Roll({
+      characterId,
+      label: `Concentração · CD ${pendingCheck.dc}`,
+      source: { type: "save", attribute: "con" },
+      mode: rollModeFromEvent(event.nativeEvent),
+    }))
+  }
 
   function parseAmount(value: string): number {
     return Math.max(0, Math.trunc(Number(value) || 0))
@@ -178,6 +224,7 @@ export function CharacterHpControls({ character, updateCharacter, compact = fals
     closeModal()
 
     if (concentrationBeforeDamage && amount > 0) {
+      closeConcentrationCheck()
       setPendingCheck({
         damage: amount,
         dc: concentrationDc,
@@ -255,7 +302,7 @@ export function CharacterHpControls({ character, updateCharacter, compact = fals
     } else {
       console.warn("[session-runtime] Concentration change ignored while the authoritative session server is disconnected.")
     }
-    setPendingCheck(null)
+    closeConcentrationCheck()
   }
 
   const amount = parseAmount(amountText)
@@ -563,15 +610,45 @@ export function CharacterHpControls({ character, updateCharacter, compact = fals
       {pendingCheck ? (
         <Modal
           title="Teste de concentração"
-          onClose={() => setPendingCheck(null)}
+          onClose={closeConcentrationCheck}
           className="max-w-md"
         >
           <div className="grid gap-4">
             <div className="rounded-lg border border-accentBorder bg-accentBg p-3 text-sm text-text">
               O personagem sofreu {pendingCheck.damage} de dano e precisa realizar um teste de Constituição CD {pendingCheck.dc}{pendingCheck.spellName ? ` para manter ${pendingCheck.spellName}` : ""}.
             </div>
+            <Button
+              variant="secondary"
+              className="w-full"
+              disabled={Boolean(concentrationRollRequestId) || runtime?.status !== "connected"}
+              title={rollModifierHint()}
+              onClick={rollConcentrationCheck}
+            >
+              {concentrationRollRequestId ? "Aguardando resultado..." : "Rolar teste de Constituição"}
+            </Button>
+            {runtime?.status !== "connected" ? (
+              <p className="text-xs text-textMuted">
+                Conecte-se à sessão para rolar no servidor. Você ainda pode registrar o resultado manualmente.
+              </p>
+            ) : null}
+            {concentrationRollResult ? (
+              <div
+                role="status"
+                className={`rounded-lg border p-3 text-sm ${
+                  concentrationRollResult.total >= pendingCheck.dc
+                    ? "border-emerald-500/50 bg-emerald-500/10 text-textH"
+                    : "border-danger/50 bg-danger/10 text-textH"
+                }`}
+              >
+                <strong>{concentrationRollResult.total >= pendingCheck.dc ? "Sucesso" : "Falha"}</strong>
+                {" · "}d20 {concentrationRollResult.natural ?? "—"}
+                {" + "}{concentrationRollResult.modifier} = {concentrationRollResult.total}
+                {" (CD "}{pendingCheck.dc}{")"}
+              </div>
+            ) : null}
+            {concentrationRollError ? <p role="alert" className="text-xs text-danger">{concentrationRollError}</p> : null}
             <div className="grid grid-cols-2 gap-2">
-              <Button variant="secondary" onClick={() => setPendingCheck(null)}>
+              <Button variant="secondary" onClick={closeConcentrationCheck}>
                 Passou
               </Button>
               <Button variant="primary" onClick={failConcentration}>
