@@ -46,3 +46,190 @@
   padding: 12px;
 }
 .owlbear-shell > footer { padding: 16px; font-size: 11px; color: var(--text-muted); }
+
+
+/* The initiative is an unobtrusive overlay, not part of the character sheet.
+   Scope the transparent document to the dedicated popover iframe only. */
+html:has(.owlbear-initiative-overlay),
+html:has(.owlbear-initiative-overlay) body,
+html:has(.owlbear-initiative-overlay) #root {
+  background: transparent !important;
+  background-color: transparent !important;
+  min-height: 0;
+  color-scheme: dark;
+}
+.owlbear-shell.owlbear-initiative-overlay {
+  min-height: 0;
+  padding: 6px;
+  background: transparent;
+}
+.owlbear-initiative-bar {
+  position: relative;
+  min-width: 0;
+  padding: 7px 9px 8px;
+  color: #f6f3fc;
+  border: 1px solid rgba(226, 214, 255, .16);
+  border-radius: 12px;
+  background: rgba(22, 19, 32, .67);
+  box-shadow: 0 5px 24px rgba(0, 0, 0, .2);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+}
+.owlbear-initiative-toolbar {
+  display: flex;
+  align-items: center;
+  min-height: 23px;
+  gap: 6px;
+  margin-bottom: 5px;
+}
+.owlbear-initiative-heading { font-size: 11px; font-weight: 650; }
+.owlbear-initiative-round { font-size: 10px; color: #c4bbd7; }
+.owlbear-initiative-actions { display: flex; gap: 4px; align-items: center; margin-left: auto; }
+.owlbear-initiative-actions button,
+.owlbear-initiative-menu summary,
+.owlbear-initiative-editor button {
+  display: inline-flex;
+  justify-content: center;
+  align-items: center;
+  height: 22px;
+  min-width: 22px;
+  padding: 0 7px;
+  color: #e9e2f5;
+  font-size: 11px;
+  background: rgba(255,255,255,.075);
+  border: 1px solid rgba(255,255,255,.11);
+  border-radius: 7px;
+  cursor: pointer;
+}
+.owlbear-initiative-actions button:hover:not(:disabled),
+.owlbear-initiative-menu summary:hover,
+.owlbear-initiative-editor button:hover:not(:disabled) {
+  background: rgba(255,255,255,.18);
+}
+.owlbear-initiative-actions button:disabled,
+.owlbear-initiative-editor button:disabled { opacity: .32; cursor: not-allowed; }
+.owlbear-initiative-actions .owlbear-initiative-primary {
+  color: #fff;
+  background: rgba(137,94,218,.52);
+  border-color: rgba(178,142,255,.42);
+}
+.owlbear-initiative-actions .owlbear-initiative-close {
+  padding: 0 5px;
+  background: transparent;
+  font-size: 17px;
+  border-color: transparent;
+}
+.owlbear-initiative-menu { position: relative; }
+.owlbear-initiative-menu summary { list-style: none; }
+.owlbear-initiative-menu summary::-webkit-details-marker { display: none; }
+.owlbear-initiative-menu-content {
+  position: absolute;
+  z-index: 5;
+  right: 0;
+  top: 26px;
+  display: grid;
+  gap: 3px;
+  min-width: 148px;
+  padding: 5px;
+  background: rgba(27,23,37,.95);
+  border: 1px solid rgba(255,255,255,.18);
+  border-radius: 8px;
+  box-shadow: 0 6px 18px rgba(0,0,0,.25);
+}
+.owlbear-initiative-menu-content button { width: 100%; justify-content: flex-start; white-space: nowrap; }
+.owlbear-initiative-cards {
+  display: flex;
+  gap: 5px;
+  overflow-x: auto;
+  overflow-y: hidden;
+  padding: 2px 1px 4px;
+  scrollbar-width: thin;
+}
+.owlbear-initiative-card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  width: 62px;
+  height: 76px;
+  padding: 4px 3px 3px;
+  border: 1px solid rgba(255,255,255,.1);
+  border-radius: 9px;
+  background: rgba(255,255,255,.06);
+  color: #f8f4ff;
+  text-align: center;
+  cursor: pointer;
+}
+.owlbear-initiative-card:hover:not(:disabled) { background: rgba(255,255,255,.13); }
+.owlbear-initiative-card:disabled { cursor: default; }
+.owlbear-initiative-card.is-active {
+  border-color: rgba(248,203,87,.95);
+  background: rgba(245,202,87,.19);
+  box-shadow: 0 0 0 1px rgba(248,203,87,.2);
+}
+.owlbear-initiative-card.is-selected { outline: 1px solid #bba0fb; outline-offset: 1px; }
+.owlbear-initiative-card.is-defeated { opacity: .48; }
+.owlbear-initiative-avatar {
+  width: 23px;
+  height: 23px;
+  min-height: 23px;
+  border-radius: 50%;
+  object-fit: cover;
+}
+.owlbear-initiative-avatar.avatar-fallback {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  font-size: 12px;
+  font-weight: 650;
+  background: rgba(255,255,255,.12);
+}
+.owlbear-initiative-name {
+  width: 100%;
+  max-width: 100%;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  font-size: 9px;
+  line-height: 11px;
+}
+.owlbear-initiative-value {
+  font-size: 15px;
+  line-height: 17px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+.owlbear-initiative-turn {
+  position: absolute;
+  right: 3px;
+  top: 3px;
+  font-size: 8px;
+  color: #ddd3f1;
+}
+.owlbear-initiative-flag { position: absolute; left: 3px; top: 1px; font-size: 11px; }
+.owlbear-initiative-empty { margin: 3px 0; font-size: 11px; color: #c9c0d9; }
+.owlbear-initiative-editor {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 4px;
+  padding: 6px 0 0;
+  margin-top: 4px;
+  border-top: 1px solid rgba(255,255,255,.12);
+  font-size: 10px;
+}
+.owlbear-initiative-editor-name { max-width: 120px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.owlbear-initiative-editor label { display: flex; align-items: center; gap: 3px; }
+.owlbear-initiative-editor input {
+  width: 38px;
+  height: 22px;
+  padding: 1px 3px;
+  font-size: 11px;
+  color: white;
+  border: 1px solid rgba(255,255,255,.2);
+  border-radius: 5px;
+  background: rgba(0,0,0,.25);
+}
+.owlbear-initiative-error { margin-top: 5px; color: #ffc3c3; font-size: 10px; }
