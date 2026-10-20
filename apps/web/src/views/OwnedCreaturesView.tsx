@@ -140,6 +140,7 @@ export function OwnedCreaturesView() {
               ...quickSheetFromCompendiumCreature(
                 viewingCreature, effectiveViewingEntry, { enableRolls: true },
               ),
+              rollContext: { creatureId: viewingCreature.id, initiativeEntryId: viewingEntry?.id, canSpendOutsideInitiative: true },
               currentHp: viewingCompanion?.currentHp,
               maxHp: viewingCompanion?.maxHp,
               temporaryHp: viewingCompanion?.temporaryHp,
