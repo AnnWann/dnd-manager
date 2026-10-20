@@ -429,6 +429,7 @@ function AddBonusDialog({
   const [useDice, setUseDice] = useState(false)
   const [dice, setDice] = useState("1d6")
   const [ignoreResistance, setIgnoreResistance] = useState(false)
+  const [magical, setMagical] = useState(false)
   const [bypassTemporaryHp, setBypassTemporaryHp] = useState(false)
   const [affinityKind, setAffinityKind] = useState<DamageAffinityKind>("resistance")
   const [affinityQualifier, setAffinityQualifier] = useState<DamageAffinityQualifier>("any")
@@ -460,6 +461,7 @@ function AddBonusDialog({
     setUseDice(false)
     setDice("1d6")
     setIgnoreResistance(false)
+    setMagical(false)
     setBypassTemporaryHp(false)
     setAffinityKind("resistance")
     setAffinityQualifier("any")
@@ -518,6 +520,10 @@ function AddBonusDialog({
                     <Select value={damageType} onChange={event => setDamageType(event.target.value as DamageType)}>
                       {DAMAGE_TYPE_OPTIONS.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}
                     </Select>
+                  </label>
+                  <label className="flex items-center gap-2 text-xs text-textH">
+                    <input type="checkbox" checked={magical} onChange={event => setMagical(event.target.checked)} />
+                    Dano mágico (para resistências a dano não mágico)
                   </label>
                   <label className="flex items-center gap-2 text-xs text-textH">
                     <input type="checkbox" checked={ignoreResistance} onChange={event => setIgnoreResistance(event.target.checked)} />
@@ -752,6 +758,7 @@ function AddBonusDialog({
                       roll: useDice ? { mode: "automatic", dice: dice.trim() } : undefined,
                     },
                     damageType: target === "onUseDamage" ? damageType : undefined,
+                    magical: target === "onUseDamage" ? magical : undefined,
                     ignoreResistance: target === "onUseDamage" ? ignoreResistance : undefined,
                     bypassTemporaryHp: target === "onUseDamage" ? bypassTemporaryHp : undefined,
                   },
