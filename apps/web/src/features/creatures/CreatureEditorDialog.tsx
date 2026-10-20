@@ -331,6 +331,14 @@ export function CreatureEditorDialog({
                 placeholder="Ex.: Goblin, Bugbear, Cultista…"
                 onChange={(basicName) => patch({ basicName })}
               />
+              <Field label="Tipo de acompanhante">
+                <SharedSelect className={selectClassName} value={draft.controlKind ?? "familiar"}
+                  onChange={event => patch({ controlKind: event.target.value as CompendiumCreature["controlKind"] })}>
+                  <option value="familiar">Familiar</option>
+                  <option value="companion">Acompanhante</option>
+                  <option value="mount">Montaria</option>
+                </SharedSelect>
+              </Field>
               <p className="text-xs leading-5 text-textMuted sm:col-span-2">
                 O nome básico é o que os jogadores veem na iniciativa até o mestre revelar o nome verdadeiro ou definir um nome de combate.
               </p>
