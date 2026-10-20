@@ -3,6 +3,14 @@ export type SessionPauseState = { paused: boolean; updatedAt: string; updatedBy:
 export type SessionPauseClientMessage = { type: "session.pause.set"; paused: boolean }
 export type SessionPauseServerMessage = { type: "session.pause.state"; state: SessionPauseState }
 
+/** UI lockdown applies only to players, never to the session master. */
+export function shouldBlockPlayerSessionUI(
+  role: string | null | undefined,
+  state: SessionPauseState | null | undefined,
+): boolean {
+  return role === "PLAYER" && state?.paused === true
+}
+
 /** Only heartbeat/ping remain accepted from players while paused. */
 export function isSessionPlayerOperationBlocked(paused: boolean, role: string, type: string | undefined): boolean {
   return paused && role !== "MASTER" && type !== "session.heartbeat" && type !== "session.ping"
