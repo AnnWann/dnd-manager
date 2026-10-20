@@ -206,8 +206,7 @@ export class SessionActor extends BaseSessionActor {
         const [kind, id] = [ref.slice(0, ref.indexOf(":")), ref.slice(ref.indexOf(":") + 1)];
         if (kind === "character") return !hpState[id] || (connection.role !== "MASTER" &&
           !connection.visibleCharacterIds?.includes(id) && hpState[id].ownerUserId !== connection.userId);
-        if (kind === "companion") return !(runtimeConfig?.config.creatureCompendium.some(creature =>
-          creature.id === id && creature.ownerUserId && (connection.role === "MASTER" || creature.ownerUserId === connection.userId)));
+        if (kind === "companion") return !(runtimeConfig?.config.creatureCompendium.some(creature => creature.id === id && creature.ownerUserId));
         if (kind === "initiative") {
           const entry = initiative?.entries.find(entry => entry.id === id);
           return !entry || (connection.role !== "MASTER" && entry.hidden);
