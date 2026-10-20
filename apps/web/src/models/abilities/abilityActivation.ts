@@ -179,6 +179,7 @@ export function useAbilityEffect(
     },
   }
   const duration = getAbilityEffectDuration(resolvedAbility)
+  const directedToOtherTargets = resolvedAbility.targeting?.mode === "targets" || resolvedAbility.targeting?.mode === "point"
   const persists = resolvedAbility.effectPersistence === "permanent"
   const previousEffectiveMaxHp = character.getEffectiveMaxHp()
   const previousCurrentHp = character.get("sheet").HP.current
@@ -191,7 +192,7 @@ export function useAbilityEffect(
   }
 
   const maxHpBonuses = resolveBonuses(character, resolvedAbility.bonuses?.maxHp ?? [])
-  if (maxHpBonuses.length > 0) {
+  if (!directedToOtherTargets && maxHpBonuses.length > 0) {
     if (duration === "instant" && !persists) {
       const currentBaseMax = next.get("sheet").HP.max
       const nextBaseMax = Math.max(1, applyBonuses(currentBaseMax, maxHpBonuses))
@@ -206,18 +207,18 @@ export function useAbilityEffect(
   }
 
   const temporaryHpBonuses = resolveBonuses(character, resolvedAbility.bonuses?.temporaryHp ?? [])
-  if (temporaryHpBonuses.length > 0) {
+  if (!directedToOtherTargets && temporaryHpBonuses.length > 0) {
     const currentTemporaryHp = next.get("sheet").HP.temporary
     next = next.setTemporaryHp(Math.max(0, applyBonuses(currentTemporaryHp, temporaryHpBonuses)))
   }
 
-  if (duration === "lasting") next = upsertAbilityCondition(next, resolvedAbility, source)
+  if (duration === "lasting" && !directedToOtherTargets) next = upsertAbilityCondition(next, resolvedAbility, source)
 
-  if (resolvedAbility.conditionOnUse) {
+  if (resolvedAbility.conditionOnUse && !directedToOtherTargets) {
     next = upsertGrantedCondition(next, resolvedAbility, source, resolvedAbility.conditionOnUse, "base")
   }
 
-  if (selectedOption) {
+  if (selectedOption && !directedToOtherTargets) {
     const optionAbilities = getActivationOptionAbilities(selectedOption)
     if (optionAbilities.length > 0) {
       next = upsertGrantedCondition(
