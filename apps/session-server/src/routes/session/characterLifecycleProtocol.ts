@@ -16,6 +16,11 @@ export type SessionCharacterLifecycleOperation =
       characterId: string;
     }
   | {
+      type: "character.session.rename";
+      characterId: string;
+      name: string;
+    }
+  | {
       type: "character.session.owner.set";
       characterId: string;
       owner: SessionCharacterOwner;
@@ -66,6 +71,12 @@ export function parseCharacterLifecycleClientMessage(
       return {
         type: "session.character.operation",
         operation: { type: operation.type, characterId: operation.characterId },
+      };
+    case "character.session.rename":
+      if (typeof operation.name !== "string" || !operation.name.trim() || operation.name.length > 120) return null;
+      return {
+        type: "session.character.operation",
+        operation: { type: operation.type, characterId: operation.characterId, name: operation.name.trim() },
       };
     case "character.session.owner.set":
       if (!isOwner(operation.owner)) return null;
