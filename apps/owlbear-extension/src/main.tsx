@@ -4,13 +4,16 @@ import type { CompendiumCreature } from "../../web/src/models/creatures/Compendi
 import { CreatureTokenInspector } from "./CreatureTokenInspector"
 import { OwlbearInitiativeStrip } from "./OwlbearInitiativeStrip"
 import { createCreatureInitiativeEntries } from "../../web/src/models/initiative/creatureInitiativeEntries"
+import { getCreatureEffectiveInitiative } from "../../web/src/models/creatures/CreatureCombatRuntime"
+import type { InitiativeEntry } from "../../web/src/models/initiative/Initiative"
+import { setRuntimeCustomSystemOverride } from "../../web/src/lib/customSystems/creationCustomSystemsBridge"
 import { findOwlbearInitiativeCreature, resolveOwlbearSpellDefinitions } from "./owlbearSpellCatalog"
 import { filterAssociationChoices } from "./associationSearch"
 import { createInitiativeSession, normalizeInitiativeSession, type InitiativeSession } from "../../web/src/models/initiative/Initiative"
 import { readSelectedToken, readTokenCharacterLink, setTokenCharacterLink, readTokenCreatureLink, setTokenCreatureLink, readTokenCompendiumCreature, TOKEN_COMPENDIUM_CREATURE_METADATA } from "./tokenCharacterLink"
 import { SessionDicePanel, type DiceHistoryEntry } from "./SessionDicePanel"
 import { SessionTransport } from "@dnd-manager/session-client/transport"
-import { NativeCharacterSheetHost } from "./NativeCharacterSheetHost"
+import { NativeCharacterSheetHost, hydrateOwlbearCharacter } from "./NativeCharacterSheetHost"
 import { publishServerDiceRoll, publishServerActionRoll, CREATURE_ROLL_REQUEST_EVENT } from "../../web/src/lib/diceRoller"
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { createRoot } from "react-dom/client"
@@ -72,6 +75,11 @@ function App() {
      const index = asRecord(entry).index
      return typeof index === "string" && index.trim() ? [index.trim()] : []
    }))
+ }, [runtimeConfig])
+ useEffect(() => {
+   const config = asRecord(runtimeConfig?.config)
+   setRuntimeCustomSystemOverride(Array.isArray(config.customSystems) ? config.customSystems as never : null)
+   return () => setRuntimeCustomSystemOverride(null)
  }, [runtimeConfig])
  const availableCreatures = useMemo(() => {
    const official = Array.isArray(asRecord(runtimeConfig?.config).creatureCompendium)
@@ -399,6 +407,27 @@ function App() {
    ? normalizeInitiativeSession(asRecord(initiativeState.session) as Partial<InitiativeSession>)
    : null
  const initiativeEntries = initiativeSession?.entries ?? []
+ const resolveEntryInitiativeBonus = (entry: InitiativeEntry): number => {
+   if (entry.sourceId?.startsWith("compendium:")) {
+     const creature = findOwlbearInitiativeCreature(availableCreatures, entry)
+     if (creature) return getCreatureEffectiveInitiative(creature, entry.conditions, entry)
+   }
+   if (entry.sourceId) {
+     const characterRaw = abilities[entry.sourceId]?.character ?? characters[entry.sourceId]?.character
+     if (characterRaw) {
+       try {
+         return hydrateOwlbearCharacter(
+           asRecord(characterRaw),
+           asRecord(hp[entry.sourceId]),
+           asRecord(conditions[entry.sourceId]),
+         ).getEffectiveInitiative()
+       } catch (error) {
+         console.warn("[owlbear] initiative bonus fallback", error)
+       }
+     }
+   }
+   return entry.initiativeBonus
+ }
  const boundCreature=role==="MASTER" && selectedToken?.creatureLink?.sessionId===sessionId
   ? initiativeEntries.find(entry=>entry.id===selectedToken.creatureLink?.entryId) : undefined
  const catalogCreature=role==="MASTER"&&selectedToken?.catalogSessionId===sessionId&&selectedToken?.catalogId?availableCreatures.find(c=>c.id===selectedToken.catalogId):undefined
@@ -481,6 +510,8 @@ function App() {
    connected={status==="Conectado à sessão"}
    onInitialize={()=>socket.current?.sendRaw(JSON.stringify({type:"session.initiative.initialize",session:createInitiativeSession("Combate da sessão")}))??false}
    onOperation={operation=>socket.current?.sendRaw(JSON.stringify({type:"session.initiative.operation",operation}))??false}
+   resolveBonus={resolveEntryInitiativeBonus}
+   rollingEnabled={asRecord(runtimeConfig?.config).diceRollingEnabled!==false}
  />
  <section>{!isDicePopover && <><h1>D&D Manager · Sessão</h1><p>Ficha e rolagens sincronizadas com o Session Server.</p></>}
  <div className="toolbar"><button onClick={connectAccount}>{connected ? "Reconectar conta" : "Conectar ao D&D Manager"}</button><button disabled={!connected} onClick={() => void refreshSessions()}>Atualizar sessões</button></div>
