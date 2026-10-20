@@ -94,16 +94,27 @@ export function removeCharacterCondition(
 ): CharacterTemplate {
   const conditions = getCharacterConditions(character)
   const removed = conditions.find((condition) => condition.id === conditionId)
-  let next = withCharacterConditions(
-    character,
-    conditions.filter((condition) => condition.id !== conditionId),
-  )
+  if (!removed) return character
+  const isLinked = Boolean(removed.sourceAbilityId && removed.sourceAbilityLocation)
+  const familyPrefix = removed.id.split(":grant:")[0]
+  const matchesFamily = (condition: CharacterCondition) =>
+    condition.sourceAbilityId === removed.sourceAbilityId
+    && condition.sourceAbilityLocation === removed.sourceAbilityLocation
+    && condition.sourceItemId === removed.sourceItemId
+    && (condition.id === familyPrefix || condition.id.startsWith(`${familyPrefix}:grant:`))
+  const isFamilyRoot = isLinked && removed.id === familyPrefix
+  let remaining = conditions.filter(condition => condition.id !== conditionId
+    && !(isFamilyRoot && matchesFamily(condition)))
+  if (!isLinked) return withCharacterConditions(character, remaining)
 
-  if (removed?.sourceAbilityId && removed.sourceAbilityLocation) {
-    next = deactivateLinkedAbility(next, removed)
+  // Removing just one weapon's infusion must not end all other infusions.
+  const hasOtherGrants = remaining.some(condition =>
+    matchesFamily(condition) && condition.id.startsWith(`${familyPrefix}:grant:`))
+  if (isFamilyRoot || !hasOtherGrants) {
+    remaining = remaining.filter(condition => !matchesFamily(condition))
+    return deactivateLinkedAbility(withCharacterConditions(character, remaining), removed)
   }
-
-  return next
+  return withCharacterConditions(character, remaining)
 }
 
 export function adjustConditionRemaining(
@@ -139,12 +150,8 @@ export function adjustConditionRemaining(
     ]
   })
 
-  let next = withCharacterConditions(character, nextConditions)
-  if (removed?.sourceAbilityId && removed.sourceAbilityLocation) {
-    next = deactivateLinkedAbility(next, removed)
-  }
-
-  return next
+  if (removed) return removeCharacterCondition(character, removed.id)
+  return withCharacterConditions(character, nextConditions)
 }
 
 function normalizeCondition(value: unknown): CharacterCondition {
