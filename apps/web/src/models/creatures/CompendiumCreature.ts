@@ -117,6 +117,8 @@ export type CompendiumCreature = {
    * companion. Undefined keeps the full stat block MASTER-only.
    */
   ownerUserId?: string
+  /** Presentation group for owned persistent creatures. */
+  controlKind?: "familiar" | "companion" | "mount"
 
   /** Optional monster-style spellcasting block backed by compendium spells. */
   spellcasting?: CreatureSpellcasting
@@ -207,6 +209,7 @@ export function createCompendiumCreature(
     senses: patch.senses ?? "",
     languages: patch.languages ?? "",
     ownerUserId: optionalStringValue(patch.ownerUserId),
+    controlKind: patch.controlKind ?? "familiar",
     spellcasting: normalizeCreatureSpellcasting(patch.spellcasting),
     traits: normalizeCreatureFeatures(patch.traits, "Traço"),
     actions: normalizeCreatureFeatures(patch.actions, "Ação"),
@@ -282,6 +285,7 @@ export function normalizeCompendiumCreature(raw: unknown): CompendiumCreature {
     senses: stringValue(value.senses),
     languages: stringValue(value.languages),
     ownerUserId: optionalStringValue(value.ownerUserId),
+    controlKind: value.controlKind === "companion" || value.controlKind === "mount" ? value.controlKind : "familiar",
     spellcasting: normalizeCreatureSpellcasting(value.spellcasting),
     traits: normalizeCreatureFeatures(
       value.traits ?? featureGroups?.traits,
