@@ -812,6 +812,8 @@ export class SessionActor extends DurableObject<Env> {
             const effect = {
               kind: damage.damageType === "healing" ? "heal" as const : "damage" as const,
               damageType: damage.damageType === "healing" ? undefined : damage.damageType as import("../../../../web/src/models/combat/Damage").DamageType | undefined,
+              magical: damage.magical,
+              ignoreResistance: damage.ignoreResistance,
             };
             if (!applyHpToReferences(targetsState, [ref], effect, Math.floor(Math.max(0, damage.total) * saveFactor))) {
               this.sendError(webSocket, "ACTION_TARGETS_INVALID", "Não foi possível aplicar a rolagem ao alvo.");
@@ -2196,6 +2198,7 @@ function resolveServerActionRoll(
       critical,
     );
     damage.damageType = damageType;
+    damage.magical = weaponEffect.magical;
     const damages = rollAttackRiderDamages(riders, critical, damageType);
 
     return {
@@ -2387,14 +2390,18 @@ function resolveConfiguredAbilityRoll(
     const dice = parseAttackRiderDice(component.dice);
     if (!dice) return { ok: false, code: "ABILITY_DAMAGE_INVALID", message: "Invalid ability damage dice." };
     const critical = result.critical && component.critical !== false;
-    const rawBonus = dice.flat + (component.addAttributeModifier ? attributeModifier : 0);
+    const componentAttribute = component.attribute ?? attribute;
+    const rawBonus = dice.flat + (component.addAttributeModifier
+      ? character.getEffectiveAttributeModifier(componentAttribute) : 0);
     const damageBonus = roll.kind === "attack" && roll.attackType === "spell"
-      ? character.getEffectiveSpellDamageBonus(attribute, rawBonus)
+      ? character.getEffectiveSpellDamageBonus(componentAttribute, rawBonus)
       : rawBonus;
     damages.push({
       ...rollActionDamage([{ quantity: dice.quantity, sides: dice.sides }], damageBonus, critical),
-      label: component.label?.trim() || "Dano",
+      label: component.label?.trim() || (component.damageType === "healing" ? "Cura" : "Dano"),
       damageType: component.damageType,
+      magical: component.magical ?? (roll.attackType === "spell"),
+      ignoreResistance: component.ignoreResistance === true,
     });
   }
 
