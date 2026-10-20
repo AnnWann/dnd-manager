@@ -1,4 +1,5 @@
 import type { CompendiumCreature } from "../creatures/CompendiumCreature"
+import { getCreatureEffectiveInitiative } from "../creatures/CreatureCombatRuntime"
 import {
   rollInitiative,
   type InitiativeCreatureSpellResources,
@@ -34,10 +35,11 @@ export function createCreatureInitiativeEntries(
   const quantity = Number.isFinite(requested)
     ? Math.max(1, Math.min(50, Math.trunc(requested)))
     : 1
+  const bonus = getCreatureEffectiveInitiative(creature)
   const roller = options.roll ?? rollInitiative
   const enabled = options.digitalDiceEnabled !== false
   const sharedRoll = !creature.unique && options.sharedInitiative && enabled
-    ? roller(creature.initiativeBonus)
+    ? roller(bonus)
     : undefined
   const combatantId = creature.unique ? crypto.randomUUID() : undefined
 
@@ -56,7 +58,7 @@ export function createCreatureInitiativeEntries(
       revealRealName: false,
       imageUrl: creature.sheetImageUrl,
       initiative: sharedRoll ?? (enabled ? roller(creature.initiativeBonus) : 0),
-      initiativeBonus: creature.initiativeBonus,
+      initiativeBonus: bonus,
       dexterity: creature.abilityScores.dex,
       side: creature.defaultSide,
       armorClass: creature.armorClass,
