@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react"
-import { Clock3, Plus, RotateCcw, Tag, Trash2 } from "lucide-react"
+import { Clock3, Plus, RotateCcw, Swords, Tag, Trash2 } from "lucide-react"
 
 import { Button } from "../../../components/ui/Button"
 import { Card, CardContent, CardHeader } from "../../../components/ui/Card"
@@ -11,6 +11,7 @@ import type {
   ConditionDurationType,
 } from "../../../models/characters/CharacterCondition"
 import type { CharacterTemplate } from "../../../models/characters/CharacterTemplate"
+import { getConditionWeaponLabels } from "../../../models/characters/characterConditionWeaponLinks"
 import {
   addCharacterCondition,
   adjustConditionRemaining,
@@ -143,6 +144,7 @@ export function CharacterConditions({
                 const numeric = NUMERIC_DURATION_TYPES.has(condition.duration.type)
                 const remaining = condition.duration.remaining
                 const expired = numeric && remaining === 0
+                const linkedWeapons = getConditionWeaponLabels(condition, character.get("equipment").weapons ?? [])
 
                 return (
                   <article
@@ -175,6 +177,16 @@ export function CharacterConditions({
                           {condition.source ? (
                             <span>Fonte: {condition.source}</span>
                           ) : null}
+                          {linkedWeapons.map(weapon => (
+                            <span
+                              key={weapon.id}
+                              title={weapon.missing ? `Arma vinculada não encontrada no inventário: ${weapon.id}` : undefined}
+                              className="inline-flex items-center gap-1 rounded-md border border-accentBorder bg-accentBg px-2 py-0.5 text-textH"
+                            >
+                              <Swords className="h-3.5 w-3.5" />
+                              Arma: {weapon.label}
+                            </span>
+                          ))}
                         </div>
                       </div>
 
