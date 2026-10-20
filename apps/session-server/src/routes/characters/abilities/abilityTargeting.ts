@@ -37,6 +37,30 @@ export function validateAbilityTargets(
   return refs.every(ref => /^(character|initiative|companion):[^:]{1,200}$/.test(ref)) ? refs : null
 }
 
+/** Avoid double application when a character/companion appears in several target pickers or initiative turns. */
+export function areSelectedTargetsDistinct(
+  refs: string[],
+  initiative: SessionInitiativeState | undefined,
+  creatures: CompendiumCreature[],
+): boolean {
+  const combat = initiative?.initialized
+    ? normalizeInitiativeSession(initiative.session as Partial<InitiativeSession>) : undefined
+  const controlled = new Set(creatures.filter(creature => creature.ownerUserId).map(creature => creature.id))
+  const resolved = refs.map(ref => {
+    if (!ref.startsWith("initiative:")) return ref
+    const entry = combat?.entries.find(entry => entry.id === ref.slice("initiative:".length))
+    if (!entry) return ref
+    if (entry.sourceType === "character" && entry.sourceId) return "character:" + entry.sourceId
+    if (entry.sourceId?.startsWith("compendium:")) {
+      const id = entry.sourceId.slice("compendium:".length)
+      if (controlled.has(id)) return "companion:" + id
+    }
+    if (entry.combatantId) return "combatant:" + entry.combatantId
+    return ref
+  })
+  return new Set(resolved).size === resolved.length
+}
+
 function applyDamageOrHealing(
   current: number, temporary: number, max: number,
   effect: OnUseHpEffect | { kind: "damage" | "heal" | "temporary"; damageType?: import("../../../../../web/src/models/combat/Damage").DamageType; ignoreResistance?: boolean; bypassTemporaryHp?: boolean },
