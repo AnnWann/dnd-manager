@@ -1,4 +1,4 @@
-import { abilityRequiresWeaponAttributeSelection, getAbilityAttackRiderDamageChoices } from "../../../models/combat/AttackRider"
+import { abilityRequiresWeaponAttributeSelection, getAbilityAttackRiderDamageChoices, optionRequiresWeaponSelection } from "../../../models/combat/AttackRider"
 import { getInitiativeRollSelection } from "../../initiative/initiativeRollSelection"
 import { useEffect, useMemo, useState } from "react"
 
@@ -192,7 +192,7 @@ export function CharacterAbilitiesTab({ character, updateCharacter }: Props) {
       Boolean(sessionRuntime)
       && !digitalDiceEnabled
       && listBonusRollRequirements(ability.bonuses).length > 0
-    if (abilityRequiresWeaponAttributeSelection(ability) || getAbilityAttackRiderDamageChoices(ability).length > 0 || (ability.activationOptions ?? []).some(option => getAbilityAttackRiderDamageChoices(ability, option.id).length > 0) || (ability.activationOptions?.length ?? 0) > 0 || hasAbilityResourceCosts(ability) || abilityHasSelfDamage(ability) || ability.resourceUpcast?.enabled || hasManualBonusRolls(ability.bonuses) || requiresPhysicalRollInput || (ability.targeting?.mode === "targets" || ability.targeting?.mode === "point")) {
+    if (optionRequiresWeaponSelection(ability) || abilityRequiresWeaponAttributeSelection(ability) || getAbilityAttackRiderDamageChoices(ability).length > 0 || (ability.activationOptions ?? []).some(option => getAbilityAttackRiderDamageChoices(ability, option.id).length > 0) || (ability.activationOptions?.length ?? 0) > 0 || hasAbilityResourceCosts(ability) || abilityHasSelfDamage(ability) || ability.resourceUpcast?.enabled || hasManualBonusRolls(ability.bonuses) || requiresPhysicalRollInput || (ability.targeting?.mode === "targets" || ability.targeting?.mode === "point")) {
       setActivationChoice(ability)
       return
     }
