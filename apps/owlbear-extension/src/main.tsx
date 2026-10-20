@@ -33,6 +33,9 @@ const isAssociatePopover = new URLSearchParams(window.location.search).get("pane
 const DICE_CHANNEL = "dnd-manager:owlbear-dice-v1"
 const DICE_POPOVER_ID = "com.dnd-manager.owlbear/dice-popover"
 const isDicePopover = new URLSearchParams(window.location.search).get("panel") === "dice"
+const INITIATIVE_CHANNEL = "dnd-manager:owlbear-initiative-v1"
+const INITIATIVE_POPOVER_ID = "com.dnd-manager.owlbear/initiative-popover"
+const isInitiativePopover = new URLSearchParams(window.location.search).get("panel") === "initiative"
 const origin = (import.meta.env.VITE_DND_MANAGER_URL || "https://dnd-magic-manager.vercel.app").replace(/\/$/, "")
 type Session = { id: string; name: string; role: "MASTER" | "PLAYER" }
 type RuntimeCharacter = { characterId: string; ownerUserId?: string; active?: boolean; character?: Record<string, unknown> }
@@ -93,6 +96,28 @@ function App() {
  const [sharedDice, setSharedDice] = useState<{connected:boolean; selectedCharacterId?:string; history:DiceHistoryEntry[]}>({connected:false,history:[]})
  const diceChannel = useRef<BroadcastChannel | null>(null)
  const currentDiceState = useRef({connected:false,selectedCharacterId:undefined as string|undefined,history:[] as DiceHistoryEntry[]})
+ const [sharedInitiative, setSharedInitiative] = useState<{session:InitiativeSession|null;role:string;connected:boolean;rollingEnabled:boolean}>({session:null,role:"",connected:false,rollingEnabled:true})
+ const initiativeChannel = useRef<BroadcastChannel|null>(null)
+ const initiativeBridge = useRef<{session:InitiativeSession|null;role:string;connected:boolean;rollingEnabled:boolean;resolveBonus:(entry:InitiativeEntry)=>number}>({
+   session:null,role:"",connected:false,rollingEnabled:true,resolveBonus:entry=>entry.initiativeBonus,
+ })
+ const initiativePopoverOpening = useRef(false)
+ const openInitiativePopover = useCallback(async () => {
+   if(isInitiativePopover||isAssociatePopover||isDicePopover||initiativePopoverOpening.current)return
+   initiativePopoverOpening.current=true
+   try {
+     await OBR.popover.open({
+       id:INITIATIVE_POPOVER_ID,url:"/?panel=initiative",
+       width:900,height:335,
+       anchorReference:"POSITION",
+       anchorPosition:{left:window.screen.availWidth/2,top:28},
+       anchorOrigin:{horizontal:"CENTER",vertical:"TOP"},
+       transformOrigin:{horizontal:"CENTER",vertical:"TOP"},
+       disableClickAway:true,
+     })
+   } catch(error) {setError("Não foi possível abrir a iniciativa no mapa: "+String(error))}
+   finally {initiativePopoverOpening.current=false}
+ },[])
  const popoverOpening = useRef(false)
  const openDicePopover = useCallback(async () => {
    if(isDicePopover || popoverOpening.current)return
