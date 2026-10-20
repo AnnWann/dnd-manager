@@ -171,7 +171,7 @@ test("companion daily spells and conditions are persisted even when no HP or slo
 })
 
 test("selected targets cannot apply one effect twice through character and initiative aliases", () => {
-  const combat = { initialized: true, session: { entries: [
+  const combat = { initialized: true, session: { version: 1, entries: [
     { id: "slot-a", sourceType: "character", sourceId: "a", name: "A", initiative: 10 },
     { id: "turn-owl", sourceType: "monster", sourceId: "compendium:owl", name: "Coruja" },
   ] } }
