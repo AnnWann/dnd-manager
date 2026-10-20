@@ -3,6 +3,7 @@ import { CreatureQuickSheet, quickSheetFromCompendiumCreature } from "../../web/
 import type { CompendiumCreature } from "../../web/src/models/creatures/CompendiumCreature"
 import { CreatureTokenInspector } from "./CreatureTokenInspector"
 import { OwlbearInitiativeStrip } from "./OwlbearInitiativeStrip"
+import { useActiveInitiativeTokenMarker } from "./activeInitiativeToken"
 import { createCreatureInitiativeEntries } from "../../web/src/models/initiative/creatureInitiativeEntries"
 import { getCreatureEffectiveInitiative } from "../../web/src/models/creatures/CreatureCombatRuntime"
 import type { InitiativeEntry } from "../../web/src/models/initiative/Initiative"
@@ -110,9 +111,9 @@ function App() {
    try {
      await OBR.popover.open({
        id:INITIATIVE_POPOVER_ID,url:"/?panel=initiative&bridge="+encodeURIComponent(initiativeBridgeId),
-       width:900,height:335,
+       width:560,height:158,
        anchorReference:"POSITION",
-       anchorPosition:{left:window.screen.availWidth/2,top:28},
+       anchorPosition:{left:window.screen.availWidth/2,top:10},
        anchorOrigin:{horizontal:"CENTER",vertical:"TOP"},
        transformOrigin:{horizontal:"CENTER",vertical:"TOP"},
        disableClickAway:true,
@@ -477,6 +478,11 @@ function App() {
    ? normalizeInitiativeSession(asRecord(initiativeState.session) as Partial<InitiativeSession>)
    : null
  const initiativeEntries = initiativeSession?.entries ?? []
+ useActiveInitiativeTokenMarker({
+   ready: ready && !isDicePopover && !isAssociatePopover && !isInitiativePopover,
+   connected: status==="Conectado à sessão",
+   sessionId,role,session:initiativeSession,
+ })
  const resolveEntryInitiativeBonus = (entry: InitiativeEntry): number => {
    if (entry.sourceId?.startsWith("compendium:")) {
      const creature = findOwlbearInitiativeCreature(availableCreatures, entry)
@@ -536,8 +542,7 @@ function App() {
  const sheet = asRecord(raw.sheet)
  const health = hp[selectedId]
  const attributes = asRecord(sheet.attributes)
- if(isInitiativePopover)return <main className="owlbear-shell">
-   <header><strong>Iniciativa da sessão</strong><button type="button" onClick={()=>void OBR.popover.close(INITIATIVE_POPOVER_ID)} className="rounded-lg border border-border px-3 py-1 text-xs text-textH">Fechar</button></header>
+ if(isInitiativePopover)return <main className="owlbear-shell owlbear-initiative-overlay">
    <OwlbearInitiativeStrip
      session={sharedInitiative.session}
      isMaster={sharedInitiative.role==="MASTER"}
@@ -547,6 +552,7 @@ function App() {
      onInitialize={()=>{initiativeChannel.current?.postMessage({type:"initialize"});return initiativeChannel.current!==null}}
      onOperation={operation=>{initiativeChannel.current?.postMessage({type:"operation",operation});return initiativeChannel.current!==null}}
      onRoll={entry=>{initiativeChannel.current?.postMessage({type:"roll",entryId:entry.id});return initiativeChannel.current!==null}}
+     onClose={()=>void OBR.popover.close(INITIATIVE_POPOVER_ID)}
    />
  </main>
  if(isAssociatePopover)return <main className="owlbear-shell">
@@ -597,15 +603,6 @@ function App() {
  </main>
  return <main className="owlbear-shell">
  <header><strong>{isDicePopover ? "D&D Manager · Dados" : "D&D Manager"}</strong><span>{ready ? "Owlbear conectado" : "Pré-visualização"}</span></header>
- <OwlbearInitiativeStrip
-   session={initiativeSession}
-   isMaster={role==="MASTER"}
-   connected={status==="Conectado à sessão"}
-   onInitialize={()=>socket.current?.sendRaw(JSON.stringify({type:"session.initiative.initialize",session:createInitiativeSession("Combate da sessão")}))??false}
-   onOperation={operation=>socket.current?.sendRaw(JSON.stringify({type:"session.initiative.operation",operation}))??false}
-   resolveBonus={resolveEntryInitiativeBonus}
-   rollingEnabled={asRecord(runtimeConfig?.config).diceRollingEnabled!==false}
- />
  <section>{!isDicePopover && <><h1>D&D Manager · Sessão</h1><p>Ficha e rolagens sincronizadas com o Session Server.</p></>}
  <div className="toolbar"><button onClick={connectAccount}>{connected ? "Reconectar conta" : "Conectar ao D&D Manager"}</button><button disabled={!connected} onClick={() => void refreshSessions()}>Atualizar sessões</button></div>
  {error && <p role="alert" className="error">{error}</p>}
