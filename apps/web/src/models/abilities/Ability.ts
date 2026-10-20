@@ -11,6 +11,15 @@ import type { Attribute } from "../sheet/Attribute"
 import type { Proficiency } from "../sheet/Proficiency"
 
 /** Self-inflicted, unpreventable hit-point cost paid when activating an ability. */
+/** Optional automated targets. "none" leaves existing manual resolution unchanged. */
+export type AbilityTargeting = {
+  mode: "none" | "self" | "targets" | "point"
+  /** Maximum separate creatures affected in a single use. */
+  maxTargets?: number
+  /** Informational area radius; selection is explicit, not inferred from an unstored battle map. */
+  radiusFeet?: number
+}
+
 export interface AbilitySelfDamageCost {
   /** Dice notation, e.g. 1d6 (the blood hunter's hemocraft die at level 5). */
   dice: string
@@ -122,6 +131,8 @@ export interface Ability {
   grantedSpells?: SpellGrant[]
   grantedProficiencies?: Proficiency[]
   bonuses?: BonusCollection
+  /** Opt-in automatic HP application; unset abilities remain unchanged. */
+  targeting?: AbilityTargeting
   /** Configuração autoritativa do ataque, teste ou dano ao usar a habilidade. */
   roll?: AbilityRollDefinition
   /** Condição adicional aplicada ao personagem quando a habilidade é usada. */
