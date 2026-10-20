@@ -23,6 +23,7 @@ import { AbilityDialog } from "./abilityDialog"
 import { AbilityResourceActivationModal } from "./abilityResourceActivationModal"
 import { hasAbilityResourceCosts, spendAbilityResourceCosts } from "../../../models/abilities/abilityResourceCosts"
 import { abilityHasSelfDamage } from "../../../models/abilities/abilitySelfDamage"
+import { shouldRequestSeparateAbilityActionRoll } from "../../../models/abilities/shouldRollAbilityAction"
 import { hasManualBonusRolls, listBonusRollRequirements } from "../../../models/bonuses/BonusRoll"
 import { CompactAbilityCard } from "./compactAbilityCard"
 
@@ -216,14 +217,14 @@ export function CharacterAbilitiesTab({ character, updateCharacter }: Props) {
       })) {
         // Bonus/HP dice are already rolled during the authoritative ability use.
         // A second action roll is only valid when the ability explicitly defines one.
-        if (ability.roll) {
+        if (shouldRequestSeparateAbilityActionRoll(ability, optionId)) {
           requestActionRoll({
             characterId: displayCharacter.get("id"),
             source: {
               type: "ability",
               abilityId: ability.originalAbilityId ?? ability.id,
             },
-            mode: ability.roll.d20Mode ?? "normal",
+            mode: ability.roll?.d20Mode ?? "normal",
             targetEntryId: getInitiativeRollSelection()?.entryId,
             targetRefs: ability.targeting?.mode === "self" ? [`character:${displayCharacter.get("id")}`] : targetRefs,
             pointLabel,
