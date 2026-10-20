@@ -31,7 +31,7 @@ export function SessionPauseGate({ children }: { children: ReactNode }) {
           aria-modal="true"
           aria-labelledby="session-paused-title"
           aria-describedby="session-paused-description"
-          className="fixed inset-0 z-[20000] flex min-h-dvh items-center justify-center bg-[color:var(--surface-app)]/95 p-5 text-text backdrop-blur-md focus:outline-none"
+          className="fixed inset-0 z-[2147483647] flex min-h-dvh items-center justify-center bg-[color:var(--surface-app)]/95 p-5 text-text backdrop-blur-md focus:outline-none"
         >
           <div className="w-full max-w-md rounded-2xl border border-accentBorder bg-bg-elevated p-7 text-center shadow-2xl sm:p-10">
             <PauseCircle className="mx-auto h-12 w-12 text-accent" aria-hidden="true" />
