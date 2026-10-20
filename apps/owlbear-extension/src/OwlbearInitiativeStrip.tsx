@@ -12,10 +12,11 @@ type Props = {
   onInitialize: () => boolean
   onOperation: (operation: Record<string, unknown>) => boolean
   resolveBonus: (entry: InitiativeEntry) => number
+  onRoll?: (entry: InitiativeEntry) => boolean
   rollingEnabled: boolean
 }
 
-export function OwlbearInitiativeStrip({ session, isMaster, connected, onInitialize, onOperation, resolveBonus, rollingEnabled }: Props) {
+export function OwlbearInitiativeStrip({ session, isMaster, connected, onInitialize, onOperation, resolveBonus, onRoll, rollingEnabled }: Props) {
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [initiativeDraft, setInitiativeDraft] = useState("")
   const [error, setError] = useState("")
@@ -103,6 +104,11 @@ export function OwlbearInitiativeStrip({ session, isMaster, connected, onInitial
         </label>
         <button type="button" disabled={!connected || !Number.isFinite(Number(initiativeDraft)) || !initiativeDraft.trim()} onClick={() => updateEntry({ initiative: Number(initiativeDraft) })} className="rounded-lg border border-border px-2 py-1.5 disabled:opacity-40">Salvar</button>
         <button type="button" disabled={!connected || !rollingEnabled} onClick={() => {
+          if (onRoll) {
+            if (!onRoll(selected)) setError("Não foi possível enviar a rolagem.")
+            else setError("")
+            return
+          }
           const initiativeBonus = resolveBonus(selected)
           if (!Number.isFinite(initiativeBonus)) { setError("Bônus de iniciativa inválido."); return }
           send("initiative.entry.update", {entryId:selected.id,patch:{initiativeBonus,initiative:Math.floor(Math.random()*20)+1+initiativeBonus}})
