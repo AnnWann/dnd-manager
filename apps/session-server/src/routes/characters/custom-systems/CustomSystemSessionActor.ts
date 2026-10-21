@@ -400,7 +400,10 @@ export class SessionActor extends BaseSessionActor {
       });
     }
 
-    if (isActivation) {
+    if (
+      loggedOperation.type === "character.customSystem.ability.activate"
+      || loggedOperation.type === "character.customSystem.action.execute"
+    ) {
       // Announce from the server only AFTER the authoritative activation
       // commits. No dice are fabricated for description-only abilities.
       const result = resolvedCustomRoll
