@@ -413,6 +413,13 @@ function FormulaOverrideEditor({
 }) {
   const [draft, setDraft] = useState(value)
   const [error, setError] = useState('')
+  const classIds = new Set((character.get('sheet').classes ?? []).map((entry) => String(entry.className)))
+  const referencedCustomClasses = Array.from(draft.matchAll(/\bcharacter\.class\.(__custom__(?:-[A-Za-z0-9_-]+)?)\.(?:level|present)\b/g), (match) => match[1])
+  const missingCustomClasses = Array.from(new Set(referencedCustomClasses.filter((id) => !classIds.has(id))))
+  const currentPreview = draft.trim()
+    ? evaluateCustomFormula(draft, definition, state, character,
+        abilityType ? { type: abilityType } : undefined)
+    : undefined
   useEffect(() => {
     setDraft(value)
     setError('')
@@ -428,6 +435,10 @@ function FormulaOverrideEditor({
     if (!draft.trim()) {
       setError('')
       onChange('')
+      return
+    }
+    if (missingCustomClasses.length) {
+      setError('Esta fórmula referencia uma classe personalizada que não existe nesta ficha. Se houver apenas uma classe personalizada, use character.class.custom.level.')
       return
     }
     const issue = validateCustomFormula(draft, definition, abilityType, character)
@@ -478,6 +489,17 @@ function FormulaOverrideEditor({
         />
       </label>
       {error ? <p role="alert" className="mt-1 text-xs text-danger">{error}</p> : null}
+      {missingCustomClasses.length ? (
+        <p role="alert" className="mt-2 text-xs text-danger">
+          ID de classe não encontrado: {missingCustomClasses.join(', ')}.
+          Use o seletor de variáveis ou character.class.custom.level para uma classe personalizada.
+        </p>
+      ) : null}
+      {currentPreview?.ok && !missingCustomClasses.length ? (
+        <p className="mt-2 text-xs text-textMuted">
+          Resultado calculado com esta ficha: <strong className="text-textH">{String(currentPreview.value)}</strong>
+        </p>
+      ) : null}
       <div className="mt-2 flex flex-wrap items-center justify-between gap-2">
         <span className="min-w-0 break-all text-[11px] text-textMuted">Padrão: {original}</span>
         <FormulaVariablePicker

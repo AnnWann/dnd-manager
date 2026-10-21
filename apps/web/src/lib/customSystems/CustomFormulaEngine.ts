@@ -13,6 +13,8 @@ export type CustomFormulaVariable = {
   path: string
   label: string
   valueType: 'number' | 'text' | 'boolean' | 'dice'
+  /** Optional friendly names for individual path segments, without changing formula identifiers. */
+  segmentLabels?: Record<string, string>
 }
 
 type Token =

@@ -1,4 +1,5 @@
 import type { CharacterTemplate } from '../../models/characters/CharacterTemplate'
+import { getCustomClassConfigFromEntry, isCustomClassName } from '../../models/characters/customClassConfig'
 import type { Attribute } from '../../models/sheet/Attribute'
 import type { ClassName } from '../../models/sheet/Class'
 import type { Skill } from '../../models/sheet/Skills'
@@ -74,13 +75,49 @@ export function listCharacterFormulaVariables(character?: CharacterTemplate): Cu
     },
   ])
 
-  const customClasses = (character?.get('sheet').classes ?? [])
-    .filter(({ className }) => !CLASSES.some((entry) => entry.id === className))
-    .filter(({ className }) => /^[A-Za-z0-9_-]+$/.test(className))
-    .flatMap(({ className }) => [
-      variable(`character.class.${className}.level`, `${className} — nível`),
-      { path: `character.class.${className}.present`, label: `${className} — possui a classe`, valueType: 'boolean' as const },
-    ])
+  const customClassEntries = Array.from(new Map(
+    (character?.get('sheet').classes ?? [])
+      .filter(({ className }) => !CLASSES.some((entry) => entry.id === className))
+      .filter(({ className }) => /^[A-Za-z0-9_-]+$/.test(className))
+      .map((entry) => [entry.className, entry] as const),
+  ).values())
+
+  const customClassNames = customClassEntries.map((entry) =>
+    (getCustomClassConfigFromEntry(entry)?.name || String(entry.className)).trim(),
+  )
+  // Different custom classes can share a display name. Their unique IDs are
+  // preserved in formula paths, and a short suffix disambiguates their labels.
+  const nameCounts = new Map<string, number>()
+  for (const name of customClassNames) {
+    nameCounts.set(name, (nameCounts.get(name) ?? 0) + 1)
+  }
+  const customClasses: CustomFormulaVariable[] = customClassEntries.flatMap((entry, index) => {
+    const className = String(entry.className)
+    const name = customClassNames[index]
+    const label = (nameCounts.get(name) ?? 0) > 1
+      ? `${name} (${className.slice(-8)})`
+      : name
+    const segmentLabels = { [className]: label }
+    return [
+      {
+        ...variable(`character.class.${className}.level`, `${label} — nível`),
+        segmentLabels,
+      },
+      {
+        path: `character.class.${className}.present`,
+        label: `${label} — possui a classe`,
+        valueType: 'boolean',
+        segmentLabels,
+      },
+    ]
+  })
+
+  // Stable alias independent of generated UUIDs for custom-class slots.
+  // Use an explicit ID instead when different custom classes need distinct rules.
+  const customClassAliases: CustomFormulaVariable[] = [
+    variable('character.class.custom.level', 'Classes personalizadas — nível total'),
+    { path: 'character.class.custom.present', label: 'Possui classe personalizada', valueType: 'boolean' },
+  ]
 
   const skills = SKILLS.map(({ id, label }) =>
     variable(`character.skill.${id}`, `${label} — bônus`),
@@ -132,6 +169,7 @@ export function listCharacterFormulaVariables(character?: CharacterTemplate): Cu
     ...attributes,
     ...classes,
     ...customClasses,
+    ...customClassAliases,
     ...skills,
     ...customSystemVariables,
   ]
@@ -233,6 +271,15 @@ export function getCharacterFormulaValues(
       } else {
         values[path] = character.getSavingThrowBonus(attribute.id)
       }
+      continue
+    }
+
+    if (path === 'character.class.custom.level' || path === 'character.class.custom.present') {
+      const total = (sheet.classes ?? []).reduce(
+        (sum, entry) => sum + (isCustomClassName(entry.className) ? Math.max(0, Number(entry.level) || 0) : 0),
+        0,
+      )
+      values[path] = path.endsWith('.present') ? total > 0 : total
       continue
     }
 
