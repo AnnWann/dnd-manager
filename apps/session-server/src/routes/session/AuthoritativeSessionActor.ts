@@ -17,6 +17,7 @@ import {
   type CharacterTemplateProps,
 } from "../../../../web/src/models/characters/CharacterTemplate";
 import { reconcileConfiguredCustomSystemStates } from "../../../../web/src/lib/customSystems/CustomSystemConfigurationReconciliation";
+import { recalculateCustomSystemState } from "../../../../web/src/lib/customSystems/CustomFormulaRuntimePatch";
 import type { SessionRuntimeConfigSnapshot } from "../../../../web/src/shared/session-runtime/sessionRuntimeConfig";
 import {
   RUNTIME_CONFIG_STATE_KEY,
@@ -446,14 +447,25 @@ async function reconcileAbilityCustomSystems(
     }
 
     const currentSystems = character.get("sheet").customSystems ?? [];
-    const nextSystems = reconcileConfiguredCustomSystemStates(
+    const configuredSystems = reconcileConfiguredCustomSystemStates(
       currentSystems,
       configuration.customSystems,
       snapshot.config.customSystems,
     );
+    const configuredCharacter = character.withSheet("customSystems", configuredSystems);
+    const definitionsById = new Map(
+      snapshot.config.customSystems.map((definition) => [definition.id, definition]),
+    );
+    const nextSystems = configuredSystems.map((state) =>
+      recalculateCustomSystemState(
+        state,
+        configuredCharacter,
+        definitionsById.get(state.systemId),
+      ),
+    );
     if (JSON.stringify(currentSystems) === JSON.stringify(nextSystems)) continue;
 
-    const nextCharacter = character.withSheet("customSystems", nextSystems);
+    const nextCharacter = configuredCharacter.withSheet("customSystems", nextSystems);
     abilities[characterId] = {
       ...stored,
       character: nextCharacter.toJSON() as unknown as Record<string, unknown>,
