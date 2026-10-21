@@ -21,9 +21,12 @@ export function configureCustomFormulaRuntime(
 export function recalculateCustomSystemState(
   state: CharacterCustomSystemState,
   character?: CharacterTemplate,
+  explicitDefinition?: CustomSystemDefinition,
 ): CharacterCustomSystemState {
-  const definition = resolveDefinition?.(state.systemId)
-  if (!definition) return state
+  // Creation persistence and the authoritative session server do not use the
+  // browser-side registry. Their caller must supply the matching definition.
+  const definition = explicitDefinition ?? resolveDefinition?.(state.systemId)
+  if (!definition || definition.id !== state.systemId || state.enabled === false) return state
 
   const hasCalculatedResources = definition.resources.some((resource) =>
     Boolean(resource.maximumFormula) && (resource.maximumMode ?? 'formula') !== 'manual',
