@@ -64,6 +64,8 @@ jobs:
         run: node --test packages/session-client/tests/*.test.mjs
       - name: Test custom ability activation inheritance
         run: node scripts/check-custom-ability-inheritance.mjs
+      - name: Test custom action announcements
+        run: node scripts/check-custom-action-announcements.mjs
       - name: Build website
         run: npm run --workspace @dnd-manager/web build
       - name: Build Owlbear extension
