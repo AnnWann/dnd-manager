@@ -479,18 +479,13 @@ export function MinimalCharacterActions({
           ...(activationLevel !== undefined
             ? { activationLevel }
             : {}),
-          ...(entry.customAbilityRoll
-            ? { visibility: getRollVisibility() }
-            : {}),
+          visibility: getRollVisibility(),
         })
         if (!sent) {
           setError("Não foi possível enviar esta ação para a sessão.")
           return
         }
 
-        if (!entry.customAbilityRoll) {
-          announce(entry)
-        }
         setSelected(null)
         return
       }
@@ -583,9 +578,7 @@ export function MinimalCharacterActions({
           ...(activationLevel !== undefined
             ? { activationLevel }
             : {}),
-          ...(entry.customAbilityRoll
-            ? { visibility: getRollVisibility() }
-            : {}),
+          visibility: getRollVisibility(),
         })
         if (!sent) {
           setError("Não foi possível enviar esta habilidade para a sessão.")
