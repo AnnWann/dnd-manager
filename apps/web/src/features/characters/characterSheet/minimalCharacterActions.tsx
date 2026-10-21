@@ -162,8 +162,12 @@ export function MinimalCharacterActions({
   ) => void
 }) {
   const navigate = useNavigate()
-  const definitions = useCustomSystemDefinitions()
+  const registeredDefinitions = useCustomSystemDefinitions()
   const sessionRuntime = useOptionalSessionRuntime()
+  // A connected session must render actions from its authoritative Creation
+  // snapshot, not a potentially stale browser/editor custom-system registry.
+  const definitions = sessionRuntime?.runtimeConfigSnapshot?.config.customSystems
+    ?? registeredDefinitions
   const digitalDiceEnabled =
     sessionRuntime?.runtimeConfigSnapshot?.config.diceRollingEnabled !== false
   const physicalDiceMode = Boolean(sessionRuntime) && !digitalDiceEnabled
