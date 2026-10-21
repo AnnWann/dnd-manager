@@ -1648,7 +1648,7 @@ function normalizeActionKind(actionKind: AbilityActionKind | undefined): ActionF
   if (actionKind === "action") return "action"
   if (actionKind === "bonusAction") return "bonusAction"
   if (actionKind === "reaction") return "reaction"
-  if (actionKind === "free" || actionKind === "freeAction") return "free"
+  if (actionKind === "free" || (actionKind as string | undefined) === "freeAction") return "free"
   return undefined
 }
 
