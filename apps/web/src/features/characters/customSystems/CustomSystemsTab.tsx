@@ -668,7 +668,7 @@ function AbilityEditor({
         acquisition: { ...abilityType.acquisition, ...preset.acquisition },
       }
     : abilityType
-  const availability = getCustomAbilityAvailability(effectiveType, ability)
+  const availability = getCustomAbilityAvailability(effectiveType, ability, state)
   const libraryAbility = isLibraryAbility(ability)
   const canEdit = actor !== 'automation' && !libraryAbility
   const display = getAbilityDisplay(abilityType, ability)
