@@ -188,14 +188,12 @@ export function MinimalCharacterActions({
     () => getStandardActions(character, filter, definitions),
     [character, filter, definitions],
   )
-  const systemActions = useMemo(
-    () => getCustomSystemActions(character, filter, definitions),
-    [character, filter, definitions],
-  )
-  const abilityActions = useMemo(
-    () => getAbilityActions(character, filter, definitions),
-    [character, filter, definitions],
-  )
+  // Custom systems can update the installed ability state while the same
+  // CharacterTemplate instance stays mounted (e.g. preparing in another tab).
+  // Resolve live rather than memoizing solely by the character object reference.
+  const systemActions = getCustomSystemActions(character, filter, definitions)
+  const preparedSystemAbilities = getCustomAbilityActions(character, filter, definitions)
+  const abilityActions = getAbilityActions(character, filter)
   const metamagicActions = useMemo<ActionEntry[]>(() => {
     if (filter !== "free") return []
     const knownIds = character.get("magic")?.metamagic?.metamagics ?? []
@@ -681,6 +679,9 @@ export function MinimalCharacterActions({
       {systemActions.length ? (
         <ActionGroup title="Ações de sistemas" entries={systemActions} onSelect={open} />
       ) : null}
+      {preparedSystemAbilities.length ? (
+        <ActionGroup title="Habilidades preparadas" entries={preparedSystemAbilities} onSelect={open} />
+      ) : null}
       {channelDivinityActions.length ? (
         <ActionGroup title="Canalizar Divindade" entries={channelDivinityActions} onSelect={open} />
       ) : null}
@@ -1020,7 +1021,6 @@ function getCustomSystemActions(
 function getAbilityActions(
   character: CharacterTemplate,
   filter: ActionFilter,
-  definitions: CustomSystemDefinition[],
 ): ActionEntry[] {
   const channelDivinity = getChannelDivinityPool(character)
   const ki = getKiPool(character)
@@ -1088,7 +1088,7 @@ function getAbilityActions(
       }
     })
 
-  return [...nativeEntries, ...getCustomAbilityActions(character, filter, definitions)]
+  return nativeEntries
     .sort((left, right) => left.name.localeCompare(right.name, "pt-BR"))
 }
 
@@ -1648,7 +1648,7 @@ function normalizeActionKind(actionKind: AbilityActionKind | undefined): ActionF
   if (actionKind === "action") return "action"
   if (actionKind === "bonusAction") return "bonusAction"
   if (actionKind === "reaction") return "reaction"
-  if (actionKind === "free") return "free"
+  if (actionKind === "free" || actionKind === "freeAction") return "free"
   return undefined
 }
 
