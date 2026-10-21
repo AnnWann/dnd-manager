@@ -225,14 +225,8 @@ export function CustomSystemActionsPanel({
           setError("Não foi possível enviar esta ação para a sessão.")
           return
         }
-        if (!entry.roll) {
-          requestActionAnnouncement({
-            characterId: character.get("id"),
-            title: entry.name,
-            subtitle: `${CATEGORY_LABELS[entry.actionKind]} · ${entry.source}`,
-            description: entry.description,
-          })
-        }
+        // An authoritative announcement is emitted after the operation
+        // commits; do not send a second client-generated announcement.
         return
       }
       updateCharacter(
