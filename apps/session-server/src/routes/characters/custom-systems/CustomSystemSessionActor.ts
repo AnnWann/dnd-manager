@@ -323,17 +323,15 @@ export class SessionActor extends BaseSessionActor {
         return;
       }
     }
-    const resolvedRollOnly =
-      aggregateOperation
-      && (
-        loggedOperation.type === "character.customSystem.ability.activate"
-        || loggedOperation.type === "character.customSystem.action.execute"
-      )
-      && Boolean(loggedOperation.rollSummary?.length);
+    // A description-only ability is still a genuine activation. It can have
+    // no dice, no save and no resource changes; the session must record it.
+    const isActivation =
+      loggedOperation.type === "character.customSystem.ability.activate"
+      || loggedOperation.type === "character.customSystem.action.execute";
 
     if (
       aggregateOperation
-      && !resolvedRollOnly
+      && !isActivation
       && JSON.stringify(character.toJSON()) === JSON.stringify(nextCharacter.toJSON())
     ) {
       sendError(webSocket, "CUSTOM_SYSTEM_OPERATION_NO_CHANGE", "The requested custom-system operation does not change the current state.");
@@ -402,27 +400,54 @@ export class SessionActor extends BaseSessionActor {
       });
     }
 
-    if (
-      resolvedCustomRoll
-      && (
-        loggedOperation.type === "character.customSystem.ability.activate"
-        || loggedOperation.type === "character.customSystem.action.execute"
-      )
-    ) {
-      const rollResult = buildCustomSystemActionRollResult(
-        connection.userId,
-        character,
-        definition,
-        currentState,
-        loggedOperation,
-        resolvedCustomRoll,
-      );
+    if (isActivation) {
+      // Announce from the server only AFTER the authoritative activation
+      // commits. No dice are fabricated for description-only abilities.
+      const result = resolvedCustomRoll
+        ? buildCustomSystemActionRollResult(
+            connection.userId, character, definition, currentState,
+            loggedOperation, resolvedCustomRoll,
+          )
+        : buildCustomSystemActionAnnouncement(
+            connection.userId, character, definition, currentState,
+            loggedOperation,
+          );
       broadcastVisibilityFiltered(sockets, {
         type: "session.action.result",
-        result: rollResult,
+        result,
       });
     }
   }
+}
+
+function buildCustomSystemActionAnnouncement(
+  actorId: string,
+  character: CharacterTemplate,
+  definition: CustomSystemDefinition,
+  state: CharacterCustomSystemState,
+  operation: Extract<
+    SessionCustomSystemOperation,
+    { type: "character.customSystem.ability.activate" | "character.customSystem.action.execute" }
+  >,
+): SessionActionRollResult {
+  const presentation = customRollPresentation(definition, state, operation);
+  return {
+    id: crypto.randomUUID(),
+    requestId: crypto.randomUUID(),
+    actorId,
+    characterId: operation.characterId,
+    sourceName: character.get("name"),
+    sourceType: "announcement",
+    title: presentation.title,
+    subtitle: presentation.subtitle,
+    description: presentation.description,
+    details: operation.activationLevel !== undefined
+      ? [`Nível de uso: ${operation.activationLevel}`]
+      : undefined,
+    critical: false,
+    visibility: operation.visibility ?? "public",
+    createdAt: new Date().toISOString(),
+  };
 }
 
 function buildCustomSystemActionRollResult(
