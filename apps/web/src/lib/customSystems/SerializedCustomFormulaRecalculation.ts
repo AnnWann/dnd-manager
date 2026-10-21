@@ -13,10 +13,11 @@ import { getCustomSystemFormulaOverride, formulaOverrideKey } from './CustomSyst
  * CharacterTemplate module imports extensionless dependencies that fail at
  * module initialization, even for unauthenticated GET requests.
  */
+type AttributeKey = 'str' | 'dex' | 'con' | 'int' | 'wis' | 'cha'
 type StoredCharacter = {
   sheet?: {
     classes?: Array<{ className: string; level: number }>
-    attributes?: Partial<Record<'str' | 'dex' | 'con' | 'int' | 'wis' | 'cha', number>>
+    attributes?: Partial<Record<AttributeKey, number>>
     stats?: {
       armorClass?: number
       initiative?: number
@@ -75,7 +76,7 @@ export function recalculateSerializedCustomSystem(
     if (!field || field.type !== 'attribute') continue
     const attribute = state.fields[field.id] ?? field.defaultValue
     const score = typeof attribute === 'string' && ['str', 'dex', 'con', 'int', 'wis', 'cha'].includes(attribute)
-      ? snapshot.sheet?.attributes?.[attribute as keyof NonNullable<StoredCharacter['sheet']>['attributes']]
+      ? snapshot.sheet?.attributes?.[attribute as AttributeKey]
       : undefined
     if (typeof score !== 'number' || !Number.isFinite(score)) continue
     virtualValues.set(path, match[2] === 'score' ? score : Math.floor((score - 10) / 2))
@@ -193,7 +194,7 @@ function resolveRawCharacterPath(path: string, character: StoredCharacter): Reso
   }
   const attributeMatch = path.match(/^character\.(attribute|attributeModifier|save)\.(str|dex|con|int|wis|cha)$/)
   if (attributeMatch) {
-    const score = sheet.attributes?.[attributeMatch[2] as keyof NonNullable<StoredCharacter['sheet']>['attributes']]
+    const score = sheet.attributes?.[attributeMatch[2] as AttributeKey]
     if (typeof score !== 'number' || !Number.isFinite(score)) return UNRESOLVED
     return { found: true, value: attributeMatch[1] === 'attribute' ? score : Math.floor((score - 10) / 2) }
   }
