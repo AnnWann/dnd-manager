@@ -19,8 +19,7 @@ import {
 import { prisma } from "../../../server/prisma.js"
 import { requireSession } from "../../../server/session.js"
 import { CHARACTER_TYPES } from "../../../src/models/characters/CharacterType.js"
-import { CharacterTemplate, type CharacterTemplateProps } from "../../../src/models/characters/CharacterTemplate.js"
-import { recalculateCustomSystemState } from "../../../src/lib/customSystems/CustomFormulaRuntimePatch.js"
+import { recalculateSerializedCustomSystem } from "../../../src/lib/customSystems/SerializedCustomFormulaRecalculation.js"
 import type {
   CharacterCustomSystemState,
   CustomSystemDefinition,
@@ -1120,14 +1119,17 @@ function mergeCharacterCreationConfiguration(
   // Persist materialized formula values alongside configuration exceptions.
   // Without this, Creation can preview a changed value while the live sheet
   // still reads the previous value (and stale dependent resource maxima).
-  const character = CharacterTemplate.fromJSON(merged as Partial<CharacterTemplateProps>)
   const definitionsById = new Map(definitions.map((definition) => [definition.id, definition]))
   return {
     ...merged,
     sheet: {
       ...merged.sheet,
       customSystems: reconciledSystems.map((state) =>
-        recalculateCustomSystemState(state, character, definitionsById.get(state.systemId)),
+        recalculateSerializedCustomSystem(
+          state,
+          definitionsById.get(state.systemId),
+          merged as Parameters<typeof recalculateSerializedCustomSystem>[2],
+        ),
       ),
     },
   }
