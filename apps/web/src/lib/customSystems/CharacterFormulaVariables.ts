@@ -1,4 +1,5 @@
 import type { CharacterTemplate } from '../../models/characters/CharacterTemplate'
+import { isCustomClassName } from '../../models/characters/customClassConfig'
 import type { Attribute } from '../../models/sheet/Attribute'
 import type { ClassName } from '../../models/sheet/Class'
 import type { Skill } from '../../models/sheet/Skills'
@@ -82,6 +83,13 @@ export function listCharacterFormulaVariables(character?: CharacterTemplate): Cu
       { path: `character.class.${className}.present`, label: `${className} — possui a classe`, valueType: 'boolean' as const },
     ])
 
+  // Stable alias independent of generated UUIDs for custom-class slots.
+  // Use an explicit ID instead when different custom classes need distinct rules.
+  const customClassAliases: CustomFormulaVariable[] = [
+    variable('character.class.custom.level', 'Classes personalizadas — nível total'),
+    { path: 'character.class.custom.present', label: 'Possui classe personalizada', valueType: 'boolean' },
+  ]
+
   const skills = SKILLS.map(({ id, label }) =>
     variable(`character.skill.${id}`, `${label} — bônus`),
   )
@@ -132,6 +140,7 @@ export function listCharacterFormulaVariables(character?: CharacterTemplate): Cu
     ...attributes,
     ...classes,
     ...customClasses,
+    ...customClassAliases,
     ...skills,
     ...customSystemVariables,
   ]
@@ -233,6 +242,15 @@ export function getCharacterFormulaValues(
       } else {
         values[path] = character.getSavingThrowBonus(attribute.id)
       }
+      continue
+    }
+
+    if (path === 'character.class.custom.level' || path === 'character.class.custom.present') {
+      const total = (sheet.classes ?? []).reduce(
+        (sum, entry) => sum + (isCustomClassName(entry.className) ? Math.max(0, Number(entry.level) || 0) : 0),
+        0,
+      )
+      values[path] = path.endsWith('.present') ? total > 0 : total
       continue
     }
 
