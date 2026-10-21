@@ -36,6 +36,8 @@ import {
   type CustomSystemActor,
 } from '../../../lib/customSystems'
 import { useCustomSystemDefinitions } from '../../../lib/customSystems/CustomSystemRegistry'
+import { evaluateCustomFormula } from '../../../lib/customSystems/CustomFormulaEngineWithCharacter'
+import { getCustomSystemFormulaOverride, formulaOverrideKey } from '../../../lib/customSystems/CustomSystemFormulaOverrides'
 import type { SessionCustomSystemOperation } from '../../session-runtime/customSystemSessionProtocol'
 import { useOptionalSessionRuntime } from '../../session-runtime/useSessionRuntime'
 import { CustomSystemIcon } from '../../customSystems/CustomSystemIcon'
@@ -973,6 +975,16 @@ function FieldEditor({
 }) {
   const commonClass =
     'w-full rounded-lg border border-border bg-transparent px-3 py-2 text-sm text-textH disabled:cursor-not-allowed disabled:opacity-60'
+  // A persisted calculated value can be stale if the character is loaded before
+  // the system definition. Always render system fields from the live formula.
+  const isSystemFormula = field.type === 'formula'
+    && definition?.fields.some((entry) => entry.id === field.id && entry.type === 'formula')
+  const computed = isSystemFormula && definition && state
+    ? evaluateCustomFormula(
+        getCustomSystemFormulaOverride(state, formulaOverrideKey('field', field.id)) ?? (field.type === 'formula' ? field.formula : ''),
+        definition, state, character,
+      )
+    : undefined
 
   return (
     <div>
@@ -1075,7 +1087,12 @@ function FieldEditor({
         <ReferencePicker field={field} value={value} disabled={disabled} character={character} definition={definition} state={state} onChange={onChange} />
       ) : field.type === 'formula' ? (
         <div className="rounded-lg border border-border bg-[color:var(--social-bg)] px-3 py-2 text-sm text-text">
-          {displayJsonValue(value) || field.formula}
+          {computed && computed.ok
+            ? displayJsonValue(computed.value)
+            : displayJsonValue(value) || field.formula}
+          {computed && !computed.ok ? (
+            <p role="alert" className="mt-1 text-xs text-danger">{computed.error}</p>
+          ) : null}
         </div>
       ) : field.type === 'text' ? (
         <BufferedTextInput
