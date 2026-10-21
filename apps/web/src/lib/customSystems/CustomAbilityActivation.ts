@@ -51,7 +51,7 @@ export function activateCustomAbility(
   const effectiveType = preset?.acquisition
     ? { ...type, acquisition: { ...type.acquisition, ...preset.acquisition } }
     : type
-  const availability = getCustomAbilityAvailability(effectiveType, ability)
+  const availability = getCustomAbilityAvailability(effectiveType, ability, sourceState)
   if (!availability.canUse) {
     throw new Error(availability.learned ? 'A habilidade precisa estar preparada para ser usada.' : 'A habilidade precisa estar aprendida para ser usada.')
   }

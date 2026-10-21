@@ -1116,7 +1116,7 @@ function getCustomAbilityActions(
 
 function customAbilityEntry(
   definition: CustomSystemDefinition,
-  _state: CharacterCustomSystemState,
+  state: CharacterCustomSystemState,
   ability: CustomAbilityInstance,
   filter: ActionFilter,
 ): ActionEntry | undefined {
@@ -1136,7 +1136,7 @@ function customAbilityEntry(
         acquisition: { ...type.acquisition, ...preset.acquisition },
       }
     : type
-  const availability = getCustomAbilityAvailability(effectiveType, ability)
+  const availability = getCustomAbilityAvailability(effectiveType, ability, state)
   if (!availability.canUse) return undefined
 
   const title = displayValue(ability.values[type.display.titleFieldId]) || type.name

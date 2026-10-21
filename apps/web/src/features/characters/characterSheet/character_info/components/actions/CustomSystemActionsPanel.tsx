@@ -570,7 +570,7 @@ function abilityEntry(
         acquisition: { ...type.acquisition, ...preset.acquisition },
       }
     : type
-  const availability = getCustomAbilityAvailability(effectiveType, ability)
+  const availability = getCustomAbilityAvailability(effectiveType, ability, state)
   if (!availability.canUse) return undefined
 
   const usage = resolveUsageDisplay(
