@@ -155,7 +155,7 @@ export function CustomSystemAcquisitionExceptionsModal({
               Exceções — {definition.name}
             </h2>
             <p className="mt-1 text-sm text-text">
-              Personalize fórmulas de campos e recursos, limites e habilidades isentas para este personagem.
+              Personalize fórmulas de campos e recursos, limites e habilidades isentas. As alterações da Criação só entram na ficha após salvar o rascunho da campanha.
             </p>
           </div>
           <button
@@ -368,8 +368,8 @@ export function CustomSystemAcquisitionExceptionsModal({
                   Campos e recursos — fórmulas personalizadas ({Object.keys(state.formulaOverrides ?? {}).length} alteradas)
                 </summary>
                 <p className="mt-2 text-xs text-textMuted">
-                  Altere apenas o cálculo deste personagem. Deixe vazio para utilizar a fórmula original do sistema.
-                  A alteração é aplicada após sair do campo, se a fórmula for válida.
+                  Altere o cálculo apenas deste personagem. Deixe vazio para utilizar a fórmula original do sistema.
+                  A fórmula é validada ao sair do campo e fica no rascunho até salvar as alterações de Criação.
                 </p>
                 <div className="mt-4 grid gap-3">
                   {formulaTargets.map((entry) => (
@@ -497,7 +497,7 @@ function FormulaOverrideEditor({
       ) : null}
       {currentPreview?.ok && !missingCustomClasses.length ? (
         <p className="mt-2 text-xs text-textMuted">
-          Resultado calculado com esta ficha: <strong className="text-textH">{String(currentPreview.value)}</strong>
+          Prévia da fórmula no rascunho: <strong className="text-textH">{String(currentPreview.value)}</strong>
         </p>
       ) : null}
       <div className="mt-2 flex flex-wrap items-center justify-between gap-2">
