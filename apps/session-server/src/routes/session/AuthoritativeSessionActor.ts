@@ -17,7 +17,7 @@ import {
   type CharacterTemplateProps,
 } from "../../../../web/src/models/characters/CharacterTemplate";
 import { reconcileConfiguredCustomSystemStates } from "../../../../web/src/lib/customSystems/CustomSystemConfigurationReconciliation";
-import { recalculateCustomSystemState } from "../../../../web/src/lib/customSystems/CustomFormulaRuntimePatch";
+import { recalculateSerializedCustomSystem } from "../../../../web/src/lib/customSystems/SerializedCustomFormulaRecalculation";
 import type { SessionRuntimeConfigSnapshot } from "../../../../web/src/shared/session-runtime/sessionRuntimeConfig";
 import {
   RUNTIME_CONFIG_STATE_KEY,
@@ -457,10 +457,10 @@ async function reconcileAbilityCustomSystems(
       snapshot.config.customSystems.map((definition) => [definition.id, definition]),
     );
     const nextSystems = configuredSystems.map((state) =>
-      recalculateCustomSystemState(
+      recalculateSerializedCustomSystem(
         state,
-        configuredCharacter,
         definitionsById.get(state.systemId),
+        configuredCharacter.toJSON(),
       ),
     );
     if (JSON.stringify(currentSystems) === JSON.stringify(nextSystems)) continue;
