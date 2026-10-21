@@ -121,18 +121,32 @@ function mergeActivation(
   preset: CustomPredefinedAbilityDefinition | undefined,
 ): CustomAbilityActivationDefinition {
   if (!preset?.activation) return base ?? {}
+
+  // The predefined ability can override individual properties, but missing
+  // properties must continue to inherit the ability type's activation.
+  // Older custom-system exports use actionKind: "special" as a placeholder.
+  // That is not a supported action category and must NOT erase a valid
+  // parent category (e.g. "free" for martial techniques).
+  const override = preset.activation
   return {
     ...base,
-    ...preset.activation,
-    roll: preset.activation.rollDisabled
+    ...Object.fromEntries(
+      Object.entries(override).filter(([, value]) => value !== undefined),
+    ),
+    kind: override.kind ?? base?.kind,
+    actionKind: normalizeActionKind(override.actionKind)
+      ?? normalizeActionKind(base?.actionKind),
+    actionKindFieldId: override.actionKindFieldId ?? base?.actionKindFieldId,
+    trigger: override.trigger ?? base?.trigger,
+    triggerFieldId: override.triggerFieldId ?? base?.triggerFieldId,
+    level: override.level ?? base?.level,
+    roll: override.rollDisabled
       ? undefined
-      : preset.activation.roll ?? base?.roll,
+      : override.roll ?? base?.roll,
     rollDisabled: undefined,
-    usage: preset.activation.usage ?? base?.usage,
-    resourceChanges:
-      preset.activation.resourceChanges ?? base?.resourceChanges,
-    conditionChanges:
-      preset.activation.conditionChanges ?? base?.conditionChanges,
+    usage: override.usage ?? base?.usage,
+    resourceChanges: override.resourceChanges ?? base?.resourceChanges,
+    conditionChanges: override.conditionChanges ?? base?.conditionChanges,
   }
 }
 
