@@ -28,6 +28,10 @@ export function applySessionAbilityState(
   next = next.with("profile", authoritative.get("profile"))
   next = next.withSheet("proficiencies", authoritative.get("sheet").proficiencies ?? [])
   next = next.withSheet("race", authoritative.get("sheet").race)
+  // Custom-system preparations, installed techniques and their resource states
+  // are owned by the session's authoritative ability snapshot. Project them
+  // explicitly when overlaying that snapshot on an existing character.
+  next = next.withSheet("customSystems", authoritative.get("sheet").customSystems ?? [])
 
   next = withCharacterAsis(next, getCharacterAsis(authoritative))
 

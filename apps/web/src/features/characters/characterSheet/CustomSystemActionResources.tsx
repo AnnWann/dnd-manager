@@ -20,8 +20,10 @@ export function CustomSystemActionResources({
     updater: (character: CharacterTemplate) => CharacterTemplate,
   ) => void
 }) {
-  const definitions = useCustomSystemDefinitions()
+  const registeredDefinitions = useCustomSystemDefinitions()
   const runtime = useOptionalSessionRuntime()
+  const definitions = runtime?.runtimeConfigSnapshot?.config.customSystems
+    ?? registeredDefinitions
   const [error, setError] = useState('')
   const entries = collectEntries(character, definitions)
 

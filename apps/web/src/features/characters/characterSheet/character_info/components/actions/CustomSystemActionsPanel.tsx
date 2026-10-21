@@ -93,8 +93,10 @@ export function CustomSystemActionsPanel({
   character,
   updateCharacter,
 }: Props) {
-  const definitions = useCustomSystemDefinitions()
+  const registeredDefinitions = useCustomSystemDefinitions()
   const sessionRuntime = useOptionalSessionRuntime()
+  const definitions = sessionRuntime?.runtimeConfigSnapshot?.config.customSystems
+    ?? registeredDefinitions
   const digitalDiceEnabled =
     sessionRuntime?.runtimeConfigSnapshot?.config.diceRollingEnabled !== false
   const physicalDiceMode = Boolean(sessionRuntime) && !digitalDiceEnabled

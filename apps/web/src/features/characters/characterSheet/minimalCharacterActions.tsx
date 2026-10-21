@@ -162,8 +162,12 @@ export function MinimalCharacterActions({
   ) => void
 }) {
   const navigate = useNavigate()
-  const definitions = useCustomSystemDefinitions()
+  const registeredDefinitions = useCustomSystemDefinitions()
   const sessionRuntime = useOptionalSessionRuntime()
+  // A connected session must render actions from its authoritative Creation
+  // snapshot, not a potentially stale browser/editor custom-system registry.
+  const definitions = sessionRuntime?.runtimeConfigSnapshot?.config.customSystems
+    ?? registeredDefinitions
   const digitalDiceEnabled =
     sessionRuntime?.runtimeConfigSnapshot?.config.diceRollingEnabled !== false
   const physicalDiceMode = Boolean(sessionRuntime) && !digitalDiceEnabled
@@ -664,6 +668,35 @@ export function MinimalCharacterActions({
 
   const sorceryPoints = getSorceryPointPool(character)
 
+  // When a session cannot place prepared techniques in the action list,
+  // expose the actual filtering reason instead of silently showing "none".
+  // This is read-only and does not change preparation or activation rules.
+  const sessionPreparedDiagnostics = sessionRuntime && filter === "free"
+    && preparedSystemAbilities.length === 0
+    ? ((character.get("sheet").customSystems ?? []) as CharacterCustomSystemState[])
+      .filter(state => state.enabled !== false)
+      .flatMap(state => (state.abilities ?? [])
+        .filter(ability => ability.enabled !== false && ability.prepared === true)
+        .map(ability => {
+          const definition = definitions.find(entry => entry.id === state.systemId)
+          const type = definition?.abilityTypes.find(entry => entry.id === ability.abilityTypeId)
+          const activation = type && getEffectiveCustomAbilityActivation(type, ability)
+          const availability = type && getCustomAbilityAvailability(type, ability, state)
+          const name = type
+            ? displayValue(ability.values[type.display.titleFieldId]) || type.name
+            : ability.predefinedAbilityId || ability.id
+          const reason = !definition ? "Definição ausente da sessão"
+            : definition.hiddenFromSheet ? "Sistema oculto na ficha"
+            : !type ? "Tipo de habilidade ausente"
+            : !availability?.canUse ? "Não utilizável pelo estado de aprendizado/preparo"
+            : normalizeActionKind(activation?.actionKind) !== filter
+              ? `Categoria: ${activation?.actionKind ?? "não configurada"}`
+              : "Elegível (verificar projeção da ficha)"
+          return { id: ability.id, name, system: definition?.name ?? state.systemId, reason }
+        }))
+      .slice(0, 20)
+    : []
+
   return (
     <section className="rounded-xl border border-border bg-bg p-3 shadow-theme-sm">
       <h2 className="text-xs font-semibold uppercase tracking-wide text-textH">Ações</h2>
@@ -694,6 +727,19 @@ export function MinimalCharacterActions({
         onSelect={open}
         emptyMessage={`Nenhuma habilidade configurada como ${filterLabel(filter).toLocaleLowerCase("pt-BR")}.`}
       />
+      {sessionPreparedDiagnostics.length > 0 ? (
+        <details className="mt-2 rounded-lg border border-dashed border-border px-3 py-2 text-xs text-textMuted">
+          <summary className="cursor-pointer">Por que minhas técnicas preparadas não aparecem?</summary>
+          <div className="mt-2 space-y-1">
+            {sessionPreparedDiagnostics.map(item => (
+              <div key={item.id}>
+                <strong className="text-textH">{item.name}</strong>
+                {" · "}{item.system}{" · "}{item.reason}
+              </div>
+            ))}
+          </div>
+        </details>
+      ) : null}
       <ActionGroup
         title="Passivas"
         entries={passiveAbilities}
