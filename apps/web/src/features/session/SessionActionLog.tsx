@@ -742,10 +742,16 @@ export function ActionRollEntry({
         ))}
 
         {roll.description ? (
-          <details className="rounded-lg border border-border bg-bg-subtle px-3 py-2">
-            <summary className="cursor-pointer text-[11px] font-semibold text-textH">Ver descrição</summary>
-            <div className="mt-2 whitespace-pre-wrap break-words text-[11px] leading-5 text-text">{roll.description}</div>
-          </details>
+          roll.sourceType === "announcement" ? (
+            <div className="whitespace-pre-wrap break-words rounded-lg border border-border bg-bg-subtle px-3 py-2 text-xs leading-5 text-text">
+              {roll.description}
+            </div>
+          ) : (
+            <details className="rounded-lg border border-border bg-bg-subtle px-3 py-2">
+              <summary className="cursor-pointer text-[11px] font-semibold text-textH">Ver descrição</summary>
+              <div className="mt-2 whitespace-pre-wrap break-words text-[11px] leading-5 text-text">{roll.description}</div>
+            </details>
+          )
         ) : null}
 
         <div className="flex items-center justify-between gap-2 text-[10px] text-textMuted">
