@@ -16,6 +16,8 @@ type GroupedCustomFormulaVariable = CustomFormulaVariable & {
 type VariableTree = {
   children: Map<string, VariableTree>
   variables: CustomFormulaVariable[]
+  /** Display name of a segment, independent from its formula path. */
+  label?: string
 }
 
 const SEGMENT_LABELS: Record<string, string> = {
@@ -206,7 +208,7 @@ export function FormulaVariablePicker({
                             onClick={() => setSegments(segments.slice(0, index + 1))}
                             className="rounded px-1.5 py-1 hover:bg-accentBg"
                           >
-                            {translateSegment(segment)}
+                            {getNode(tree, segments.slice(0, index + 1)).label ?? translateSegment(segment)}
                           </button>
                         </span>
                       ))}
@@ -228,8 +230,10 @@ export function FormulaVariablePicker({
                             className="flex items-center justify-between gap-3 rounded-lg border border-border p-3 text-left hover:border-accent hover:bg-accentBg"
                           >
                             <div>
-                              <div className="text-sm font-medium text-textH">{translateSegment(segment)}</div>
-                              <div className="mt-1 font-mono text-[11px] text-text">{segment}</div>
+                              <div className="text-sm font-medium text-textH">{child.label ?? translateSegment(segment)}</div>
+                              <div className="mt-1 font-mono text-[11px] text-text">
+                                {child.label && segment.startsWith('__custom__') ? 'Classe personalizada' : segment}
+                              </div>
                               <div className="mt-1 text-[11px] text-text">{countVariables(child)} variável(is)</div>
                             </div>
                             <ChevronRight className="h-4 w-4 text-text" />
@@ -331,11 +335,13 @@ function buildTree(
     let node = root
 
     for (const part of parts.slice(0, -1)) {
+      const label = variable.segmentLabels?.[part]
       const existing = node.children.get(part)
       if (existing) {
+        if (label && !existing.label) existing.label = label
         node = existing
       } else {
-        const created: VariableTree = { children: new Map(), variables: [] }
+        const created: VariableTree = { children: new Map(), variables: [], label }
         node.children.set(part, created)
         node = created
       }
