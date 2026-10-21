@@ -11,6 +11,7 @@ import {
   setCustomSystemEnabled,
 } from '../../../lib/customSystems'
 import { useCustomSystemDefinitions } from '../../../lib/customSystems/CustomSystemRegistry'
+import { recalculateCustomSystemState } from '../../../lib/customSystems/CustomFormulaRuntimePatch'
 import {
   CHARACTER_TABS,
   type CharacterTab,
@@ -111,11 +112,13 @@ export function CharacterSettingsModal({
   }
 
   function replaceSystemState(nextState: CharacterCustomSystemState) {
-    updateSystemStates((current) =>
-      current.map((state) =>
-        state.systemId === nextState.systemId ? nextState : state,
-      ),
-    )
+    updateCharacter(character.get('id'), (current) => {
+      const recalculated = recalculateCustomSystemState(nextState, current)
+      const states = current.get('sheet').customSystems ?? []
+      return current.withSheet('customSystems', states.map((state) =>
+        state.systemId === nextState.systemId ? recalculated : state,
+      ))
+    })
   }
 
   function hideSystem(systemId: string) {
