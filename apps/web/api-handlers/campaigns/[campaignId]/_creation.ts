@@ -1,4 +1,4 @@
-import { isCriticalDamageSettings } from "../../../src/shared/session-runtime/criticalDamage"
+import { isCriticalDamageSettings } from "../../../src/shared/session-runtime/criticalDamage.js"
 import {
   CampaignMemberStatus,
   CampaignSpellApprovalStatus,
