@@ -5,6 +5,13 @@ import { fileURLToPath } from "node:url";
 async function load(path) {
   const compiled = await build({
     entryPoints: [fileURLToPath(new URL(path, import.meta.url))],
+    // CI runs protocol tests before generating game-core/dist.
+    // Resolve workspace runtime exports to source, as in the other protocol tests.
+    alias: {
+      "@dnd-manager/game-core/critical-damage": fileURLToPath(new URL("../../game-core/src/criticalDamage.ts", import.meta.url)),
+      "@dnd-manager/game-core/long-rest-settings": fileURLToPath(new URL("../../game-core/src/longRestSupplySettings.ts", import.meta.url)),
+      "@dnd-manager/game-core/campaign-progression": fileURLToPath(new URL("../../game-core/src/campaignProgression.ts", import.meta.url)),
+    },
     bundle: true,
     platform: "node",
     format: "esm",
