@@ -9,6 +9,7 @@ const root = resolve(fileURLToPath(new URL("..", import.meta.url)))
 await build({
   absWorkingDir: root,
   entryPoints: {
+    criticalDamage: "packages/game-core/src/criticalDamage.ts",
     campaignProgression: "packages/game-core/src/campaignProgression.ts",
     longRestSupplySettings: "packages/game-core/src/longRestSupplySettings.ts",
     manualDiceExpression: "packages/game-core/src/manualDiceExpression.ts",

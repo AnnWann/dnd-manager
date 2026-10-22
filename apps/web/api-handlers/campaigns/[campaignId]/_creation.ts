@@ -1,3 +1,4 @@
+import { isCriticalDamageSettings } from "../../../src/shared/session-runtime/criticalDamage"
 import {
   CampaignMemberStatus,
   CampaignSpellApprovalStatus,
@@ -183,6 +184,7 @@ export async function PATCH(
     const nextDiceRollingEnabled = domains.settings
       ? data.diceRollingEnabled !== false
       : currentSnapshot.data.diceRollingEnabled !== false
+    const nextCriticalDamage = domains.settings ? data.criticalDamage : currentSnapshot.data.criticalDamage
     const nextProgression = domains.settings
       ? normalizeCampaignProgressionSettings(data.progression)
       : normalizeCampaignProgressionSettings(currentSnapshot.data.progression)
@@ -390,6 +392,7 @@ export async function PATCH(
           data: {
             ...nextManagedDomains,
             diceRollingEnabled: nextDiceRollingEnabled,
+            criticalDamage: nextCriticalDamage,
             progression: nextProgression,
             longRestSupplies: nextLongRestSupplies,
             creatureFolders: nextCreatureFolders,
@@ -400,6 +403,7 @@ export async function PATCH(
           data: {
             ...nextManagedDomains,
             diceRollingEnabled: nextDiceRollingEnabled,
+            criticalDamage: nextCriticalDamage,
             progression: nextProgression,
             longRestSupplies: nextLongRestSupplies,
             creatureFolders: nextCreatureFolders,
@@ -480,6 +484,7 @@ function projectCreationSnapshot(
     data: {
       version: 1,
       diceRollingEnabled: snapshot.data.diceRollingEnabled,
+      criticalDamage: snapshot.data.criticalDamage,
       progression: access.settings ? snapshot.data.progression : undefined,
       longRestSupplies: access.settings ? snapshot.data.longRestSupplies : undefined,
       characters: access.settings ? snapshot.data.characters : [],
@@ -635,6 +640,7 @@ async function buildCreationSnapshot(campaignId: string): Promise<CreationSnapsh
   const data: CreationState = {
     version: 1,
     diceRollingEnabled,
+    criticalDamage: isCriticalDamageSettings(markerData?.criticalDamage) ? markerData.criticalDamage : undefined,
     progression,
     longRestSupplies,
     characters,
@@ -751,6 +757,9 @@ function readCreationState(value: unknown): CreationState {
       )
     ) ||
     !Array.isArray(state.customSystems) ||
+    (
+      state.criticalDamage !== undefined && !isCriticalDamageSettings(state.criticalDamage)
+    ) ||
     (
       state.diceRollingEnabled !== undefined
       && typeof state.diceRollingEnabled !== "boolean"

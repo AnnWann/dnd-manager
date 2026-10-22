@@ -1,3 +1,4 @@
+import { applyCriticalDamageRule } from "../../../../../web/src/shared/session-runtime/criticalDamage";
 import type { CharacterTemplateProps } from "../../../../../web/src/models/characters/CharacterTemplate";
 import { getSpellCastDamageChoices, getSpellOnCastAttackRiders } from "../../../../../web/src/models/magic/spells/spellAttackRiders";
 import { resolveAttackRiderDamageChoice } from "../../../../../web/src/models/combat/AttackRider";
@@ -356,6 +357,7 @@ export class SessionActor extends AbilitySessionActor {
         targetEntryId: operation.targetEntryId,
         selectedDamageType: chosenType,
       });
+      applyCriticalDamageRule(actionResult, runtimeConfig?.config.criticalDamage);
     } catch (error) {
       sendError(
         webSocket,

@@ -1,3 +1,4 @@
+import { isCriticalDamageSettings } from "../../shared/session-runtime/criticalDamage"
 import {
   createContext,
   useCallback,
@@ -315,6 +316,9 @@ export function CreationEditorProvider({
         }
       }
 
+      if (candidate.criticalDamage !== undefined && !isCriticalDamageSettings(candidate.criticalDamage)) {
+        throw new Error("Corrija a fórmula de dano crítico antes de salvar.")
+      }
       const snapshot = await saveCreationSnapshot(
         campaignId,
         baseRevision,

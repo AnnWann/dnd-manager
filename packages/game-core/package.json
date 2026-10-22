@@ -31,7 +31,11 @@
     "./standard-volumes": "./src/standardItemVolumes.ts",
     "./asi": "./src/asi.ts",
     "./item-weight": "./src/itemWeight.ts",
-    "./numeric-bonuses": "./src/numericBonuses.ts"
+    "./numeric-bonuses": "./src/numericBonuses.ts",
+    "./critical-damage": {
+      "types": "./src/criticalDamage.ts",
+      "default": "./dist/criticalDamage.js"
+    }
   },
   "scripts": {
     "typecheck": "tsc --project tsconfig.json --noEmit"

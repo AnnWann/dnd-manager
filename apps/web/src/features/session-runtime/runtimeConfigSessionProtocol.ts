@@ -1,3 +1,4 @@
+import { isCriticalDamageSettings } from "../../shared/session-runtime/criticalDamage"
 import type { SessionRuntimeConfigSnapshot } from "../../shared/session-runtime/sessionRuntimeConfig"
 import { isCampaignProgressionSettings } from "../../shared/progression/campaignProgression"
 import { isLongRestSupplySettings } from "../../shared/rest/longRestSupplySettings"
@@ -51,6 +52,9 @@ function isRuntimeConfigSnapshot(
     (
       config.diceRollingEnabled === undefined
       || typeof config.diceRollingEnabled === "boolean"
+    ) &&
+    (
+      (config.criticalDamage === undefined || isCriticalDamageSettings(config.criticalDamage))
     ) &&
     (
       config.progression === undefined

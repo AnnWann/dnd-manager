@@ -1,3 +1,4 @@
+import { applyCriticalDamageRule } from "../../../../web/src/shared/session-runtime/criticalDamage";
 import type { SessionRuntimeConfigSnapshot } from "../../../../web/src/shared/session-runtime/sessionRuntimeConfig";
 import { DurableObject } from "cloudflare:workers";
 import {
@@ -596,6 +597,7 @@ export class SessionActor extends DurableObject<Env> {
           rollDice:
             !announcing && isDigitalDiceRollingEnabled(runtimeConfig),
         });
+        applyCriticalDamageRule(actionResult, runtimeConfig?.config.criticalDamage);
       } catch (error) {
         this.sendError(
           webSocket,
@@ -679,6 +681,13 @@ export class SessionActor extends DurableObject<Env> {
     );
     if (!resolution.ok) {
       this.sendError(webSocket, resolution.code, resolution.message);
+      return;
+    }
+
+    try {
+      if (resolution.resultType === "action") applyCriticalDamageRule(resolution.result, runtimeConfig?.config.criticalDamage);
+    } catch (error) {
+      this.sendError(webSocket, "CRITICAL_FORMULA_INVALID", error instanceof Error ? error.message : "Não foi possível resolver o crítico.");
       return;
     }
 
@@ -766,6 +775,7 @@ export class SessionActor extends DurableObject<Env> {
     let resolved: ActionResolution;
     try {
       resolved = resolveServerActionRoll(request, connection.userId, character, isDigitalDiceRollingEnabled(runtimeConfig));
+      if (resolved.ok) applyCriticalDamageRule(resolved.result, runtimeConfig?.config.criticalDamage);
     } catch {
       this.sendError(webSocket, "ACTION_ROLL_RESOLUTION_FAILED", "The authoritative action roll could not be resolved.");
       return;
