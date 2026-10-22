@@ -535,7 +535,7 @@ function richCustomConditionDuration(
   } as SessionCondition["duration"];
 }
 
-function applyInitiativeOperation(
+export function applyInitiativeOperation(
   current: InitiativeSession,
   operation: SessionInitiativeOperation,
   runtimeConfig: SessionRuntimeConfigSnapshot | null,
@@ -583,6 +583,28 @@ function applyInitiativeOperation(
         session = synchronizeSharedCombatantState(session, operation.entryId);
       }
       return { ok: true, session, operation: { ...operation, patch } };
+    }
+    case "initiative.spellSlot.restore": {
+      const entry = current.entries.find((candidate) => candidate.id === operation.entryId);
+      if (!entry) return invalid("INITIATIVE_ENTRY_NOT_FOUND", "Initiative entry was not found.");
+      const creature = findRuntimeCreature(runtimeConfig, entry.sourceId);
+      const level = operation.level as keyof NonNullable<InitiativeEntry["creatureSpellResources"]>["slots"];
+      const maximum = creature?.spellcasting?.slots[level];
+      if (!Number.isInteger(operation.level) || operation.level < 1 || operation.level > 9 || !maximum) {
+        return invalid("CREATURE_SPELL_SLOT_INVALID", "A criatura não possui espaços desse círculo.");
+      }
+      const resources = entry.creatureSpellResources;
+      const available = Math.max(0, Math.min(maximum, resources?.slots[level]?.current ?? maximum));
+      if (available >= maximum) return invalid("CREATURE_SPELL_SLOTS_FULL", "Os espaços desse círculo já estão completos.");
+      let session = updateInitiativeEntry(current, entry.id, (target) => ({
+        ...target,
+        creatureSpellResources: {
+          slots: { ...resources?.slots, [level]: { current: available + 1, max: maximum } },
+          perDay: resources?.perDay ?? {},
+        },
+      }));
+      session = synchronizeSharedCombatantState(session, entry.id);
+      return { ok: true, session, operation };
     }
     case "initiative.entry.remove": {
       if (!current.entries.some((entry) => entry.id === operation.entryId)) return invalid("INITIATIVE_ENTRY_NOT_FOUND", "Initiative entry was not found.");

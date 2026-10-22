@@ -1228,6 +1228,7 @@ function describeSessionOperation(
     case "initiative.settings.update": return `Alterou as configurações de saves de morte da iniciativa.`
     case "initiative.deathSaves.set": return `Atualizou os saves de morte de um personagem na iniciativa (${operation.successes} sucessos, ${operation.failures} falhas).`
     case "initiative.conditions.bulk": return operation.mode === "add" ? `Aplicou uma condição em ${operation.entryIds.length} participantes da iniciativa.` : `Removeu ${operation.conditionName || "uma condição"} de ${operation.entryIds.length} participantes da iniciativa.`
+    case "initiative.spellSlot.restore": return `Recuperou 1 espaço de magia de ${operation.level}º círculo pela iniciativa.`
     case "initiative.hp.apply": {
       const count = operation.entryIds.length
       if (operation.mode === "damage") {
