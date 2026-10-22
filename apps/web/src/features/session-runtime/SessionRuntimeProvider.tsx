@@ -9,6 +9,10 @@ import {
   type ReactNode,
 } from "react"
 import { SessionSocket, type SessionRuntimeStatus } from "./sessionSocket"
+import type {
+  SessionPanelsState,
+  SessionPanelOperation,
+} from "../../../../../packages/session-protocol/src/sessionPanels"
 import { ACTION_ROLL_REQUEST_EVENT, CREATURE_ROLL_REQUEST_EVENT, DICE_ROLL_REQUEST_EVENT, publishServerActionRoll, publishServerDiceRoll } from "../../lib/diceRoller"
 import type { CompanionOperation, CompanionState } from "../../shared/session-runtime/companionRuntime"
 import type { SessionPauseState } from "../../shared/session-runtime/sessionPause"
@@ -85,6 +89,8 @@ export type SessionRuntimeContextValue = {
   presence: SessionRuntimePresenceUser[]
   lastHeartbeatAckAt: number | null
   runtimeConfigSnapshot: SessionRuntimeConfigSnapshot | null
+  panelsState?: SessionPanelsState | null
+  dispatchPanelOperation?: (operation: SessionPanelOperation) => boolean
   hpByCharacterId: Readonly<Record<string, SessionHpState>>
   conditionsByCharacterId: Readonly<Record<string, SessionConditionsState>>
   abilitiesByCharacterId: Readonly<Record<string, SessionAbilityState>>
@@ -173,6 +179,7 @@ function SessionRuntimeProviderInner({ sessionId, userId, role, children }: {
   const [presence, setPresence] = useState<SessionRuntimePresenceUser[]>([])
   const [lastHeartbeatAckAt, setLastHeartbeatAckAt] = useState<number | null>(null)
   const [runtimeConfigSnapshot, setRuntimeConfigSnapshot] = useState<SessionRuntimeConfigSnapshot | null>(null)
+  const [panelsState, setPanelsState] = useState<SessionPanelsState | null>(null)
   const digitalDiceEnabledRef = useRef(true)
 
   useEffect(() => {
@@ -199,6 +206,7 @@ function SessionRuntimeProviderInner({ sessionId, userId, role, children }: {
     setPauseState(null)
     setLastHeartbeatAckAt(null)
     setRuntimeConfigSnapshot(null)
+    setPanelsState(null)
     setHpByCharacterId({})
     setConditionsByCharacterId({})
     setAbilitiesByCharacterId({})
@@ -225,6 +233,10 @@ function SessionRuntimeProviderInner({ sessionId, userId, role, children }: {
       onStatusChange: setStatus,
       onMessage: (message) => {
         if (message.type === "session.pause.state") { setPauseState(message.state); return }
+        if (message.type === "session.panels.snapshot") {
+          setPanelsState(message.state)
+          return
+        }
         if (message.type === "session.config.snapshot") {
           setRuntimeConfigSnapshot(message.snapshot)
           return
@@ -363,6 +375,8 @@ function SessionRuntimeProviderInner({ sessionId, userId, role, children }: {
     }
   }, [baseUrl, clientId, role, sessionId, userId])
 
+  const dispatchPanelOperation = useCallback((operation: SessionPanelOperation) =>
+    socketRef.current?.send({ type: "session.panels.operation", operation }) ?? false, [])
   const publishRuntimeConfig = useCallback((snapshot: SessionRuntimeConfigSnapshot) =>
     socketRef.current?.send({ type: "session.config.publish", snapshot }) ?? false, [])
   const initializeHp = useCallback((characters: SessionHpSeed[]) =>
@@ -459,6 +473,7 @@ function SessionRuntimeProviderInner({ sessionId, userId, role, children }: {
 
   const value = useMemo<SessionRuntimeContextValue>(() => ({
     status, sessionId, clientId, role, presence, lastHeartbeatAckAt, runtimeConfigSnapshot,
+    panelsState, dispatchPanelOperation,
     hpByCharacterId, conditionsByCharacterId, abilitiesByCharacterId, sessionCharactersById, characterSnapshotReady,
     inventoryState, missionState, initiativeState, pauseState, setSessionPaused, companionsById, dispatchCompanionOperation,
     publishRuntimeConfig,
@@ -476,6 +491,7 @@ function SessionRuntimeProviderInner({ sessionId, userId, role, children }: {
     dispatchProficiencyOperation, dispatchProfileOperation, dispatchRaceOperation, dispatchSheetOperation,
     hpByCharacterId, initializeAbilities, initializeConditions, initializeHp, initializeInitiative, initializeInventory, initializeMissions,
     initiativeState, inventoryState, lastHeartbeatAckAt, missionState, pauseState, setSessionPaused, presence, publishRuntimeConfig, role, runtimeConfigSnapshot,
+    panelsState, dispatchPanelOperation,
     sessionCharactersById, sessionId, status,
   ])
 
