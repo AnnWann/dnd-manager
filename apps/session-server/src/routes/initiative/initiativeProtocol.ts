@@ -31,6 +31,7 @@ export function parseInitiativeClientMessage(raw: string): SessionInitiativeClie
   switch (operation.type) {
     case "initiative.entries.add": return Array.isArray(operation.entries) && operation.entries.every(isRecord) ? value as SessionInitiativeClientMessage : null;
     case "initiative.entry.update": return readId(operation.entryId) && isRecord(operation.patch) ? value as SessionInitiativeClientMessage : null;
+    case "initiative.spellSlot.restore": return readId(operation.entryId) && integerRange(operation.level, 1, 9) ? value as SessionInitiativeClientMessage : null;
     case "initiative.entry.remove": return readId(operation.entryId) ? value as SessionInitiativeClientMessage : null;
     case "initiative.allies.trade": return readId(operation.entryId) && operation.direction === 1 ? value as SessionInitiativeClientMessage : null;
     case "initiative.viewMode.set": return operation.viewMode === "table" || operation.viewMode === "cards" ? value as SessionInitiativeClientMessage : null;

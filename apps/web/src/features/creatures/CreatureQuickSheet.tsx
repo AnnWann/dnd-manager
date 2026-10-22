@@ -94,12 +94,14 @@ type CreatureQuickSheetProps = {
   data: CombatQuickSheetData
   preferImage?: boolean
   compact?: boolean
+  onRestoreSpellSlot?: (level: number) => boolean
 }
 
 export function CreatureQuickSheet({
   data,
   preferImage = false,
   compact = false,
+  onRestoreSpellSlot,
 }: CreatureQuickSheetProps) {
   const [mode, setMode] = useState<"summary" | "image">(
     preferImage && data.sheetImageUrl ? "image" : "summary",
@@ -161,13 +163,13 @@ export function CreatureQuickSheet({
           />
         </div>
       ) : (
-        <QuickSheetSummary data={data} compact={compact} />
+        <QuickSheetSummary data={data} compact={compact} onRestoreSpellSlot={onRestoreSpellSlot} />
       )}
     </div>
   )
 }
 
-function QuickSheetSummary({ data, compact = false }: { data: CombatQuickSheetData; compact?: boolean }) {
+function QuickSheetSummary({ data, compact = false, onRestoreSpellSlot }: Pick<CreatureQuickSheetProps, "data" | "compact" | "onRestoreSpellSlot">) {
   return (
     <div className="grid gap-4">
       <div className={`grid gap-2 ${compact ? "grid-cols-2" : "grid-cols-2 sm:grid-cols-3 lg:grid-cols-6"}`}>
@@ -316,6 +318,7 @@ function QuickSheetSummary({ data, compact = false }: { data: CombatQuickSheetDa
           saveDc={data.spellSaveDc}
           attackBonus={data.spellAttackBonus}
           resources={data.spellResources}
+          onRestoreSpellSlot={onRestoreSpellSlot}
           rollContext={data.rollContext}
         />
       ) : null}
@@ -349,13 +352,30 @@ function CreatureSpellcastingSection({
   attackBonus,
   resources,
   rollContext,
+  onRestoreSpellSlot,
 }: {
   spellcasting: CreatureSpellcasting
   saveDc?: number
   attackBonus?: number
   resources?: InitiativeCreatureSpellResources
+  onRestoreSpellSlot?: (level: number) => boolean
   rollContext?: CreatureQuickSheetRollContext
 }) {
+  const runtime = useOptionalSessionRuntime()
+  const [restoreError, setRestoreError] = useState("")
+  const canRestore = Boolean(onRestoreSpellSlot || (runtime && rollContext && (
+    (runtime.role === "MASTER" && rollContext.initiativeEntryId) || rollContext.canSpendOutsideInitiative
+  )))
+  const restoreSlot = (level: number) => {
+    let sent = false
+    if (onRestoreSpellSlot) sent = onRestoreSpellSlot(level)
+    else if (runtime && rollContext?.initiativeEntryId && runtime.role === "MASTER") {
+      sent = runtime.dispatchInitiativeOperation({ type: "initiative.spellSlot.restore", characterId: "session", entryId: rollContext.initiativeEntryId, level })
+    } else if (runtime && rollContext?.canSpendOutsideInitiative) {
+      sent = runtime.dispatchCompanionOperation({ type: "spellSlot", creatureId: rollContext.creatureId, level, delta: 1 })
+    }
+    setRestoreError(sent ? "" : "Não foi possível enviar a recuperação à sessão. Verifique a conexão.")
+  }
   const { getSpellByIndex, ensureOfficialSpells } = useMagicContext()
   const [expanded, setExpanded] = useState<Set<string>>(() => new Set())
   const [castLevels, setCastLevels] = useState<Record<string, number>>({})
@@ -394,21 +414,25 @@ function CreatureSpellcastingSection({
 
         {slots.length ? (
           <div className="flex max-w-full flex-wrap justify-end gap-1.5 text-[10px] text-textMuted">
-            {slots.map(([level, amount]) => (
-              <span
-                key={level}
-                className="rounded-full border border-border bg-bg px-2 py-1"
-              >
-                {level}º: {resources?.slots?.[
-                  Number(level) as keyof InitiativeCreatureSpellResources["slots"]
-                ]?.current ?? amount}/{resources?.slots?.[
-                  Number(level) as keyof InitiativeCreatureSpellResources["slots"]
-                ]?.max ?? amount}
-              </span>
-            ))}
+            {slots.map(([level, amount]) => {
+              const resource = resources?.slots?.[Number(level) as keyof InitiativeCreatureSpellResources["slots"]]
+              const current = resource?.current ?? amount ?? 0
+              const maximum = resource?.max ?? amount ?? 0
+              return <div key={level} className="flex items-center gap-1 rounded-full border border-border bg-bg px-2 py-1">
+                <span>{level}º: {current}/{maximum}</span>
+                {canRestore ? <button type="button"
+                  className="rounded-full px-2 py-1 text-accent hover:bg-bg-subtle disabled:cursor-not-allowed disabled:opacity-40"
+                  disabled={current >= maximum || (!onRestoreSpellSlot && runtime?.status !== "connected")}
+                  aria-label={`Recuperar 1 espaço de magia de ${level}º círculo`}
+                  title={current >= maximum ? "Espaços completos" : `Recuperar 1 espaço de ${level}º círculo`}
+                  onClick={() => restoreSlot(Number(level))}>+ Recuperar 1</button> : null}
+              </div>
+            })}
           </div>
         ) : null}
       </div>
+
+      {restoreError ? <p role="alert" className="mt-2 text-xs text-danger">{restoreError}</p> : null}
 
       {spellcasting.spells.length ? (
         <div className="mt-3 grid gap-2">

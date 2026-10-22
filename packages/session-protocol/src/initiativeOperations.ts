@@ -10,6 +10,7 @@ export type InitiativeDamagePart<TDamageType extends string = string> = {
 export type SessionInitiativeOperation<TDamageType extends string = string> =
   | { type: "initiative.entries.add"; characterId: "session"; entries: Record<string, unknown>[] }
   | { type: "initiative.entry.update"; characterId: "session"; entryId: string; patch: Record<string, unknown> }
+  | { type: "initiative.spellSlot.restore"; characterId: "session"; entryId: string; level: number }
   | { type: "initiative.entry.remove"; characterId: "session"; entryId: string }
   | { type: "initiative.sort"; characterId: "session" }
   | { type: "initiative.combat.start"; characterId: "session" }

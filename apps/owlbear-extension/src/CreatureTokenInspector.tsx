@@ -35,7 +35,8 @@ export function CreatureTokenInspector({ entry, creature, spells, serverSpellInd
     <MagicProvider spells={spells}>
       <CreatureQuickSheet data={creature
         ? quickSheetFromCompendiumCreature(creature,entry,{enableRolls:true,serverSpellIndexes})
-        : quickSheetFromInitiativeEntry(entry)} compact />
+        : quickSheetFromInitiativeEntry(entry)} compact
+        onRestoreSpellSlot={connected ? level => onOperation({ type: "initiative.spellSlot.restore", characterId: "session", entryId: entry.id, level }) : undefined} />
     </MagicProvider>
     {unavailableSpells.length ? <p role="alert" className="rounded-lg border border-border p-2 text-xs text-textMuted">
       {unavailableSpells.length} magia(s) da criatura não têm definição disponível no Owlbear.
