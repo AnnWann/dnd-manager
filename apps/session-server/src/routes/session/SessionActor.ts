@@ -194,7 +194,7 @@ export class SessionActor extends DurableObject<Env> {
       webSocket.close(1011, "Missing connection attachment");
       return;
     }
-    if (parsed.type === "session.heartbeat" && parsed.clientId !== connection.clientId) {
+    if (parsed?.type === "session.heartbeat" && parsed.clientId !== connection.clientId) {
       this.sendError(webSocket, "CLIENT_ID_MISMATCH", "Heartbeat clientId does not match this connection.");
       return;
     }
