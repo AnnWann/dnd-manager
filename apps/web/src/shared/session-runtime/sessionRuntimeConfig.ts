@@ -1,3 +1,4 @@
+import type { CriticalDamageSettings } from "./criticalDamage"
 import type {
   CreationCharacterCustomSystemConfiguration,
   CreationSnapshot,
@@ -24,6 +25,7 @@ import {
 export type SessionRuntimeConfig = {
   /** Defaults to true for snapshots created before this setting existed. */
   diceRollingEnabled?: boolean
+  criticalDamage?: CriticalDamageSettings
   /** Player-safe projection. Hidden custom goals are deliberately omitted. */
   progression?: CampaignProgressionSettings
   /** Authoritative long-rest supply policy for this campaign. */
@@ -61,6 +63,7 @@ export function toSessionRuntimeConfig(
 
   return {
     diceRollingEnabled: creation.diceRollingEnabled !== false,
+    criticalDamage: creation.criticalDamage,
     progression: projectCampaignProgressionForPlayers(creation.progression),
     longRestSupplies: normalizeLongRestSupplySettings(creation.longRestSupplies),
     characters: creation.characters.map((character) => ({

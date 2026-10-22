@@ -1,3 +1,4 @@
+import { CriticalDamageSettingsEditor } from "../../features/session/CriticalDamageSettingsEditor"
 import { Select as SharedSelect } from "../../components/ui/Select"
 import {
   Copy,
@@ -339,6 +340,11 @@ export function SessionCreationSettingsView() {
             </div>
           ) : null}
         </section>
+      ) : null}
+
+      {editor?.draft ? (
+        <CriticalDamageSettingsEditor value={editor.draft.criticalDamage}
+          onChange={(criticalDamage) => editor.updateDraft(draft => ({ ...draft, criticalDamage }))} />
       ) : null}
 
       {editor ? (

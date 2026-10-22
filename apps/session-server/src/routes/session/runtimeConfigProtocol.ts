@@ -1,3 +1,4 @@
+import { isCriticalDamageSettings } from "../../../../web/src/shared/session-runtime/criticalDamage";
 import type { SessionRuntimeConfigPublishMessage as SharedSessionRuntimeConfigPublishMessage, SessionRuntimeConfigSnapshotMessage as SharedSessionRuntimeConfigSnapshotMessage } from "../../../../../packages/session-protocol/src/runtimeConfig"
 import type { SessionRuntimeConfigSnapshot } from "../../../../web/src/shared/session-runtime/sessionRuntimeConfig";
 import { isCampaignProgressionSettings } from "../../../../web/src/shared/progression/campaignProgression";
@@ -48,6 +49,7 @@ function isRuntimeConfigSnapshot(
       config.diceRollingEnabled !== undefined
       && typeof config.diceRollingEnabled !== "boolean"
     )
+    || (config.criticalDamage !== undefined && !isCriticalDamageSettings(config.criticalDamage))
     || (
       config.progression !== undefined
       && !isCampaignProgressionSettings(config.progression)

@@ -1,3 +1,4 @@
+import { applyCriticalDamageRule } from "../../../../../web/src/shared/session-runtime/criticalDamage";
 import {
   addCustomAbility,
   createCustomCollectionEntry,
@@ -338,6 +339,27 @@ export class SessionActor extends BaseSessionActor {
       return;
     }
 
+    let actionResult: SessionActionRollResult | undefined;
+    if (loggedOperation.type === "character.customSystem.ability.activate" || loggedOperation.type === "character.customSystem.action.execute") {
+      try {
+        actionResult = resolvedCustomRoll
+          ? buildCustomSystemActionRollResult(
+              connection.userId, character, definition, currentState,
+              loggedOperation, resolvedCustomRoll,
+            )
+          : buildCustomSystemActionAnnouncement(
+              connection.userId, character, definition, currentState,
+              loggedOperation,
+            );
+        if (resolvedCustomRoll?.mode !== "manual" && isDigitalDiceRollingEnabled(activeRuntimeConfig)) {
+          applyCriticalDamageRule(actionResult, activeRuntimeConfig.config.criticalDamage);
+        }
+      } catch (error) {
+        sendError(webSocket, "CRITICAL_FORMULA_INVALID", error instanceof Error ? error.message : "Não foi possível resolver o crítico.");
+        return;
+      }
+    }
+
     const nextAbility: SessionAbilityState = {
       characterId: operation.characterId,
       character: nextCharacter.toJSON() as unknown as Record<string, unknown>,
@@ -406,18 +428,9 @@ export class SessionActor extends BaseSessionActor {
     ) {
       // Announce from the server only AFTER the authoritative activation
       // commits. No dice are fabricated for description-only abilities.
-      const result = resolvedCustomRoll
-        ? buildCustomSystemActionRollResult(
-            connection.userId, character, definition, currentState,
-            loggedOperation, resolvedCustomRoll,
-          )
-        : buildCustomSystemActionAnnouncement(
-            connection.userId, character, definition, currentState,
-            loggedOperation,
-          );
       broadcastVisibilityFiltered(sockets, {
         type: "session.action.result",
-        result,
+        result: actionResult!,
       });
     }
   }

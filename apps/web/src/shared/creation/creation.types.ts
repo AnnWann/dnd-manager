@@ -1,3 +1,4 @@
+import type { CriticalDamageSettings } from "../session-runtime/criticalDamage"
 import type { CharacterType } from "../../models/characters/CharacterType"
 import type {
   CustomAbilityAcquisitionExceptionState,
@@ -20,6 +21,7 @@ export type CreationState = {
   version: 1
   /** Missing means enabled for Creation documents created before this setting existed. */
   diceRollingEnabled?: boolean
+  criticalDamage?: CriticalDamageSettings
   /** Campaign-wide rule for when character level-ups become available. */
   progression?: CampaignProgressionSettings
   /** Campaign-wide requirements for supplies consumed by a full long rest. */
