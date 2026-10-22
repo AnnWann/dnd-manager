@@ -4,6 +4,7 @@ import { routeForSheetOperation, type CharacterSheetRoute } from "../characters/
 import type { SessionActionRollRequest, SessionActionRollResult, SessionCreatureRollRequest, SessionDiceRollRequest, SessionDiceRollResult } from "../../../../web/src/shared/session-runtime/diceRollProtocol";
 import type { CompanionOperation, CompanionServerMessage } from "../../../../web/src/shared/session-runtime/companionRuntime";
 import { parseManualDiceExpression } from "../../../../web/src/shared/session-runtime/manualDiceExpression";
+import type { SessionPanelsServerMessage } from "../../../../../packages/session-protocol/src/sessionPanels";
 
 export type SessionRole = "MASTER" | "PLAYER";
 
@@ -155,6 +156,7 @@ export type ServerSessionMessage =
   | { type: "session.dice.result"; result: SessionDiceRollResult }
   | { type: "session.action.result"; result: SessionActionRollResult }
   | CompanionServerMessage
+  | SessionPanelsServerMessage
   | { type: "session.customSystem.notice"; characterId: string; title: string; message: string }
   | { type: "session.error"; code: string; message: string };
 
