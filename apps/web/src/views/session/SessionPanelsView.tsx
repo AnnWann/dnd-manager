@@ -1,3 +1,4 @@
+import { DEFAULT_CAMPAIGN_TIME, faerunDate, moonPhase, campaignWeather, campaignLight } from "../../../../../packages/session-protocol/src/campaignTime"
 import { useEffect, useMemo, useRef, useState, type ChangeEvent } from "react"
 import { useOptionalSessionRuntime } from "../../features/session-runtime/useSessionRuntime"
 import { Select } from "../../components/ui/Select"
@@ -281,6 +282,7 @@ export function SessionPanelsView() {
         </section>
       ) : null}
 
+      <CampaignCalendar time={runtime.panelsState?.campaignTime ?? DEFAULT_CAMPAIGN_TIME} isMaster={isMaster} advance={minutes => send({type:"time.advance",minutes})} />
       {panels.length > 0 ? (
         <>
           <nav className="flex flex-wrap gap-2" aria-label="Selecionar painel">
@@ -319,4 +321,39 @@ export function SessionPanelsView() {
       ) : null}
     </main>
   )
+}
+
+function CampaignCalendar({time,isMaster,advance}:{
+ time: typeof DEFAULT_CAMPAIGN_TIME
+ isMaster: boolean
+ advance: (minutes:number)=>void
+}) {
+ const date = faerunDate(time.day,time.epochYear)
+ const moon = moonPhase(time.day)
+ const weather = campaignWeather(time)
+ const light = campaignLight(time,weather)
+ const labels: Record<string,string> = { daylight:"Luz do dia",penumbra:"Penumbra",moonlight:"Escuridão com lua",darkness:"Escuridão total" }
+ const weatherLabels: Record<string,string> = {clear:"Ensolarado",cloudy:"Nublado",rain:"Chuva",storm:"Tempestade",fog:"Neblina",wind:"Ventos fortes"}
+ const hh = String(Math.floor(time.minute/60)).padStart(2,"0")
+ const mm = String(time.minute%60).padStart(2,"0")
+ return <section className={`rounded-xl border border-border p-5 ${light==="darkness"||light==="moonlight"?"bg-slate-900 text-white":"bg-bg"}`}>
+  <div className="flex flex-wrap items-center justify-between gap-3">
+   <div>
+    <h2 className="text-lg font-semibold">Relógio e calendário de Faerûn</h2>
+    <p>{date.festival ?? `${date.dayOfMonth} de ${date.month}`} · ${date.year} CV · {date.tenday}º tenday</p>
+    <p className="text-2xl font-bold">{hh}:{mm}</p>
+   </div>
+   <div className="text-sm">
+    <p>Iluminação: <strong>{labels[light]}</strong></p>
+    <p>Clima: <strong>{weatherLabels[weather]}</strong></p>
+    <p>Selûne: fase {moon.index+1}/8 · {Math.round(moon.illumination*100)}% iluminada</p>
+   </div>
+  </div>
+  {isMaster && <div className="mt-4 flex flex-wrap gap-2">
+   <button className={button} onClick={()=>advance(60)}>+1 hora</button>
+   <button className={button} onClick={()=>advance(360)}>+6 horas</button>
+   <button className={button} onClick={()=>advance(1440)}>+1 dia</button>
+   <button className={button} onClick={()=>advance(-60)}>−1 hora</button>
+  </div>}
+ </section>
 }
