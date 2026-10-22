@@ -442,6 +442,12 @@ export function CampaignLayout() {
       onClick: () => navigate(toSession("missions")),
     },
     {
+      label: "Painéis",
+      icon: <IconCompendium />,
+      active: location.pathname === toSession("panels"),
+      onClick: () => navigate(toSession("panels")),
+    },
+    {
       label: "Iniciativa",
       icon: <IconInitiative />,
       active: location.pathname === toSession("initiative"),
