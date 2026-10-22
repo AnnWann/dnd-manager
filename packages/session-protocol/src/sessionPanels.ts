@@ -54,7 +54,7 @@ export function isSessionPanel(value: unknown): value is SessionPanel {
   if (value.kind === "clock") {
     if (!isRecord(value.clock)) return false
     const { max, value: current, label } = value.clock
-    if (!Number.isInteger(max) || (max as number) < 1 || (max as number) > 1000000) return false
+    if (!Number.isInteger(max) || (max as number) < 1 || (max as number) > 36) return false
     if (!Number.isInteger(current) || (current as number) < 0 || (current as number) > (max as number)) return false
     if (!boundedText(label, 100)) return false
   }
