@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type ChangeEvent } from "react"
 import { useOptionalSessionRuntime } from "../../features/session-runtime/useSessionRuntime"
+import { Select } from "../../components/ui/Select"
 import type {
   SessionPanel,
   SessionPanelVisibility,
@@ -210,10 +211,10 @@ export function SessionPanelsView() {
         </div>
         {isMaster && !editor && (
           <div className="flex gap-2">
-            <select className={field} value={newKind} onChange={e => setNewKind(e.target.value as SessionPanel["kind"])}>
+            <Select className={field} value={newKind} onChange={e => setNewKind(e.target.value as SessionPanel["kind"])}>
               <option value="clock">Relógio</option>
               <option value="html">Painel HTML</option>
-            </select>
+            </Select>
             <button className={button} onClick={() => setEditor(newPanel(newKind))}>+ Adicionar</button>
           </div>
         )}
@@ -231,9 +232,9 @@ export function SessionPanelsView() {
             <input className={field} value={editor.title} maxLength={100} onChange={e => setEditor({ ...editor, title: e.target.value })} />
           </label>
           <label className="grid gap-1 text-sm">Visibilidade
-            <select className={field} value={editor.visibility} onChange={e => setEditor({ ...editor, visibility: e.target.value as SessionPanelVisibility })}>
+            <Select className={field} value={editor.visibility} onChange={e => setEditor({ ...editor, visibility: e.target.value as SessionPanelVisibility })}>
               {visibilityOptions.map(option => <option value={option.value} key={option.value}>{option.label}</option>)}
-            </select>
+            </Select>
           </label>
           {editor.kind === "clock" && editor.clock && (
             <div className="grid gap-3 sm:grid-cols-3">
