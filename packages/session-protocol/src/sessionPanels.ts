@@ -133,3 +133,13 @@ export function applySessionPanelOperation(
   } else return null
   return { revision: state.revision + 1, panels }
 }
+
+export function parseSessionPanelsServerMessage(raw: string): SessionPanelsServerMessage | null {
+  let parsed: unknown
+  try { parsed = JSON.parse(raw) } catch { return null }
+  if (!isRecord(parsed) || parsed.type !== "session.panels.snapshot" || !isRecord(parsed.state)) return null
+  const state = parsed.state
+  if (!Number.isInteger(state.revision) || (state.revision as number) < 0) return null
+  if (!Array.isArray(state.panels) || state.panels.length > MAX_PANELS || !state.panels.every(isSessionPanel)) return null
+  return { type: "session.panels.snapshot", state: state as SessionPanelsState }
+}
