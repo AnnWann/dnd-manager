@@ -535,7 +535,7 @@ function richCustomConditionDuration(
   } as SessionCondition["duration"];
 }
 
-function applyInitiativeOperation(
+export function applyInitiativeOperation(
   current: InitiativeSession,
   operation: SessionInitiativeOperation,
   runtimeConfig: SessionRuntimeConfigSnapshot | null,
@@ -589,7 +589,7 @@ function applyInitiativeOperation(
       return { ok: true, session: removeInitiativeEntry(current, operation.entryId), operation };
     }
     case "initiative.hp.apply": {
-      const entryIds = Array.from(new Set(operation.entryIds.flatMap((entryId) => sharedCombatantEntryIds(current, entryId))));
+      const entryIds = Array.from(new Set(operation.entryIds));
       if (!entryIds.length || entryIds.length > 50) {
         return invalid("INITIATIVE_HP_TARGETS_INVALID", "Select between 1 and 50 initiative targets.");
       }
@@ -597,9 +597,19 @@ function applyInitiativeOperation(
         return invalid("INITIATIVE_ENTRY_NOT_FOUND", "One or more initiative targets were not found.");
       }
 
+      // Initiative turns share a combatant's HP pool. Apply once per pool,
+      // then synchronize the resulting state instead of repeating the effect.
+      const affectedEntryIds = new Set<string>();
+      const targetEntryIds = entryIds.filter((entryId) => {
+        if (affectedEntryIds.has(entryId)) return false;
+        for (const sharedId of sharedCombatantEntryIds(current, entryId)) {
+          affectedEntryIds.add(sharedId);
+        }
+        return true;
+      });
       let session = current;
       const results: NonNullable<typeof operation.results> = [];
-      for (const entryId of entryIds) {
+      for (const entryId of targetEntryIds) {
         const entry = session.entries.find((candidate) => candidate.id === entryId)!;
         if (operation.mode !== "temporary" && entry.currentHp === undefined) {
           return invalid("INITIATIVE_HP_UNAVAILABLE", `${entry.name} does not have hit points configured.`);
@@ -675,7 +685,7 @@ function applyInitiativeOperation(
         });
       }
 
-      return { ok: true, session, operation: { ...operation, entryIds, results } as SessionInitiativeOperation };
+      return { ok: true, session, operation: { ...operation, entryIds: targetEntryIds, results } as SessionInitiativeOperation };
     }
     case "initiative.conditions.bulk": {
       const entryIds = Array.from(new Set(operation.entryIds));
