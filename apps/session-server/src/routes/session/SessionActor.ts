@@ -23,6 +23,14 @@ import {
 } from "../characters/sheet/characterState";
 import type { SessionAbilityState } from "../characters/abilities/abilityProtocol";
 import {
+  applySessionPanelOperation,
+  EMPTY_SESSION_PANELS,
+  parseSessionPanelOperation,
+  projectSessionPanels,
+  type SessionPanelsState,
+  type SessionPanelOperation,
+} from "../../../../../packages/session-protocol/src/sessionPanels";
+import {
   CharacterTemplate,
   type CharacterTemplateProps,
 } from "../../../../web/src/models/characters/CharacterTemplate";
@@ -133,6 +141,7 @@ const HP_STATE_KEY = "hp-state";
 const CONDITIONS_STATE_KEY = "conditions-state";
 const ABILITIES_STATE_KEY = "abilities-state";
 const INVENTORY_STATE_KEY = "inventory-state";
+const PANELS_STATE_KEY = "session-panels-v1";
 
 type StoredSessionHpState = SessionHpState & {
   /** Distinguishes an old HP-only state from an intentionally empty hit-dice state. */
@@ -165,6 +174,7 @@ export class SessionActor extends DurableObject<Env> {
     this.send(server, { type: "session.ready", sessionId: connection.sessionId, clientId: connection.clientId, serverTime: Date.now() });
     await Promise.all([this.sendHpSnapshot(server), this.sendConditionsSnapshot(server), this.sendCompanionsSnapshot(server)]);
     if (connection.role === "MASTER") await this.sendHpLog(server);
+    await this.sendPanelSnapshot(server, connection.role === "MASTER");
     this.broadcastPresence();
     await this.scheduleNextAlarm();
     return new Response(null, { status: 101, webSocket: client });
@@ -172,8 +182,9 @@ export class SessionActor extends DurableObject<Env> {
 
   async webSocketMessage(webSocket: WebSocket, message: string | ArrayBuffer): Promise<void> {
     const raw = typeof message === "string" ? message : new TextDecoder().decode(message);
-    const parsed = parseClientSessionMessage(raw);
-    if (!parsed) {
+    const panelOperation = parseSessionPanelOperation(raw);
+    const parsed = panelOperation ? null : parseClientSessionMessage(raw);
+    if (!parsed && !panelOperation) {
       this.sendError(webSocket, "INVALID_MESSAGE", "Unsupported or malformed session message.");
       return;
     }
@@ -183,13 +194,20 @@ export class SessionActor extends DurableObject<Env> {
       webSocket.close(1011, "Missing connection attachment");
       return;
     }
-    if (parsed.type === "session.heartbeat" && parsed.clientId !== connection.clientId) {
+    if (parsed?.type === "session.heartbeat" && parsed.clientId !== connection.clientId) {
       this.sendError(webSocket, "CLIENT_ID_MISMATCH", "Heartbeat clientId does not match this connection.");
       return;
     }
 
     connection.lastHeartbeatAt = Date.now();
     webSocket.serializeAttachment(connection);
+
+    if (panelOperation) {
+      await this.handlePanelOperation(webSocket, connection.role === "MASTER", panelOperation);
+      await this.scheduleNextAlarm();
+      return;
+    }
+    if (!parsed) return;
 
     switch (parsed.type) {
       case "session.heartbeat":
@@ -245,6 +263,34 @@ export class SessionActor extends DurableObject<Env> {
         break;
     }
     await this.scheduleNextAlarm();
+  }
+
+  private async sendPanelSnapshot(webSocket: WebSocket, isMaster: boolean): Promise<void> {
+    const state = (await this.ctx.storage.get<SessionPanelsState>(PANELS_STATE_KEY)) ?? EMPTY_SESSION_PANELS;
+    this.send(webSocket, { type: "session.panels.snapshot", state: projectSessionPanels(state, isMaster) });
+  }
+
+  private async handlePanelOperation(
+    webSocket: WebSocket,
+    isMaster: boolean,
+    operation: SessionPanelOperation,
+  ): Promise<void> {
+    const previous = (await this.ctx.storage.get<SessionPanelsState>(PANELS_STATE_KEY)) ?? EMPTY_SESSION_PANELS;
+    const next = applySessionPanelOperation(previous, operation, isMaster);
+    if (!next) {
+      this.sendError(webSocket, "SESSION_PANEL_FORBIDDEN", "Painel inexistente, operação inválida ou sem permissão.");
+      return;
+    }
+    await this.ctx.storage.put(PANELS_STATE_KEY, next);
+    // Send individual role projections. Never put private HTML/storage on the public socket.
+    for (const socket of this.ctx.getWebSockets()) {
+      const recipient = this.getConnection(socket);
+      if (!recipient) continue;
+      this.send(socket, {
+        type: "session.panels.snapshot",
+        state: projectSessionPanels(next, recipient.role === "MASTER"),
+      });
+    }
   }
 
   async webSocketClose(): Promise<void> {

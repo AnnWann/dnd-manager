@@ -1,5 +1,10 @@
 import { SessionMessageClient } from "../../../../../packages/session-client/src/sessionMessageClient"
 import {
+  parseSessionPanelsServerMessage,
+  type SessionPanelsServerMessage,
+  type SessionPanelsClientMessage,
+} from "../../../../../packages/session-protocol/src/sessionPanels"
+import {
   parseServerSessionMessage,
   type ClientSessionMessage,
   type ServerSessionMessage,
@@ -67,6 +72,7 @@ export type SessionSocketOptions = {
       | SessionRuntimeConfigServerMessage
       | CompanionServerMessage
       | SessionPauseServerMessage
+      | SessionPanelsServerMessage
   ) => void
 }
 
@@ -87,6 +93,7 @@ type SessionOutgoingMessage = | ClientSessionMessage
     | { type: "session.equipment.operation"; operation: SessionEquipmentOperation }
     | CompanionClientMessage
     | SessionPauseClientMessage
+    | SessionPanelsClientMessage
 type SessionIncomingMessage = Parameters<SessionSocketOptions["onMessage"]>[0]
 type DecodedSessionMessage = {
   message: SessionIncomingMessage
@@ -104,7 +111,8 @@ function decodeSessionMessage(raw: string): DecodedSessionMessage | null {
   const abilityMessage = parseAbilityServerMessage(raw)
   const companionMessage = parseCompanionServerMessage(raw)
   const pauseMessage = parseSessionPauseServerMessage(raw)
-  const message = pauseMessage ?? runtimeConfigMessage ?? lifecycleMessage ?? inventoryMessage ?? missionMessage ?? initiativeMessage ?? abilityMessage ?? companionMessage ?? parseServerSessionMessage(raw)
+  const panelMessage = parseSessionPanelsServerMessage(raw)
+  const message = panelMessage ?? pauseMessage ?? runtimeConfigMessage ?? lifecycleMessage ?? inventoryMessage ?? missionMessage ?? initiativeMessage ?? abilityMessage ?? companionMessage ?? parseServerSessionMessage(raw)
   return message ? { message, abilityMessage, lifecycleMessage, runtimeConfigMessage } : null
 }
 
