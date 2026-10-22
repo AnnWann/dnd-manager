@@ -2,6 +2,7 @@
  * Durable-Object-owned panels. Public projections MUST be created on the
  * server: private HTML and master-only state may contain adventure spoilers.
  */
+import { DEFAULT_CAMPAIGN_TIME, advanceCampaignTime, type CampaignTime } from "./campaignTime"
 export type SessionPanelVisibility = "private" | "shared" | "collaborative"
 export type SessionPanel = {
   id: string
@@ -16,8 +17,10 @@ export type SessionPanel = {
   /** Opaque storage owned by private HTML; never sent to players. */
   storage?: Record<string, string>
 }
-export type SessionPanelsState = { revision: number; panels: SessionPanel[] }
+export type SessionPanelsState = { revision: number; panels: SessionPanel[]; campaignTime?: CampaignTime }
 export type SessionPanelOperation =
+  | { type: "time.advance"; minutes: number }
+  | { type: "time.set"; time: CampaignTime }
   | { type: "upsert"; panel: SessionPanel }
   | { type: "delete"; id: string }
   | { type: "clock.advance"; id: string; delta: number }
@@ -68,6 +71,8 @@ export function parseSessionPanelOperation(raw: string): SessionPanelOperation |
   try { message = JSON.parse(raw) } catch { return null }
   if (!isRecord(message) || message.type !== "session.panels.operation" || !isRecord(message.operation)) return null
   const operation = message.operation
+  if (operation.type === "time.advance" && Number.isInteger(operation.minutes) && Math.abs(operation.minutes as number) <= 43200) return { type: "time.advance", minutes: operation.minutes as number }
+  if (operation.type === "time.set" && isRecord(operation.time) && Number.isInteger(operation.time.day) && Math.abs(operation.time.day as number) <= 1000000 && Number.isInteger(operation.time.minute) && (operation.time.minute as number) >= 0 && (operation.time.minute as number) < 1440 && Number.isInteger(operation.time.epochYear) && Number.isInteger(operation.time.seed)) return { type: "time.set", time: operation.time as CampaignTime }
   if (operation.type === "upsert" && isSessionPanel(operation.panel)) {
     return { type: "upsert", panel: operation.panel }
   }
@@ -85,6 +90,7 @@ export function parseSessionPanelOperation(raw: string): SessionPanelOperation |
 export function projectSessionPanels(state: SessionPanelsState, isMaster: boolean): SessionPanelsState {
   return {
     revision: state.revision,
+    campaignTime: state.campaignTime ?? DEFAULT_CAMPAIGN_TIME,
     panels: state.panels
       .filter(panel => isMaster || panel.visibility !== "private")
       .map(panel => isMaster ? panel : panel.kind === "html"
@@ -112,6 +118,10 @@ export function applySessionPanelOperation(
   isMaster: boolean,
 ): SessionPanelsState | null {
   let panels = state.panels
+  if (operation.type === "time.advance" || operation.type === "time.set") {
+    if (!isMaster) return null
+    return { ...state, revision: state.revision + 1, campaignTime: operation.type === "time.set" ? operation.time : advanceCampaignTime(state.campaignTime ?? DEFAULT_CAMPAIGN_TIME, operation.minutes) }
+  }
   if (operation.type === "upsert") {
     if (!isMaster || !isSessionPanel(operation.panel)) return null
     const index = panels.findIndex(panel => panel.id === operation.panel.id)
@@ -131,7 +141,7 @@ export function applySessionPanelOperation(
     if (!isMaster || !panel || panel.kind !== "html" || !validStorage(operation.storage)) return null
     panels = panels.map(entry => entry.id === panel.id ? { ...entry, storage: operation.storage } : entry)
   } else return null
-  return { revision: state.revision + 1, panels }
+  return { ...state, revision: state.revision + 1, panels }
 }
 
 export function parseSessionPanelsServerMessage(raw: string): SessionPanelsServerMessage | null {
