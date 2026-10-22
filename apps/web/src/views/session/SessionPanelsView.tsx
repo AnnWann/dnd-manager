@@ -233,7 +233,7 @@ export function SessionPanelsView() {
           </label>
           <label className="grid gap-1 text-sm">Visibilidade
             <Select className={field} value={editor.visibility} onChange={e => setEditor({ ...editor, visibility: e.target.value as SessionPanelVisibility })}>
-              {visibilityOptions.map(option => <option value={option.value} key={option.value}>{option.label}</option>)}
+              {visibilityOptions.filter(option => editor.kind === "clock" || option.value !== "collaborative").map(option => <option value={option.value} key={option.value}>{option.label}</option>)}
             </Select>
           </label>
           {editor.kind === "clock" && editor.clock && (
