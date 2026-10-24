@@ -189,7 +189,7 @@ export function CharacterCreationRacialChoices({
           if (featAbility) {
             nextAbilities.push({
               ...featAbility,
-              kind: "feature",
+              kind: featAbility.kind ?? "feature",
               category: "feat",
               source: "race",
             })
