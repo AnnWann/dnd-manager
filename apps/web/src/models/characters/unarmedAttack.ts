@@ -2,6 +2,7 @@ import type { Die } from "../dice/Die"
 import type { Attribute } from "../sheet/Attribute"
 import type { Weapon } from "../items/equipment/Weapon"
 import type { CharacterTemplate } from "./CharacterTemplate"
+import { getActiveAttackRiders, getUnarmedRiderDamageDice } from "../combat/AttackRider"
 
 export type UnarmedAttackProfile = {
   attribute: Attribute
@@ -48,11 +49,20 @@ export function getUnarmedAttackProfile(
     modifier,
   )
 
+  const replacement = getUnarmedRiderDamageDice(
+    getActiveAttackRiders(character, { scope: "unarmed" }),
+  )
+  const damageDie: Die | undefined = replacement
+    ? { quantity: replacement.quantity, sides: `d${replacement.sides}` as Die["sides"] }
+    : monkLevel > 0
+      ? getMonkMartialArtsDie(monkLevel)
+      : undefined
+
   return {
     attribute,
     attack,
     damageBonus,
-    damageDie: monkLevel > 0 ? getMonkMartialArtsDie(monkLevel) : undefined,
+    damageDie,
     monkLevel,
   }
 }

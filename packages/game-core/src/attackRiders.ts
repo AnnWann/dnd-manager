@@ -18,6 +18,8 @@ export type AttackRider = {
   damage?: { dice: string; damageType?: DamageType; magical?: boolean; ignoreResistance?: boolean }
   /** When present, a player must choose one of these types at activation/cast. */
   damageTypeChoices?: DamageType[]
+  /** Replace the base unarmed strike dice (e.g. 1d8); does not add extra damage. */
+  unarmedDamageDice?: string
   /** Changes only the base weapon damage packet, not other typed riders. */
   replaceWeaponDamageType?: DamageType
   /** How to determine the base weapon's damage type. Defaults to the legacy fixed value. */
@@ -54,6 +56,26 @@ export function parseAttackRiderDice(dice: string): ParsedRiderDice | undefined 
   const flat = Number(match[3] ?? 0)
   if (quantity < 1 || quantity > 20 || Math.abs(flat) > 100) return undefined
   return { quantity, sides: Number(match[2]), flat }
+}
+
+/**
+ * Effective base damage dice for an unarmed strike, resolved independently
+ * of additional on-hit rider packets. Most recently activated valid effect wins.
+ * Strictly reject flat modifiers: the normal ability modifier remains separate.
+ */
+export function getUnarmedRiderDamageDice(
+  riders: readonly AttackRider[],
+): { quantity: number; sides: number } | undefined {
+  for (const rider of [...riders].reverse()) {
+    if (rider.scope !== "unarmed" && rider.scope !== "all") continue
+    const raw = rider.unarmedDamageDice
+    if (typeof raw !== "string") continue
+    const dice = parseAttackRiderDice(raw)
+    if (dice && dice.flat === 0 && /^\d{1,2}d(?:4|6|8|10|12|20)$/i.test(raw.trim())) {
+      return { quantity: dice.quantity, sides: dice.sides }
+    }
+  }
+  return undefined
 }
 
 export function getWeaponRiderTransformation(riders: readonly AttackRider[]) {

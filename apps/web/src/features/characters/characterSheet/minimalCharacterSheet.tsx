@@ -196,6 +196,21 @@ export function MinimalCharacterSheet({
       { type: "weapon", itemId: selectedEquippedWeapon.id },
       "pocket",
     )
+    setWeaponSwapOpen(false)
+  }
+
+  function unequipWeapon(weaponId: string) {
+    moveEquippedItem(
+      characterId,
+      { type: "weapon", itemId: weaponId },
+      "inventory",
+    )
+  }
+
+  function unequipSelectedWeapon() {
+    if (!selectedEquippedWeapon) return
+    unequipWeapon(selectedEquippedWeapon.id)
+    setWeaponSwapOpen(false)
   }
 
   function updateDerivedStat(
@@ -434,12 +449,12 @@ export function MinimalCharacterSheet({
                       damageBonus={damageBonus}
                       updateCharacter={updateCharacter}
                       onClick={() => setHandDialog({ itemId: weapon.id })}
+                      onUnequip={() => unequipWeapon(weapon.id)}
                     />
                   )
                 })
-              ) : (
-                <CompactUnarmedTile character={character} />
-              )}
+              ) : null}
+              <CompactUnarmedTile character={character} />
             </div>
           </div>
 
@@ -504,19 +519,21 @@ export function MinimalCharacterSheet({
         onSelectedEquippedWeaponChange={setSelectedEquippedWeaponId}
         onWield={wieldSelectedPocketWeapon}
         onStow={stowSelectedWeapon}
+        onUnequip={unequipSelectedWeapon}
         onClose={() => setWeaponSwapOpen(false)}
       />
     </div>
   )
 }
 
-function CompactWeaponTile({ character, weapon, attack, damageBonus, updateCharacter, onClick }: {
+function CompactWeaponTile({ character, weapon, attack, damageBonus, updateCharacter, onClick, onUnequip }: {
   character: CharacterTemplate
   weapon: Weapon
   attack: number
   damageBonus: number
   updateCharacter: Props["updateCharacter"]
   onClick: () => void
+  onUnequip: () => void
 }) {
   const die = getWeaponDamageDie(weapon) ?? weapon.damage
   const damage = `${die.quantity}${die.sides}${damageBonus !== 0 ? ` ${formatSigned(damageBonus)}` : ""}`
@@ -527,6 +544,7 @@ function CompactWeaponTile({ character, weapon, attack, damageBonus, updateChara
     attackBonus={formatSigned(attack)}
     damage={damage}
     onOpen={onClick}
+    onUnequip={onUnequip}
     onRollAttack={event => requestActionRoll({
       characterId: character.get("id"),
       source: { type: "weapon", weaponId: weapon.id },

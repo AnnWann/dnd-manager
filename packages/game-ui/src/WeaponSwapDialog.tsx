@@ -20,6 +20,7 @@ export function WeaponSwapDialog({
   onSelectedEquippedWeaponChange,
   onWield,
   onStow,
+  onUnequip,
   onClose,
 }: {
   open: boolean
@@ -32,6 +33,7 @@ export function WeaponSwapDialog({
   onSelectedEquippedWeaponChange: (id: string) => void
   onWield: (hands: 1 | 2) => void
   onStow: () => void
+  onUnequip: () => void
   onClose: () => void
 }) {
   const selectedPocketWeapon = pocketWeapons.find(
@@ -160,9 +162,9 @@ export function WeaponSwapDialog({
           <section className="grid gap-2 border-t border-border pt-4">
             <div>
               <div className="text-xs font-semibold text-textH">Guardar</div>
-              <div className="text-[11px] text-textMuted">Mova uma arma equipada para um bolso.</div>
+              <div className="text-[11px] text-textMuted">Guarde no bolso ou desequipe diretamente para o inventário, sem precisar empunhar outra arma.</div>
             </div>
-            <div className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_auto]">
+            <div className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_auto_auto]">
               <select className="h-10 rounded-lg border border-border bg-bg px-3 text-sm text-textH"
                 value={selectedEquippedWeaponId}
                 disabled={equippedWeapons.length === 0}
@@ -186,7 +188,16 @@ export function WeaponSwapDialog({
                 title={pocketsFull ? "Os oito espaços de bolso estão ocupados" : undefined}
                 onClick={onStow}
               >
-                Guardar
+                Guardar no bolso
+              </button>
+              <button
+                type="button"
+                className="h-10 rounded-md border border-border bg-bg-subtle px-3 text-xs font-semibold text-textH transition-colors hover:border-accentBorder hover:bg-accentBg disabled:cursor-not-allowed disabled:opacity-50"
+                disabled={equippedWeapons.length === 0}
+                title="Mover a arma para o inventário e deixar a mão livre"
+                onClick={onUnequip}
+              >
+                Desequipar
               </button>
             </div>
             {pocketsFull ? (

@@ -112,9 +112,8 @@ export function AttributeCalculators({ character }: Props) {
                   onClick={() => setHandDialog({ itemId: weapon.id })}
                 />
               ))
-            ) : (
-              <UnarmedAttackCard character={character} />
-            )}
+            ) : null}
+            <UnarmedAttackCard character={character} />
           </div>
         </CalculatorGroup>
 
