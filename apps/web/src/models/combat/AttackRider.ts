@@ -9,7 +9,7 @@ import { isAbilityBenefitsActive } from "../abilities/abilityActivation"
 
 import { getAttackRiderDamageChoices, type AttackRider, type AttackRiderContext } from "../../../../../packages/game-core/src/attackRiders"
 export type { AttackRider, AttackRiderContext, ParsedRiderDice } from "../../../../../packages/game-core/src/attackRiders"
-export { parseAttackRiderDice, getWeaponRiderTransformation, resolveAttackRiderAttributeSelection, getAttackRiderDamageChoices, resolveAttackRiderDamageChoice } from "../../../../../packages/game-core/src/attackRiders"
+export { parseAttackRiderDice, getUnarmedRiderDamageDice, getWeaponRiderTransformation, resolveAttackRiderAttributeSelection, getAttackRiderDamageChoices, resolveAttackRiderDamageChoice } from "../../../../../packages/game-core/src/attackRiders"
 
 /** Keep an item's own enchantment on the weapon granting it. */
 function bindSourceWeapon(riders: readonly AttackRider[] | undefined, sourceItemId?: string): AttackRider[] {
