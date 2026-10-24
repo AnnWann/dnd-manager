@@ -232,7 +232,7 @@ export function CreatureDropsDialog({
               </div>
             </div>
             {drops.conditional.map((entry) => (
-              <div key={entry.id} className="grid gap-2 rounded-lg border border-border bg-bg p-3 sm:grid-cols-[1fr_2fr_auto] sm:items-center">
+              <div key={entry.id} className="grid gap-2 rounded-lg border border-border bg-bg p-3 sm:grid-cols-[minmax(0,1fr)_minmax(0,2fr)_auto_auto] sm:items-center">
                 <div className="text-sm font-medium text-textH">{entry.item.name}</div>
                 <Input value={entry.dmHint ?? ""} placeholder="Lembrete para o mestre (ex.: se o olho estiver intacto)" onChange={(event) => setDrops((current) => ({ ...current, conditional: current.conditional.map((candidate) => candidate.id === entry.id ? { ...candidate, dmHint: event.target.value } : candidate) }))} />
                 <Button size="icon" variant="ghost" title="Editar item do drop condicional" aria-label={`Editar ${entry.item.name}`} onClick={() => editItem({ kind: "conditional", conditionalId: entry.id }, entry.item.id)}><Pencil className="h-4 w-4" /></Button>
@@ -522,7 +522,7 @@ function DropGroupEditor({
           {items.map((item) => (
             <div
               key={item.id}
-              className="grid gap-2 rounded-lg border border-border bg-bg p-3 sm:grid-cols-[minmax(0,1fr)_9rem_auto] sm:items-center"
+              className="grid gap-2 rounded-lg border border-border bg-bg p-3 sm:grid-cols-[minmax(0,1fr)_9rem_auto_auto] sm:items-center"
             >
               <div className="min-w-0">
                 <div className="truncate text-sm font-medium text-textH">{item.name}</div>
