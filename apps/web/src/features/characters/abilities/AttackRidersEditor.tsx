@@ -4,7 +4,7 @@ import { Select } from "../../../components/ui/Select"
 import type { CharacterTemplate } from "../../../models/characters/CharacterTemplate"
 import { DAMAGE_TYPE_OPTIONS, type DamageType } from "../../../models/combat/Damage"
 import type { AttackRider } from "../../../models/combat/AttackRider"
-import { parseAttackRiderDice } from "../../../models/combat/AttackRider"
+import { getUnarmedRiderDamageDice, parseAttackRiderDice } from "../../../models/combat/AttackRider"
 import { ATTRIBUTES, CLASS_NAMES } from "../../../contexts/consts"
 import type { Attribute } from "../../../models/sheet/Attribute"
 import { useOptionalSessionRuntime } from "../../session-runtime/useSessionRuntime"
@@ -96,6 +96,36 @@ export function AttackRidersEditor({ riders, character, onChange, defaultScope =
               ))}
             </div>
           </div> : null}
+          {(rider.scope === "unarmed" || rider.scope === "all") ? (
+            <div className="grid gap-2 rounded-lg border border-border bg-bg-subtle p-3">
+              <label className="flex items-center gap-2 text-xs font-medium text-textH">
+                <input
+                  type="checkbox"
+                  checked={rider.unarmedDamageDice !== undefined}
+                  onChange={e => patch(rider.id, {
+                    unarmedDamageDice: e.target.checked ? "1d6" : undefined,
+                  })}
+                />
+                Substituir os dados base do ataque desarmado
+              </label>
+              {rider.unarmedDamageDice !== undefined ? (
+                <label className="grid gap-1 text-xs text-textMuted">
+                  Novos dados (ex.: 1d8 ou 2d6)
+                  <Input
+                    value={rider.unarmedDamageDice}
+                    placeholder="1d6"
+                    onChange={e => patch(rider.id, { unarmedDamageDice: e.target.value })}
+                  />
+                  {!getUnarmedRiderDamageDice([rider]) ? (
+                    <span className="text-danger">Use apenas dados de 1d4 até 20d20 (d4, d6, d8, d10, d12 ou d20), sem bônus fixos.</span>
+                  ) : null}
+                </label>
+              ) : null}
+              <p className="text-[11px] leading-5 text-textMuted">
+                Substitui o dado de dano desarmado padrão (inclusive Artes Marciais do monge) enquanto o efeito estiver ativo. O modificador de atributo e os danos adicionais continuam separados.
+              </p>
+            </div>
+          ) : null}
           {rider.scope === "weapon" && rider.damage && rider.weaponSelection === "onActivation" ? (
             <p className="text-[11px] text-textMuted">
               Este dano é acrescentado apenas aos ataques feitos com a arma escolhida durante a ativação.
