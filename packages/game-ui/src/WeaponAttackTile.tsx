@@ -2,7 +2,7 @@ import type { ReactNode, MouseEvent } from "react"
 
 /** Display-only weapon attack card. Dice, ammunition and mutations are supplied by its host. */
 export function WeaponAttackTile({
-  name, hands, improvised, attackBonus, damage, onOpen, onRollAttack, onRollDamage, ammunition,
+  name, hands, improvised, attackBonus, damage, onOpen, onUnequip, onRollAttack, onRollDamage, ammunition,
 }: {
   name: string
   hands: 1 | 2
@@ -10,6 +10,7 @@ export function WeaponAttackTile({
   attackBonus: string
   damage: string
   onOpen: () => void
+  onUnequip?: () => void
   onRollAttack: (event: MouseEvent<HTMLButtonElement>) => void
   onRollDamage: () => void
   ammunition?: ReactNode
@@ -25,5 +26,15 @@ export function WeaponAttackTile({
     <button type="button" onClick={onRollDamage} title="Clique para rolar o dano no servidor."
       className="block w-full rounded text-[10px] font-medium text-textMuted hover:bg-accentBg hover:text-accent">{damage}</button>
     {ammunition}
+    {onUnequip ? (
+      <button
+        type="button"
+        title="Desequipar esta arma e movê-la ao inventário sem equipar outra"
+        onClick={onUnequip}
+        className="mt-2 w-full rounded-md border border-border bg-bg px-2 py-1.5 text-[11px] font-semibold text-textH transition-colors hover:border-accentBorder hover:bg-accentBg"
+      >
+        Desequipar
+      </button>
+    ) : null}
   </div>
 }
