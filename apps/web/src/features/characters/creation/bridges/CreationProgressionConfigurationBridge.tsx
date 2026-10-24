@@ -48,6 +48,7 @@ import {
   getCreationClassConfiguration,
   type CreationProgressionConfiguration,
 } from "../creationProgressionConfiguration"
+import { normalizeCreatedAbility } from "../normalizeCreatedAbility"
 import { findCharacterCreationRoot } from "../logic/characterCreationStepValidation"
 
 type Props = {
@@ -279,15 +280,7 @@ export function CreationProgressionConfigurationBridge({
 
   function saveFeature(ability: Ability) {
     if (!abilityTarget) return
-    const normalized: Ability = {
-      ...ability,
-      kind: "feature",
-      category:
-        ability.category === "feat" || ability.category === "invocation"
-          ? "general"
-          : ability.category,
-      source: abilityTarget.source,
-    }
+    const normalized = normalizeCreatedAbility(ability, abilityTarget.source)
 
     if (abilityTarget.source === "race") {
       const abilities = upsertAbility(value.race.abilities, normalized)
