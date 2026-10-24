@@ -1,4 +1,5 @@
 import type { Ability } from "../../../models/abilities/Ability"
+import { normalizeCreatedAbility } from "./normalizeCreatedAbility"
 import {
   withCharacterAsis,
   type CharacterAsi,
@@ -98,7 +99,7 @@ export function applyCreationProgressionConfiguration(
 
     customAbilities.push(
       ...classConfiguration.abilities.map((ability) => ({
-        ability: normalizeFeatureAbility(ability, "class"),
+        ability: normalizeCreatedAbility(ability, "class"),
         source: "class" as const,
         className: plan.className,
         classLevel: plan.level,
@@ -116,7 +117,7 @@ export function applyCreationProgressionConfiguration(
 
   customAbilities.push(
     ...configuration.race.abilities.map((ability) => ({
-      ability: normalizeFeatureAbility(ability, "race"),
+      ability: normalizeCreatedAbility(ability, "race"),
       source: "race" as const,
     })),
   )
@@ -221,7 +222,7 @@ function applyInvocations(
     ...magic,
     invocations: invocations.map((ability) => ({
       ...ability,
-      kind: ability.kind === "passive" ? "feature" : ability.kind,
+      kind: ability.kind ?? "feature",
       category: "invocation",
       source: "class",
     })),
@@ -249,22 +250,9 @@ function normalizeRacialFeatureKinds(
   return character.withSheet("race", {
     ...race,
     naturalAbilities: (race.naturalAbilities ?? []).map((ability) =>
-      normalizeFeatureAbility(ability, "race"),
+      normalizeCreatedAbility(ability, "race"),
     ),
   })
 }
 
-function normalizeFeatureAbility(
-  ability: Ability,
-  source: "class" | "race",
-): Ability {
-  return {
-    ...ability,
-    kind: ability.kind === "passive" ? "feature" : ability.kind || "feature",
-    category:
-      ability.category === "feat" || ability.category === "invocation"
-        ? "general"
-        : ability.category,
-    source,
-  }
-}
+
