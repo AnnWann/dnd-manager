@@ -71,7 +71,7 @@ export function getUnarmedRiderDamageDice(
     const raw = rider.unarmedDamageDice
     if (typeof raw !== "string") continue
     const dice = parseAttackRiderDice(raw)
-    if (dice && dice.flat === 0 && /^\\d{1,2}d(?:4|6|8|10|12|20)$/i.test(raw.trim())) {
+    if (dice && dice.flat === 0 && /^\d{1,2}d(?:4|6|8|10|12|20)$/i.test(raw.trim())) {
       return { quantity: dice.quantity, sides: dice.sides }
     }
   }
