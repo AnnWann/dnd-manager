@@ -259,8 +259,17 @@ export function CreatureSpellcastingEditor({
 
             {value.spells.length ? (
               <div className="mt-3 grid gap-2">
-                {value.spells.map((entry, index) => {
-                  const spell = getSpellByIndex(entry.spellIndex)
+                {value.spells
+                  .map((entry, index) => ({
+                    entry,
+                    index,
+                    spell: getSpellByIndex(entry.spellIndex),
+                  }))
+                  .sort((left, right) =>
+                    (left.spell?.slotLevel ?? 10) - (right.spell?.slotLevel ?? 10)
+                    || left.index - right.index,
+                  )
+                  .map(({ entry, index, spell }) => {
                   const usageType = entry.usage.type
                   const minimumLevel = spell?.slotLevel ?? 0
 
