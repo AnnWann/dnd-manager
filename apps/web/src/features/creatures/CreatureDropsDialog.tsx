@@ -1,4 +1,4 @@
-import { PackagePlus, Plus, Search, Trash2 } from "lucide-react"
+import { PackagePlus, Pencil, Plus, Search, Trash2 } from "lucide-react"
 import { useMemo, useState } from "react"
 
 import { Button } from "../../components/ui/Button"
@@ -27,6 +27,8 @@ type DropTarget =
   | { kind: "roll"; groupId: string }
   | { kind: "conditional"; conditionalId: string }
 
+type EditDropTarget = { target: DropTarget; itemId: string }
+
 export function CreatureDropsDialog({
   creature,
   onClose,
@@ -41,6 +43,7 @@ export function CreatureDropsDialog({
     normalizeCreatureDrops(creature.drops),
   )
   const [manualTarget, setManualTarget] = useState<DropTarget | null>(null)
+  const [editingDrop, setEditingDrop] = useState<EditDropTarget | null>(null)
   const [selectedByGroup, setSelectedByGroup] = useState<Record<string, string>>({})
   const [conditionalTemplateId, setConditionalTemplateId] = useState("")
 
@@ -102,6 +105,31 @@ export function CreatureDropsDialog({
       },
     ])
     setManualTarget(null)
+  }
+
+  function editItem(target: DropTarget, itemId: string) {
+    setEditingDrop({ target, itemId })
+  }
+
+  const editingItem = editingDrop
+    ? editingDrop.target.kind === "guaranteed"
+      ? drops.guaranteed.find((item) => item.id === editingDrop.itemId)
+      : editingDrop.target.kind === "roll"
+        ? drops.rollGroups.find((group) => group.id === editingDrop.target.groupId)
+            ?.items.find((item) => item.id === editingDrop.itemId)
+        : drops.conditional.find((entry) => entry.id === editingDrop.target.conditionalId)?.item
+    : undefined
+
+  function saveEditedItem(editedItem: Itemmable) {
+    if (!editingDrop || !editingItem) return
+    const { target, itemId } = editingDrop
+    // Keep the same identity and position in the drop table even if the
+    // generic item editor imported a JSON object with a different id.
+    const replacement: Itemmable = { ...structuredClone(editedItem), id: itemId }
+    updateItems(target, (items) =>
+      items.map((item) => item.id === itemId ? replacement : item),
+    )
+    setEditingDrop(null)
   }
 
   function addConditionalDrop(item: Itemmable) {
@@ -167,6 +195,7 @@ export function CreatureDropsDialog({
             onAddCompendium={(entry) => addCompendiumItem({ kind: "guaranteed" }, entry)}
             onAddManual={() => setManualTarget({ kind: "guaranteed" })}
             onChangeItems={(updater) => updateItems({ kind: "guaranteed" }, updater)}
+            onEditItem={(itemId) => editItem({ kind: "guaranteed" }, itemId)}
           />
 
           <section className="grid gap-3 rounded-xl border border-border bg-bg-subtle p-4">
@@ -206,6 +235,7 @@ export function CreatureDropsDialog({
               <div key={entry.id} className="grid gap-2 rounded-lg border border-border bg-bg p-3 sm:grid-cols-[1fr_2fr_auto] sm:items-center">
                 <div className="text-sm font-medium text-textH">{entry.item.name}</div>
                 <Input value={entry.dmHint ?? ""} placeholder="Lembrete para o mestre (ex.: se o olho estiver intacto)" onChange={(event) => setDrops((current) => ({ ...current, conditional: current.conditional.map((candidate) => candidate.id === entry.id ? { ...candidate, dmHint: event.target.value } : candidate) }))} />
+                <Button size="icon" variant="ghost" title="Editar item do drop condicional" aria-label={`Editar ${entry.item.name}`} onClick={() => editItem({ kind: "conditional", conditionalId: entry.id }, entry.item.id)}><Pencil className="h-4 w-4" /></Button>
                 <Button size="icon" variant="ghost" title="Remover drop condicional" onClick={() => setDrops((current) => ({ ...current, conditional: current.conditional.filter((candidate) => candidate.id !== entry.id) }))}><Trash2 className="h-4 w-4 text-danger" /></Button>
               </div>
             ))}
@@ -248,6 +278,7 @@ export function CreatureDropsDialog({
                 onChangeItems={(updater) =>
                   updateItems({ kind: "roll", groupId: group.id }, updater)
                 }
+                onEditItem={(itemId) => editItem({ kind: "roll", groupId: group.id }, itemId)}
                 onRemoveGroup={() => removeRollGroup(group.id)}
               />
             ))}
@@ -265,6 +296,16 @@ export function CreatureDropsDialog({
           </div>
         </div>
       </Modal>
+
+      <ItemCreationDialog
+        open={editingDrop !== null && editingItem !== undefined}
+        title={editingItem ? `Editar drop — ${editingItem.name}` : "Editar drop"}
+        item={editingItem}
+        enableJson
+        saveLabel="Salvar alterações"
+        onClose={() => setEditingDrop(null)}
+        onSave={saveEditedItem}
+      />
 
       <ItemCreationDialog
         open={manualTarget !== null}
@@ -417,6 +458,7 @@ function DropGroupEditor({
   onAddCompendium,
   onAddManual,
   onChangeItems,
+  onEditItem,
   onRemoveGroup,
 }: {
   title: string
@@ -429,6 +471,7 @@ function DropGroupEditor({
   onAddCompendium: (entry: SessionCompendiumItem) => void
   onAddManual: () => void
   onChangeItems: (updater: (items: Itemmable[]) => Itemmable[]) => void
+  onEditItem: (itemId: string) => void
   onRemoveGroup?: () => void
 }) {
   const selectedEntry = compendium.find((entry) => entry.item.id === selectedTemplateId)
@@ -497,6 +540,15 @@ function DropGroupEditor({
                   )
                 }
               />
+              <Button
+                size="icon"
+                variant="ghost"
+                title="Editar item do drop"
+                aria-label={`Editar ${item.name}`}
+                onClick={() => onEditItem(item.id)}
+              >
+                <Pencil className="h-4 w-4" />
+              </Button>
               <Button
                 size="icon"
                 variant="ghost"
