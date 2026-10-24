@@ -29,6 +29,22 @@ type DropTarget =
 
 type EditDropTarget = { target: DropTarget; itemId: string }
 
+function findExistingDropItem(
+  drops: CreatureDrops,
+  editing: EditDropTarget | null,
+): Itemmable | undefined {
+  if (!editing) return undefined
+  const { target, itemId } = editing
+  if (target.kind === "guaranteed") {
+    return drops.guaranteed.find((item) => item.id === itemId)
+  }
+  if (target.kind === "roll") {
+    return drops.rollGroups.find((group) => group.id === target.groupId)
+      ?.items.find((item) => item.id === itemId)
+  }
+  return drops.conditional.find((entry) => entry.id === target.conditionalId)?.item
+}
+
 export function CreatureDropsDialog({
   creature,
   onClose,
@@ -111,14 +127,7 @@ export function CreatureDropsDialog({
     setEditingDrop({ target, itemId })
   }
 
-  const editingItem = editingDrop
-    ? editingDrop.target.kind === "guaranteed"
-      ? drops.guaranteed.find((item) => item.id === editingDrop.itemId)
-      : editingDrop.target.kind === "roll"
-        ? drops.rollGroups.find((group) => group.id === editingDrop.target.groupId)
-            ?.items.find((item) => item.id === editingDrop.itemId)
-        : drops.conditional.find((entry) => entry.id === editingDrop.target.conditionalId)?.item
-    : undefined
+  const editingItem = findExistingDropItem(drops, editingDrop)
 
   function saveEditedItem(editedItem: Itemmable) {
     if (!editingDrop || !editingItem) return
