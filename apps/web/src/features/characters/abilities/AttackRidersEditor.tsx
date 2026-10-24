@@ -28,9 +28,14 @@ export function AttackRidersEditor({ riders, character, onChange, defaultScope =
           <div className="text-xs font-semibold text-textH">Efeitos em ataques (riders)</div>
           <div className="text-[11px] text-textMuted">Dados extras, atributo de ataque e dano, tipos de dano e propriedades temporárias de armas.</div>
         </div>
-        <Button size="sm" variant="secondary" onClick={() => onChange([...riders, {
-          id: crypto.randomUUID(), label: "Dano adicional", scope: defaultScope, damage: { dice: "1d6", damageType: "fire" },
-        }])}>+ Efeito</Button>
+        <div className="flex flex-wrap gap-2">
+          <Button size="sm" variant="secondary" onClick={() => onChange([...riders, {
+            id: crypto.randomUUID(), label: "Dano desarmado", scope: "unarmed", unarmedDamageDice: "1d6",
+          }])}>+ Dado desarmado</Button>
+          <Button size="sm" variant="secondary" onClick={() => onChange([...riders, {
+            id: crypto.randomUUID(), label: "Dano adicional", scope: defaultScope, damage: { dice: "1d6", damageType: "fire" },
+          }])}>+ Efeito</Button>
+        </div>
       </div>
       {riders.map(rider => (
         <div key={rider.id} className="grid gap-3 rounded-lg border border-border bg-bg-elevated p-3">
