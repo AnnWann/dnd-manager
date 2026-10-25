@@ -1,3 +1,6 @@
+import type { CharacterTemplate } from "../../../models/characters/CharacterTemplate"
+import { FormulaVariablePicker } from "../../customSystems/FormulaVariablePicker"
+import { listCharacterFormulaVariables } from "../../../lib/customSystems/CharacterFormulaVariables"
 import type { ReactNode } from "react"
 import { Plus, Trash2 } from "lucide-react"
 import { Button } from "../../../components/ui/Button"
@@ -54,7 +57,8 @@ function Field({ label, children }: { label: string; children: ReactNode }) {
   return <label className="grid min-w-0 gap-1 text-xs text-textMuted"><span>{label}</span>{children}</label>
 }
 
-export function AbilityRollEditor({ roll, onChange, targeting, onTargetingChange }: {
+export function AbilityRollEditor({ roll, onChange, targeting, onTargetingChange, character }: {
+  character?: CharacterTemplate
   roll?: AbilityRollDefinition
   onChange: (next: AbilityRollDefinition | undefined) => void
   targeting?: AbilityTargeting
@@ -67,7 +71,7 @@ export function AbilityRollEditor({ roll, onChange, targeting, onTargetingChange
 
   const kind = roll?.kind
   const hasD20 = kind === "attack" || kind === "abilityCheck" || kind === "savingThrow"
-  const error = validateAbilityRoll(roll)
+  const error = validateAbilityRoll(roll, character)
 
   return (
     <div className="grid gap-4">
@@ -205,9 +209,13 @@ export function AbilityRollEditor({ roll, onChange, targeting, onTargetingChange
                 </Button>
               </div>
               <div className="grid gap-3 sm:grid-cols-2">
-                <Field label="Dados (ex.: 2d6+3)">
-                  <Input value={damage.dice} placeholder="1d6" onChange={event => updateDamage({ dice: event.target.value })} />
-                </Field>
+                <div className="grid min-w-0 gap-1 text-xs text-textMuted">
+                  <span>Dados e fórmula (ex.: 1d6 + character.level)</span>
+                  <Input aria-label="Dados e fórmula" value={damage.dice} placeholder="1d6" onChange={event => updateDamage({ dice: event.target.value })} />
+                  <FormulaVariablePicker variables={listCharacterFormulaVariables(character).filter(variable => variable.valueType === "number")}
+                    onSelect={path => updateDamage({ dice: `${damage.dice.trim()}${/[+-]$/.test(damage.dice.trim()) ? " " : " + "}${path}` })} />
+                  <span>Some ou subtraia valores, variáveis e fórmulas após os dados. Ex.: 1d6 + floor(character.level / 2). O bônus da fórmula não dobra no crítico.</span>
+                </div>
                 <Field label="Tipo de dano">
                   <Select value={damage.damageType ?? ""} onChange={event => {
                     const damageType = (event.target.value || undefined) as HpEffectType | undefined

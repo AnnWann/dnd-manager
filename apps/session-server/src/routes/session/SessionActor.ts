@@ -44,7 +44,7 @@ import { hasProficiency } from "../../../../web/src/models/characters/characterP
 import { getUnarmedAttackProfile } from "../../../../web/src/models/characters/unarmedAttack";
 import type { Ability } from "../../../../web/src/models/abilities/Ability";
 import type { AbilityRollDefinition } from "../../../../web/src/models/abilities/AbilityRoll";
-import { validateAbilityRoll } from "../../../../web/src/models/abilities/AbilityRoll";
+import { validateAbilityRoll, resolveAbilityDamageFormula } from "../../../../web/src/models/abilities/AbilityRoll";
 import { applyBonuses, getCharacterBonuses, getEquippedItems, getScopedCharacterBonuses, getStatAdjustment } from "../../../../web/src/models/characters/characterStats";
 import { getCustomNativeStatOverrideWithResolver } from "../../../../web/src/lib/customSystems/CustomNativeStatOverrides";
 import { getActiveAttackRiders, getCharacterWeaponAttackAttribute, getWeaponRiderTransformation, parseAttackRiderDice } from "../../../../web/src/models/combat/AttackRider";
@@ -2485,7 +2485,7 @@ function resolveConfiguredAbilityRoll(
   base: Pick<SessionActionRollResult, "id" | "requestId" | "actorId" | "characterId" | "visibility" | "createdAt">,
 ): ActionResolution {
   const roll = ability.roll as AbilityRollDefinition;
-  const error = validateAbilityRoll(roll);
+  const error = validateAbilityRoll(roll, character);
   if (error) return { ok: false, code: "ABILITY_ROLL_INVALID", message: error };
   const attribute = roll.attribute ?? "str";
   const proficiency = character.getProficiencyBonus();
@@ -2545,7 +2545,7 @@ function resolveConfiguredAbilityRoll(
 
   const damages: SessionResolvedDamageRoll[] = [];
   for (const component of roll.damage ?? []) {
-    const dice = parseAttackRiderDice(component.dice);
+    const dice = resolveAbilityDamageFormula(component.dice, character);
     if (!dice) return { ok: false, code: "ABILITY_DAMAGE_INVALID", message: "Invalid ability damage dice." };
     const critical = result.critical && component.critical !== false;
     const componentAttribute = component.attribute ?? attribute;
