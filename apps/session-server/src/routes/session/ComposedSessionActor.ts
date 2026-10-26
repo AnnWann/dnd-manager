@@ -351,15 +351,49 @@ export class SessionActor extends BaseSessionActor {
         const now = new Date().toISOString();
         for (const cast of chain) cast.revealedAt = now;
         await this.ctx.storage.put(HIDDEN_SPELL_STATE_KEY, entries);
-        await this.revealHiddenConcentrations(chain);
         await this.broadcastHiddenSpellSnapshot();
-        for (const cast of chain) {
-          if (cast.privateResult) {
-            broadcast(this.ctx.getWebSockets(), {
-              type: "session.action.result", result: cast.privateResult,
-            });
-          }
+      for (const cast of chain) {
+        if (cast.actor.kind === "character") {
+          await this.magicRoute.webSocketMessage(socket, JSON.stringify({
+            type: "session.magic.operation",
+            operation: {
+              type: "character.spell.cast",
+              characterId: cast.actor.characterId,
+              requestId: cast.id,
+              spellIndex: cast.spellIndex,
+              sourceId: cast.sourceId,
+              castLevel: cast.castLevel,
+              mode: cast.mode,
+              visibility: "public",
+              payment: cast.payment,
+              targetEntryId: cast.targetEntryId,
+              selectedDamageType: cast.selectedDamageType,
+              selectedWeaponId: cast.selectedWeaponId,
+              counterspelled: Boolean(cast.counterspelled),
+              preResolvedResult: cast.privateResult,
+            },
+          }));
+        } else {
+          await super.webSocketMessage(socket, JSON.stringify({
+            type: "session.creature.roll",
+            request: {
+              requestId: cast.id,
+              creatureId: cast.actor.creatureId,
+              initiativeEntryId: cast.actor.initiativeEntryId,
+              mode: cast.mode,
+              visibility: "public",
+              source: {
+                type: "spell",
+                spellIndex: cast.spellIndex,
+                castLevel: cast.castLevel,
+                intent: "resolve",
+                counterspelled: Boolean(cast.counterspelled),
+                preResolvedResult: cast.privateResult,
+              },
+            },
+          }));
         }
+      }
         return;
       }
       if (chain.some(cast => Boolean(cast.resolvedAt))) {
@@ -559,76 +593,6 @@ export class SessionActor extends BaseSessionActor {
     });
     await this.ctx.storage.put(HIDDEN_SPELL_STATE_KEY, entries);
     await this.broadcastHiddenSpellSnapshot();
-  }
-
-  private async revealHiddenConcentrations(chain: HiddenSpellCommitment[]): Promise<void> {
-    const runtimeConfig = await readRuntimeConfig(this.ctx.storage);
-    const relevant = chain.filter(cast =>
-      !cast.counterspelled && findRuntimeSpell(runtimeConfig, cast.spellIndex)?.concentration);
-    if (!relevant.length) return;
-
-    const conditionsState = (await this.ctx.storage.get<Record<string, SessionConditionsState>>("conditions-state")) ?? {};
-    const initiativeState = await this.ctx.storage.get<SessionInitiativeState>("initiative-state");
-    let changedConditions = false;
-    let changedInitiative = false;
-
-    for (const cast of relevant) {
-      const source = "spell:hidden-" + cast.id;
-      const name = cast.spellName;
-      if (cast.actor.kind === "character") {
-        const state = conditionsState[cast.actor.characterId];
-        if (!state) continue;
-        const conditions = state.conditions.map(condition => {
-          if (!condition.tags.includes("dnd-manager:concentrating") || condition.notes !== source) return condition;
-          const bonuses = cast.privateRiders?.length
-            ? { ...(condition.bonuses ?? {}), attackRiders: cast.privateRiders } as typeof condition.bonuses
-            : condition.bonuses;
-          return {
-            ...condition,
-            description: "Mantendo concentração em " + name + ".",
-            source: name,
-            notes: "spell:" + cast.spellIndex,
-            duration: condition.duration?.type === "concentration"
-              ? { ...condition.duration, customLabel: "Concentrando em " + name }
-              : condition.duration,
-            bonuses,
-          };
-        });
-        if (conditions.some((item, index) => item !== state.conditions[index])) {
-          conditionsState[cast.actor.characterId] = { ...state, conditions, revision: state.revision + 1 };
-          changedConditions = true;
-        }
-      } else if (initiativeState?.session) {
-        const nextEntries = initiativeState.session.entries.map(entry => {
-          const conditions = entry.conditions.map(condition =>
-            condition.tags?.includes("dnd-manager:concentrating") && condition.notes === source
-              ? { ...condition, description: "Concentrando em " + name + ".",
-                  source: name, notes: "spell:" + cast.spellIndex }
-              : condition);
-          return conditions.some((item, index) => item !== entry.conditions[index])
-            ? { ...entry, conditions } : entry;
-        });
-        if (nextEntries.some((item, index) => item !== initiativeState.session.entries[index])) {
-          initiativeState.session = { ...initiativeState.session, entries: nextEntries };
-          changedInitiative = true;
-        }
-      }
-    }
-
-    if (changedConditions) {
-      await this.ctx.storage.put("conditions-state", conditionsState);
-      for (const cast of relevant) {
-        if (cast.actor.kind === "character") {
-          const state = conditionsState[cast.actor.characterId];
-          if (state) broadcast(this.ctx.getWebSockets(), { type: "session.conditions.updated", character: state });
-        }
-      }
-    }
-    if (changedInitiative && initiativeState) {
-      initiativeState.revision += 1;
-      await this.ctx.storage.put("initiative-state", initiativeState);
-      broadcast(this.ctx.getWebSockets(), { type: "session.initiative.updated", state: initiativeState });
-    }
   }
 
   private hiddenCounterspellModifier(
