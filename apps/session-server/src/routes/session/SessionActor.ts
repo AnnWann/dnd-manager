@@ -532,6 +532,15 @@ export class SessionActor extends DurableObject<Env> {
         this.sendError(webSocket, "COUNTERSPELL_INTERNAL_ONLY", "A anulação de magias é controlada pelo servidor.");
         return;
       }
+      const hiddenPending = (await this.ctx.storage.get<HiddenSpellCommitment[]>(HIDDEN_SPELL_STATE_KEY)) ?? [];
+      if (!spellSource.hiddenResolution && hiddenPending.some(item =>
+        item.actor.kind === "creature"
+        && item.actor.creatureId === request.creatureId
+        && item.actor.initiativeEntryId === request.initiativeEntryId
+        && !item.revealedAt)) {
+        this.sendError(webSocket, "HIDDEN_SPELL_PENDING", "Resolva e revele a conjuração oculta antes de conjurar novamente.");
+        return;
+      }
       const counterspelled = spellSource.counterspelled === true;
       const hiddenResolution = spellSource.hiddenResolution === true;
       const spellcasting = creature.spellcasting;
