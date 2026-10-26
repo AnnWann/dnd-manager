@@ -64,6 +64,9 @@ export function MinimalMagicActions({ character, updateCharacter, scrollOnlyItem
     setSelected(null)
     setConfirmConcentrationReplacement(false)
   }, [registeredHidden])
+  useEffect(() => {
+    if (sessionRuntime?.hiddenSpellError) setPendingHiddenId(null)
+  }, [sessionRuntime?.hiddenSpellError])
   const allSpells = useMemo(() => buildAvailableSpells(character, getSpellByIndex).filter(entry => !scrollOnlyItemId || entry.scrollItemId === scrollOnlyItemId), [character, getSpellByIndex, scrollOnlyItemId])
   const availableLevels = useMemo(() => Array.from(new Set(allSpells.map((entry) => entry.spell.slotLevel))).sort((a, b) => a - b), [allSpells])
   const visibleSpells = allSpells.filter((entry) => normalizeCastingTime(entry.spell) === actionFilter).filter((entry) => levelFilter === "all" || entry.spell.slotLevel === levelFilter).sort((a, b) => a.spell.slotLevel - b.spell.slotLevel || spellName(a.spell).localeCompare(spellName(b.spell), "pt-BR"))
