@@ -92,6 +92,14 @@ export class SessionActor extends AbilitySessionActor {
     const operations = parsed.type === "session.magic.operation"
       ? [parsed.operation]
       : parsed.operations;
+    const secretEntries = (await this.ctx.storage.get<HiddenSpellCommitment[]>(HIDDEN_SPELL_STATE_KEY)) ?? [];
+    const pendingForActor = secretEntries.some(item => item.actor.kind === "character"
+      && item.actor.characterId === operations[0]?.characterId && !item.revealedAt);
+    if (pendingForActor && !operations.every(item =>
+      item.type === "character.spell.cast" && item.hiddenResolution === true && connection.role === "MASTER")) {
+      sendError(webSocket, "HIDDEN_SPELL_PENDING", "Resolva e revele a conjuração oculta antes de modificar os recursos mágicos.");
+      return;
+    }
     await this.handleMagicOperations(webSocket, connection, operations);
   }
 
