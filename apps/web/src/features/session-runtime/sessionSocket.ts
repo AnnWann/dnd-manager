@@ -1,3 +1,4 @@
+import type { HiddenSpellClientMessage, HiddenSpellServerMessage } from "../../../../../packages/session-protocol/src/hiddenSpellcasting"
 import { SessionMessageClient } from "../../../../../packages/session-client/src/sessionMessageClient"
 import {
   parseSessionPanelsServerMessage,
@@ -73,6 +74,7 @@ export type SessionSocketOptions = {
       | CompanionServerMessage
       | SessionPauseServerMessage
       | SessionPanelsServerMessage
+      | HiddenSpellServerMessage
   ) => void
 }
 
@@ -94,6 +96,7 @@ type SessionOutgoingMessage = | ClientSessionMessage
     | CompanionClientMessage
     | SessionPauseClientMessage
     | SessionPanelsClientMessage
+    | HiddenSpellClientMessage
 type SessionIncomingMessage = Parameters<SessionSocketOptions["onMessage"]>[0]
 type DecodedSessionMessage = {
   message: SessionIncomingMessage
@@ -111,8 +114,15 @@ function decodeSessionMessage(raw: string): DecodedSessionMessage | null {
   const abilityMessage = parseAbilityServerMessage(raw)
   const companionMessage = parseCompanionServerMessage(raw)
   const pauseMessage = parseSessionPauseServerMessage(raw)
+  let hiddenSpellMessage: HiddenSpellServerMessage | null = null
+  try {
+    const value = JSON.parse(raw) as Partial<HiddenSpellServerMessage>
+    if (value?.type === "session.hiddenSpell.snapshot" && Array.isArray(value.entries)) {
+      hiddenSpellMessage = value as HiddenSpellServerMessage
+    }
+  } catch { /* normal parsers report malformed input */ }
   const panelMessage = parseSessionPanelsServerMessage(raw)
-  const message = panelMessage ?? pauseMessage ?? runtimeConfigMessage ?? lifecycleMessage ?? inventoryMessage ?? missionMessage ?? initiativeMessage ?? abilityMessage ?? companionMessage ?? parseServerSessionMessage(raw)
+  const message = hiddenSpellMessage ?? panelMessage ?? pauseMessage ?? runtimeConfigMessage ?? lifecycleMessage ?? inventoryMessage ?? missionMessage ?? initiativeMessage ?? abilityMessage ?? companionMessage ?? parseServerSessionMessage(raw)
   return message ? { message, abilityMessage, lifecycleMessage, runtimeConfigMessage } : null
 }
 
