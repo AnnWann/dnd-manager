@@ -528,7 +528,7 @@ export class SessionActor extends DurableObject<Env> {
 
     if (request.source.type === "spell") {
       const spellSource = request.source;
-      if ((spellSource.counterspelled || spellSource.hiddenResolution) && connection.role !== "MASTER") {
+      if ((spellSource.counterspelled || spellSource.hiddenResolution || spellSource.preResolvedResult) && connection.role !== "MASTER") {
         this.sendError(webSocket, "COUNTERSPELL_INTERNAL_ONLY", "A anulação de magias é controlada pelo servidor.");
         return;
       }
@@ -593,7 +593,9 @@ export class SessionActor extends DurableObject<Env> {
 
       let actionResult: SessionActionRollResult | undefined;
       if (!counterspelled) try {
-        actionResult = resolveCreatureSpellCastAction({
+        actionResult = spellSource.preResolvedResult
+          ? spellSource.preResolvedResult as unknown as SessionActionRollResult
+          : resolveCreatureSpellCastAction({
           requestId: request.requestId,
           actorId: connection.userId,
           creature,
@@ -605,7 +607,7 @@ export class SessionActor extends DurableObject<Env> {
           rollDice:
             !announcing && isDigitalDiceRollingEnabled(runtimeConfig),
         });
-        applyCriticalDamageRule(actionResult, runtimeConfig?.config.criticalDamage);
+        if (!spellSource.preResolvedResult) applyCriticalDamageRule(actionResult, runtimeConfig?.config.criticalDamage);
       } catch (error) {
         this.sendError(
           webSocket,
@@ -614,6 +616,18 @@ export class SessionActor extends DurableObject<Env> {
             ? error.message
             : "The creature spell could not be resolved.",
         );
+        return;
+      }
+
+      if (hiddenResolution) {
+        const entries = (await this.ctx.storage.get<HiddenSpellCommitment[]>(HIDDEN_SPELL_STATE_KEY)) ?? [];
+        const commitment = entries.find(item => item.id === request.requestId && item.resolvedAt && !item.revealedAt);
+        if (!commitment) {
+          this.sendError(webSocket, "HIDDEN_SPELL_NOT_PENDING", "Conjuração oculta não encontrada.");
+          return;
+        }
+        if (actionResult) commitment.privateResult = actionResult as unknown as Record<string, unknown>;
+        await this.ctx.storage.put(HIDDEN_SPELL_STATE_KEY, entries);
         return;
       }
 
@@ -627,9 +641,9 @@ export class SessionActor extends DurableObject<Env> {
           creature,
           configuredSpell,
           castLevel,
-          hiddenResolution ? "Magia oculta" : (spell.displayName || spell.name),
+          spell.displayName || spell.name,
           spell.concentration && !counterspelled,
-          hiddenResolution ? "hidden-" + request.requestId : spell.index,
+          spell.index,
         );
 
         if (nextInitiative !== currentInitiative) {
@@ -655,16 +669,7 @@ export class SessionActor extends DurableObject<Env> {
         if (updated) await this.persistCompanionResources(creature, updated);
       }
 
-      if (hiddenResolution) {
-        const entries = (await this.ctx.storage.get<HiddenSpellCommitment[]>(HIDDEN_SPELL_STATE_KEY)) ?? [];
-        const commitment = entries.find(item => item.id === request.requestId);
-        if (commitment && actionResult) {
-          commitment.privateResult = actionResult as unknown as Record<string, unknown>;
-          await this.ctx.storage.put(HIDDEN_SPELL_STATE_KEY, entries);
-        }
-      } else if (actionResult) {
-        this.broadcast({ type: "session.action.result", result: actionResult });
-      }
+      if (actionResult) this.broadcast({ type: "session.action.result", result: actionResult });
       return;
     }
 
