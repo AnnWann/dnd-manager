@@ -1,3 +1,4 @@
+import type { HiddenSpellCommitment } from "../../../../../packages/session-protocol/src/hiddenSpellcasting";
 import { applyCriticalDamageRule } from "../../../../web/src/shared/session-runtime/criticalDamage";
 import type { SessionRuntimeConfigSnapshot } from "../../../../web/src/shared/session-runtime/sessionRuntimeConfig";
 import { DurableObject } from "cloudflare:workers";
@@ -143,6 +144,7 @@ const CONDITIONS_STATE_KEY = "conditions-state";
 const ABILITIES_STATE_KEY = "abilities-state";
 const INVENTORY_STATE_KEY = "inventory-state";
 const PANELS_STATE_KEY = "session-panels-v1";
+const HIDDEN_SPELL_STATE_KEY = "hidden-spell-commitments-v1";
 
 type StoredSessionHpState = SessionHpState & {
   /** Distinguishes an old HP-only state from an intentionally empty hit-dice state. */
@@ -526,11 +528,12 @@ export class SessionActor extends DurableObject<Env> {
 
     if (request.source.type === "spell") {
       const spellSource = request.source;
-      if (spellSource.counterspelled && connection.role !== "MASTER") {
+      if ((spellSource.counterspelled || spellSource.hiddenResolution) && connection.role !== "MASTER") {
         this.sendError(webSocket, "COUNTERSPELL_INTERNAL_ONLY", "A anulação de magias é controlada pelo servidor.");
         return;
       }
       const counterspelled = spellSource.counterspelled === true;
+      const hiddenResolution = spellSource.hiddenResolution === true;
       const spellcasting = creature.spellcasting;
       if (!spellcasting) {
         this.sendError(webSocket, "CREATURE_SPELLCASTING_UNAVAILABLE", "This creature does not have spellcasting configured.");
@@ -624,9 +627,9 @@ export class SessionActor extends DurableObject<Env> {
           creature,
           configuredSpell,
           castLevel,
-          spell.displayName || spell.name,
+          hiddenResolution ? "Magia oculta" : (spell.displayName || spell.name),
           spell.concentration && !counterspelled,
-          spell.index,
+          hiddenResolution ? "hidden" : spell.index,
         );
 
         if (nextInitiative !== currentInitiative) {
@@ -647,15 +650,21 @@ export class SessionActor extends DurableObject<Env> {
         const virtual = { ...createInitiativeSession(), entries: [entry] };
         const updated = consumeCreatureSpellResource(
           virtual, entry.id, creature, configuredSpell, castLevel,
-          spell.displayName || spell.name, spell.concentration && !counterspelled, spell.index,
+          hiddenResolution ? "Magia oculta" : (spell.displayName || spell.name), spell.concentration && !counterspelled, hiddenResolution ? "hidden" : spell.index,
         ).entries[0];
         if (updated) await this.persistCompanionResources(creature, updated);
       }
 
-      if (actionResult) this.broadcast({
-        type: "session.action.result",
-        result: actionResult,
-      });
+      if (hiddenResolution) {
+        const entries = (await this.ctx.storage.get<HiddenSpellCommitment[]>(HIDDEN_SPELL_STATE_KEY)) ?? [];
+        const commitment = entries.find(item => item.id === request.requestId);
+        if (commitment && actionResult) {
+          commitment.privateResult = actionResult as unknown as Record<string, unknown>;
+          await this.ctx.storage.put(HIDDEN_SPELL_STATE_KEY, entries);
+        }
+      } else if (actionResult) {
+        this.broadcast({ type: "session.action.result", result: actionResult });
+      }
       return;
     }
 
