@@ -4,7 +4,7 @@ import { ResourcePill } from "../../../../../../packages/game-ui/src/ResourcePil
 import { Select as SharedSelect } from "../../../components/ui/Select"
 import { DAMAGE_TYPE_OPTIONS, type DamageType } from "../../../models/combat/Damage"
 import { getAttackRiderDamageChoices } from "../../../models/combat/AttackRider"
-import { useMemo, useState } from "react"
+import { useEffect, useMemo, useState } from "react"
 import { Button } from "../../../components/ui/Button"
 import { Modal } from "../../../components/ui/Modal"
 import { CLASS_NAMES } from "../../../contexts/consts"
@@ -56,6 +56,14 @@ export function MinimalMagicActions({ character, updateCharacter, scrollOnlyItem
   const [confirmConcentrationReplacement, setConfirmConcentrationReplacement] = useState(false)
   const [pendingRollMode, setPendingRollMode] = useState<SessionDiceRollMode>("normal")
   const [error, setError] = useState("")
+  const [pendingHiddenId, setPendingHiddenId] = useState<string | null>(null)
+  const registeredHidden = Boolean(pendingHiddenId && sessionRuntime?.hiddenSpellEntries.some(entry => entry.id === pendingHiddenId))
+  useEffect(() => {
+    if (!registeredHidden) return
+    setPendingHiddenId(null)
+    setSelected(null)
+    setConfirmConcentrationReplacement(false)
+  }, [registeredHidden])
   const allSpells = useMemo(() => buildAvailableSpells(character, getSpellByIndex).filter(entry => !scrollOnlyItemId || entry.scrollItemId === scrollOnlyItemId), [character, getSpellByIndex, scrollOnlyItemId])
   const availableLevels = useMemo(() => Array.from(new Set(allSpells.map((entry) => entry.spell.slotLevel))).sort((a, b) => a - b), [allSpells])
   const visibleSpells = allSpells.filter((entry) => normalizeCastingTime(entry.spell) === actionFilter).filter((entry) => levelFilter === "all" || entry.spell.slotLevel === levelFilter).sort((a, b) => a.spell.slotLevel - b.spell.slotLevel || spellName(a.spell).localeCompare(spellName(b.spell), "pt-BR"))
@@ -112,9 +120,10 @@ export function MinimalMagicActions({ character, updateCharacter, scrollOnlyItem
     }
     const resolved = resolveAuthoritativeCastPayment()
     if (!resolved) return
+    const requestId = crypto.randomUUID()
     const sent = sessionRuntime.dispatchHiddenSpell({
       type: "session.hiddenSpell.commit",
-      requestId: crypto.randomUUID(),
+      requestId,
       actor: { kind: "character", characterId: character.get("id") },
       spellIndex: selected.spell.index,
       castLevel: resolved.castLevel,
@@ -130,7 +139,7 @@ export function MinimalMagicActions({ character, updateCharacter, scrollOnlyItem
       setError("Não foi possível registrar esta conjuração oculta.")
       return
     }
-    finishCast()
+    setPendingHiddenId(requestId)
   }
   function finishCast() { setConfirmConcentrationReplacement(false); setSelected(null) }
 
@@ -359,10 +368,11 @@ export function MinimalMagicActions({ character, updateCharacter, scrollOnlyItem
     {character.get("equipment").weapons.map(weapon => <option key={weapon.id} value={weapon.id}>{weapon.name}</option>)}
   </SharedSelect>
 </label> : null}
-{error ? <div className="rounded-lg border border-danger bg-dangerBg px-3 py-2 text-xs text-danger">{error}</div> : null}{confirmConcentrationReplacement ? <div className="rounded-lg border border-warning bg-bg-subtle p-3 text-xs text-text"><p>O personagem já está concentrando. Usar esta magia encerra a concentração atual.</p><div className="mt-2 flex justify-end gap-2"><Button variant="secondary" onClick={() => setConfirmConcentrationReplacement(false)}>Cancelar</Button><Button variant="primary" onClick={() => executeSelectedCast(pendingRollMode)}>Substituir e usar</Button></div></div> : <div className="flex justify-end gap-2 border-t border-border pt-3">
+{(error || sessionRuntime?.hiddenSpellError) ? <div role="alert" className="rounded-lg border border-danger bg-dangerBg px-3 py-2 text-xs text-danger">{error || sessionRuntime?.hiddenSpellError}</div> : null}
+{pendingHiddenId && !sessionRuntime?.hiddenSpellError ? <p className="text-xs text-textMuted">Aguardando confirmação da conjuração oculta pelo servidor…</p> : null}{confirmConcentrationReplacement ? <div className="rounded-lg border border-warning bg-bg-subtle p-3 text-xs text-text"><p>O personagem já está concentrando. Usar esta magia encerra a concentração atual.</p><div className="mt-2 flex justify-end gap-2"><Button variant="secondary" onClick={() => setConfirmConcentrationReplacement(false)}>Cancelar</Button><Button variant="primary" onClick={() => executeSelectedCast(pendingRollMode)}>Substituir e usar</Button></div></div> : <div className="flex justify-end gap-2 border-t border-border pt-3">
   {sessionRuntime ? <Button
     variant="secondary"
-    disabled={useDisabled || sessionRuntime.status !== "connected" || (selected.spell.index === "counterspell" && !counterspellTargetId)}
+    disabled={Boolean(pendingHiddenId) || useDisabled || sessionRuntime.status !== "connected" || (selected.spell.index === "counterspell" && !counterspellTargetId)}
     title="Registra a magia e o círculo em segredo. O mestre resolve e revela após as reações."
     onClick={(event) => declareHiddenCast(rollModeFromEvent(event.nativeEvent))}
   >
