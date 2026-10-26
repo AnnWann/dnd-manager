@@ -5,6 +5,7 @@ import { authorizeCharacterMutation, findRuntimeSpell, readRuntimeConfig } from 
 import { isSessionPlayerOperationBlocked, parseSessionPauseMessage, type SessionPauseState } from "../../../../web/src/shared/session-runtime/sessionPause";
 import type { CompanionState } from "../../../../web/src/shared/session-runtime/companionRuntime";
 import type { SessionInitiativeState } from "../initiative/initiativeProtocol";
+import type { InitiativeSession } from "../../../../web/src/models/initiative/Initiative";
 import { SessionActor as AbilitySessionActor } from "../characters/abilities/AbilitySessionActor";
 import { SessionActor as MagicSessionActor } from "../characters/spells/MagicSessionActor";
 import { SessionActor as EquipmentSessionActor } from "../characters/equipment/EquipmentSessionActor";
@@ -537,7 +538,8 @@ export class SessionActor extends BaseSessionActor {
       }
       if (actor.initiativeEntryId) {
         const initiative = await this.ctx.storage.get<SessionInitiativeState>("initiative-state");
-        const entry = initiative?.session?.entries.find(item => item.id === actor.initiativeEntryId);
+        const initiativeSession = initiative?.session as Partial<InitiativeSession> | undefined;
+        const entry = initiativeSession?.entries?.find(item => item.id === actor.initiativeEntryId);
         if (!entry || entry.sourceId !== "compendium:" + actor.creatureId) {
           sendError(socket, "HIDDEN_SPELL_ENTRY_INVALID", "Combatente inválido para a criatura.");
           return;
@@ -562,7 +564,8 @@ export class SessionActor extends BaseSessionActor {
     }
 
     const initiative = await this.ctx.storage.get<SessionInitiativeState>("initiative-state");
-    const round = initiative?.session?.round ?? 0;
+    const initiativeSession = initiative?.session as Partial<InitiativeSession> | undefined;
+    const round = typeof initiativeSession?.round === "number" ? initiativeSession.round : 0;
     if (operation.counterspellTargetId) {
       const target = entries.find(candidate => candidate.id === operation.counterspellTargetId && !candidate.resolvedAt && !candidate.revealedAt);
       if (!target || spell.index !== "counterspell" || spell.slotLevel > operation.castLevel) {
@@ -601,7 +604,8 @@ export class SessionActor extends BaseSessionActor {
     config: Awaited<ReturnType<typeof readRuntimeConfig>>,
   ): number {
     if (cast.actor.kind === "creature") {
-      const creature = config?.config.creatureCompendium.find(item => item.id === cast.actor.creatureId);
+      const creatureId = cast.actor.creatureId;
+      const creature = config?.config.creatureCompendium.find(item => item.id === creatureId);
       const attr = creature?.spellcasting?.ability;
       return attr && creature?.abilityScores
         ? Math.floor(((creature.abilityScores[attr] ?? 10) - 10) / 2) : 0;
