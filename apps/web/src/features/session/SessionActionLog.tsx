@@ -561,13 +561,9 @@ function DiceRollPanel({
       </div>
 
       <div className="min-h-0 flex-1 overflow-y-auto p-3">
-        {hiddenSpells.length > 0 ? (
+        {hiddenSpells.some(cast => cast.status !== "revealed") ? (
           <div className="mb-2 flex flex-col gap-2">
-            {hiddenSpells.slice().reverse().filter(cast =>
-              cast.status !== "revealed" || !entries.some(entry =>
-                entry.type === "action" && entry.result.requestId === cast.id
-              )
-            ).map(cast => (
+            {hiddenSpells.slice().reverse().filter(cast => cast.status !== "revealed").map(cast => (
               <article key={cast.id} className="rounded-xl border border-border bg-bg p-3">
                 <div className="flex items-center justify-between gap-2">
                   <div className="min-w-0">
@@ -621,7 +617,7 @@ function DiceRollPanel({
               />
             ))}
           </div>
-        ) : hiddenSpells.length === 0 ? (
+        ) : !hiddenSpells.some(cast => cast.status !== "revealed") ? (
           <div className="rounded-xl border border-dashed border-border px-4 py-8 text-center text-xs leading-5 text-textMuted">
             As rolagens da sessão aparecerão aqui.
           </div>
