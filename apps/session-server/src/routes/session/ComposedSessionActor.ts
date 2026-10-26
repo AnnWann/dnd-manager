@@ -1,3 +1,4 @@
+import { getCharacterGrantedSpells } from "../../../../web/src/models/characters/characterGrantedSpells";
 import { parseHiddenSpellClientMessage, projectHiddenSpell, type HiddenSpellCommitment } from "../../../../../packages/session-protocol/src/hiddenSpellcasting";
 import { SessionActor as BaseSessionActor } from "./SessionActor";
 import { authorizeCharacterMutation, findRuntimeSpell, readRuntimeConfig } from "./runtimeConfigAccess";
@@ -462,7 +463,9 @@ export class SessionActor extends BaseSessionActor {
       }
       const character = CharacterTemplate.fromJSON(ability.character as Partial<CharacterTemplateProps>);
       const known = character.getOrCreateMagic().spells.knownSpells.some(item =>
-        item.spells.id === spell.index && item.source.sourceId === operation.sourceId);
+        item.spells.id === spell.index && item.source.sourceId === operation.sourceId)
+        || getCharacterGrantedSpells(character).some(item =>
+          item.index === spell.index && item.source.sourceId === operation.sourceId);
       if (!known) {
         sendError(socket, "HIDDEN_SPELL_UNKNOWN", "A magia escolhida não consta nas magias deste personagem.");
         return;
@@ -490,6 +493,12 @@ export class SessionActor extends BaseSessionActor {
       if (!creature || (connection.role !== "MASTER" && creature.ownerUserId !== connection.userId)
         || !creature.spellcasting?.spells.some(item => item.spellIndex === spell.index)) {
         sendError(socket, "HIDDEN_SPELL_CREATURE_DENIED", "A criatura não pode conjurar esta magia.");
+        return;
+      }
+      const configuredSpell = creature.spellcasting.spells.find(item => item.spellIndex === spell.index);
+      if (configuredSpell && configuredSpell.usage.type !== "slots"
+        && operation.castLevel !== (configuredSpell.castLevel ?? spell.slotLevel)) {
+        sendError(socket, "HIDDEN_SPELL_FIXED_LEVEL", "Esta magia possui círculo fixo.");
         return;
       }
       if (actor.initiativeEntryId) {
