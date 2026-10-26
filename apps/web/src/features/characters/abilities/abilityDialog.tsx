@@ -151,7 +151,7 @@ export function AbilityDialog({
   const maximumFormulaError = maximumFormula
     ? validateCharacterSheetFormula(maximumFormula)
     : undefined
-  const rollError = validateAbilityRoll(draft.roll)
+  const rollError = validateAbilityRoll(draft.roll, character)
   const requiresActivation = abilityRequiresActivation(draft)
   const duration = draft.effectDuration ?? (draft.kind === "active" ? "instant" : "lasting")
   const persistence = draft.effectPersistence ?? "untilEnd"
@@ -601,7 +601,7 @@ export function AbilityDialog({
                 title="Rolagem da habilidade"
                 description="Escolha os testes e danos efetuados ao usar a habilidade. Modificadores da ficha são calculados automaticamente."
               />
-              <AbilityRollEditor roll={draft.roll} onChange={roll => setDraft(current => ({ ...current, roll }))} targeting={draft.targeting} onTargetingChange={targeting => setDraft(current => ({ ...current, targeting }))} />
+              <AbilityRollEditor character={character} roll={draft.roll} onChange={roll => setDraft(current => ({ ...current, roll }))} targeting={draft.targeting} onTargetingChange={targeting => setDraft(current => ({ ...current, targeting }))} />
             </div>
           ) : null}
 
