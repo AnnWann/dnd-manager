@@ -344,7 +344,7 @@ export class SessionActor extends BaseSessionActor {
       };
       visit(root);
       if (operation.type === "session.hiddenSpell.reveal") {
-        if (!chain.every(cast => Boolean(cast.resolvedAt))) {
+        if (!chain.every(cast => Boolean(cast.resolvedAt) && (cast.counterspelled || Boolean(cast.privateResult)))) {
           sendError(socket, "HIDDEN_SPELL_UNRESOLVED", "Resolva as conjurações ocultamente antes de revelá-las.");
           return;
         }
@@ -558,13 +558,13 @@ export class SessionActor extends BaseSessionActor {
         sendError(socket, "HIDDEN_SPELL_ENTRY_REQUIRED", "Adicione a criatura à iniciativa antes de conjurar ocultamente.");
         return;
       }
-      actorLabel = creature.basicName || creature.name;
+      actorLabel = creature.basicName || "Criatura";
     }
 
     const initiative = await this.ctx.storage.get<SessionInitiativeState>("initiative-state");
     const round = initiative?.session?.round ?? 0;
     if (operation.counterspellTargetId) {
-      const target = entries.find(candidate => candidate.id === operation.counterspellTargetId && !candidate.revealedAt);
+      const target = entries.find(candidate => candidate.id === operation.counterspellTargetId && !candidate.resolvedAt && !candidate.revealedAt);
       if (!target || spell.index !== "counterspell" || spell.slotLevel > operation.castLevel) {
         sendError(socket, "HIDDEN_SPELL_REACTION_INVALID", "A reação deve ser Contramágica contra uma conjuração pendente.");
         return;
