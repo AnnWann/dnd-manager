@@ -236,7 +236,7 @@ export class SessionActor extends AbilitySessionActor {
     runtimeConfig: RuntimeConfigSnapshot,
     log: Awaited<ReturnType<typeof readSessionLog>>,
   ): Promise<void> {
-    if ((operation.counterspelled || operation.hiddenResolution) && connection.role !== "MASTER") {
+    if ((operation.counterspelled || operation.hiddenResolution || operation.preResolvedResult) && connection.role !== "MASTER") {
       sendError(webSocket, "COUNTERSPELL_INTERNAL_ONLY", "A anulação de magias é controlada pelo servidor.");
       return;
     }
@@ -317,8 +317,8 @@ export class SessionActor extends AbilitySessionActor {
         {
           type: "character.concentration.start",
           characterId: operation.characterId,
-          spellIndex: hiddenResolution ? "hidden-" + operation.requestId : spell.index,
-          spellName: hiddenResolution ? "Magia oculta" : (spell.displayName || spell.name),
+          spellIndex: spell.index,
+          spellName: spell.displayName || spell.name,
         },
         connection,
         hp.ownerUserId,
@@ -328,7 +328,7 @@ export class SessionActor extends AbilitySessionActor {
         return;
       }
       nextConditions = concentration.next;
-      if (spellRiders.length && !hiddenResolution) {
+      if (spellRiders.length) {
         const targetEntryId = operation.targetEntryId!;
         nextConditions = {
           ...nextConditions,
@@ -352,7 +352,10 @@ export class SessionActor extends AbilitySessionActor {
 
     let actionResult: ReturnType<typeof resolveSpellCastAction> | undefined;
     if (!counterspelled) try {
-      actionResult = resolveSpellCastAction({
+      actionResult = operation.preResolvedResult
+        ? operation.preResolvedResult as unknown as ReturnType<typeof resolveSpellCastAction>
+        : resolveSpellCastAction({
+
         requestId: operation.requestId,
         actorId: connection.userId,
         character: payment.character,
@@ -365,7 +368,7 @@ export class SessionActor extends AbilitySessionActor {
         targetEntryId: operation.targetEntryId,
         selectedDamageType: chosenType,
       });
-      applyCriticalDamageRule(actionResult, runtimeConfig?.config.criticalDamage);
+      if (!operation.preResolvedResult) applyCriticalDamageRule(actionResult, runtimeConfig?.config.criticalDamage);
     } catch (error) {
       sendError(
         webSocket,
@@ -374,6 +377,21 @@ export class SessionActor extends AbilitySessionActor {
           ? error.message
           : "The structured spell resolution is invalid.",
       );
+      return;
+    }
+
+    if (hiddenResolution) {
+      const entries = (await this.ctx.storage.get<HiddenSpellCommitment[]>(HIDDEN_SPELL_STATE_KEY)) ?? [];
+      const commitment = entries.find(item => item.id === operation.requestId && item.resolvedAt && !item.revealedAt);
+      if (!commitment) {
+        sendError(webSocket, "HIDDEN_SPELL_NOT_PENDING", "Conjuração oculta não encontrada para resolução.");
+        return;
+      }
+      if (actionResult) commitment.privateResult = actionResult as unknown as Record<string, unknown>;
+      if (!counterspelled && spellRiders.length) {
+        commitment.privateRiders = spellRiders as unknown as Array<Record<string, unknown>>;
+      }
+      await this.ctx.storage.put(HIDDEN_SPELL_STATE_KEY, entries);
       return;
     }
 
@@ -441,22 +459,9 @@ export class SessionActor extends AbilitySessionActor {
       }
     }
 
-    if (hiddenResolution) {
-      const entries = (await this.ctx.storage.get<HiddenSpellCommitment[]>(HIDDEN_SPELL_STATE_KEY)) ?? [];
-      const commitment = entries.find(item => item.id === operation.requestId);
-      if (commitment) {
-        if (actionResult) commitment.privateResult = actionResult as unknown as Record<string, unknown>;
-        if (!counterspelled && spellRiders.length) {
-          commitment.privateRiders = spellRiders as unknown as Array<Record<string, unknown>>;
-        }
-        await this.ctx.storage.put(HIDDEN_SPELL_STATE_KEY, entries);
-      }
-    } else if (actionResult) {
-      broadcastVisibilityFiltered(this.ctx.getWebSockets(), {
-        type: "session.action.result",
-        result: actionResult,
-      });
-    }
+    if (actionResult) broadcastVisibilityFiltered(this.ctx.getWebSockets(), {
+      type: "session.action.result", result: actionResult,
+    });
   }
 }
 
