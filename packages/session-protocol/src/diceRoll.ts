@@ -188,6 +188,7 @@ export type SessionCreatureRollSource =
       intent?: "resolve" | "announce"
       counterspelled?: boolean
       hiddenResolution?: boolean
+      preResolvedResult?: Record<string, unknown>
     }
   | {
       type: "feature"
