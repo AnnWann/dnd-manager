@@ -435,7 +435,7 @@ function CreatureSpellcastingSection({
       </div>
 
       {restoreError ? <p role="alert" className="mt-2 text-xs text-danger">{restoreError}</p> : null}
-      {hiddenError ? <p role="alert" className="mt-2 text-xs text-danger">{hiddenError}</p> : null}
+      {(hiddenError || runtime?.hiddenSpellError) ? <p role="alert" className="mt-2 text-xs text-danger">{hiddenError || runtime?.hiddenSpellError}</p> : null}
 
       {spellcasting.spells.length ? (
         <div className="mt-3 grid gap-2">
