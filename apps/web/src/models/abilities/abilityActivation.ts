@@ -67,7 +67,7 @@ export function getSharedAbilityUsage(character: CharacterTemplate, ability: Abi
     ?.usage ?? usage
 }
 
-function synchronizeSharedAbilityUsage(character: CharacterTemplate, ability: Ability): CharacterTemplate {
+export function synchronizeSharedAbilityUsage(character: CharacterTemplate, ability: Ability): CharacterTemplate {
   const usage = ability.usage
   const id = usage?.sharedResourceId?.trim()
   if (!usage || !id) return character
