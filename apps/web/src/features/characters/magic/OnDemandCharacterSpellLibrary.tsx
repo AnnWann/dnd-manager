@@ -3,7 +3,7 @@ import { useEffect, useMemo, useState } from "react"
 
 import {
   getOfficialSpell,
-  queryOfficialSpells,
+  queryAllOfficialSpellSummaries,
   type SpellCompendiumSummary,
 } from "../../../api/spell-compendium"
 import { Button } from "../../../components/ui/Button"
@@ -92,24 +92,23 @@ export function OnDemandCharacterSpellLibrary({
   )
 
   useEffect(() => {
-    if (originFilter === "homebrew") {
-      setOfficial([])
-      setLoading(false)
-      return
-    }
-
     let cancelled = false
     const timer = window.setTimeout(() => {
+      if (originFilter === "homebrew") {
+        setOfficial([])
+        setLoading(false)
+        setLoadError("")
+        return
+      }
       setLoading(true)
+      setOfficial([])
       setLoadError("")
-      void queryOfficialSpells({
+      void queryAllOfficialSpellSummaries({
         q: query.trim() || undefined,
         level: levelFilter === "all" ? undefined : Number(levelFilter),
         className: classFilter === "all" ? undefined : classFilter,
         school: schoolFilter === "all" ? undefined : schoolFilter,
         concentration: concentrationOnly ? true : undefined,
-        page: 1,
-        pageSize: 100,
       })
         .then((page) => {
           if (!cancelled) setOfficial(page.spells)
@@ -140,7 +139,7 @@ export function OnDemandCharacterSpellLibrary({
   const homebrew = useMemo(() => {
     const normalized = normalizeSearch(query)
     return savedSpells.filter((spell) => {
-      if (!spell.homebrew || knownSpellIds.has(spell.index)) return false
+      if (!spell.homebrew) return false
       return (
         (!normalized ||
           normalizeSearch(
@@ -155,7 +154,6 @@ export function OnDemandCharacterSpellLibrary({
   }, [
     classFilter,
     concentrationOnly,
-    knownSpellIds,
     levelFilter,
     query,
     savedSpells,
@@ -165,9 +163,7 @@ export function OnDemandCharacterSpellLibrary({
   const available = useMemo<CatalogEntry[]>(() => {
     const entries: CatalogEntry[] = []
     if (originFilter !== "homebrew") {
-      entries.push(
-        ...official.filter((spell) => !knownSpellIds.has(spell.index)),
-      )
+      entries.push(...official)
     }
     if (originFilter !== "official") entries.push(...homebrew)
     return entries.toSorted(
@@ -175,7 +171,7 @@ export function OnDemandCharacterSpellLibrary({
         left.slotLevel - right.slotLevel ||
         spellName(left).localeCompare(spellName(right), "pt-BR"),
     )
-  }, [homebrew, knownSpellIds, official, originFilter])
+  }, [homebrew, official, originFilter])
 
   const schools = useMemo(
     () =>
@@ -442,8 +438,8 @@ export function OnDemandCharacterSpellLibrary({
                 >
                   Ver detalhes
                 </Button>
-                <Button size="sm" onClick={() => void openAdd(spell)}>
-                  Adicionar
+                <Button size="sm" disabled={knownSpellIds.has(spell.index)} onClick={() => void openAdd(spell)}>
+                  {knownSpellIds.has(spell.index) ? "Já conhecida" : "Adicionar"}
                 </Button>
               </div>
             </article>
