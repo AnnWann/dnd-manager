@@ -561,6 +561,34 @@ function DiceRollPanel({
       </div>
 
       <div className="min-h-0 flex-1 overflow-y-auto p-3">
+        {hiddenSpells.length > 0 ? (
+          <div className="mb-2 flex flex-col gap-2">
+            {hiddenSpells.slice().reverse().filter(cast =>
+              cast.status !== "revealed" || !entries.some(entry =>
+                entry.type === "action" && entry.result.requestId === cast.id
+              )
+            ).map(cast => (
+              <article key={cast.id} className="rounded-xl border border-border bg-bg p-3">
+                <div className="flex items-center justify-between gap-2">
+                  <div className="min-w-0">
+                    <div className="truncate text-xs font-semibold text-textH">
+                      {cast.actorLabel} — {cast.status === "revealed" ? cast.spellName : "Conjuração oculta"}
+                    </div>
+                    <div className="text-[10px] text-textMuted">
+                      {cast.status === "revealed" ? `${cast.castLevel}º círculo` : "Magia, círculo e dados ocultos"}
+                    </div>
+                  </div>
+                  {cast.status !== "revealed" && revealHiddenSpell ? (
+                    <button type="button" onClick={() => revealHiddenSpell(cast.id)}
+                      className="shrink-0 rounded-lg border border-border px-2 py-1 text-xs font-semibold text-textH">
+                      Exibir
+                    </button>
+                  ) : null}
+                </div>
+              </article>
+            ))}
+          </div>
+        ) : null}
         {entries.length ? (
           <div className="flex flex-col gap-2">
             {entries.map((entry) => entry.type === "ability" ? (
@@ -593,11 +621,11 @@ function DiceRollPanel({
               />
             ))}
           </div>
-        ) : (
+        ) : hiddenSpells.length === 0 ? (
           <div className="rounded-xl border border-dashed border-border px-4 py-8 text-center text-xs leading-5 text-textMuted">
             As rolagens da sessão aparecerão aqui.
           </div>
-        )}
+        ) : null}
       </div>
     </>
   )
