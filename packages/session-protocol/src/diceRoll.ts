@@ -187,6 +187,7 @@ export type SessionCreatureRollSource =
       castLevel: number
       intent?: "resolve" | "announce"
       counterspelled?: boolean
+      hiddenResolution?: boolean
     }
   | {
       type: "feature"
