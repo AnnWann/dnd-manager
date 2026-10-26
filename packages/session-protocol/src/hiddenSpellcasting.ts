@@ -1,11 +1,12 @@
 /**
- * Secret, server-owned spell declarations. Never serialize HiddenSpellCommitment
- * into public session snapshots. The public projection deliberately omits spell
- * identity, chosen level, and payment details even for MASTER connections.
+ * Session-owned sealed spell commitments. Private fields NEVER belong in a
+ * session snapshot or a session log that can be sent to clients.
  */
 export type HiddenSpellActor =
   | { kind: "character"; characterId: string }
   | { kind: "creature"; creatureId: string; initiativeEntryId?: string }
+
+export type HiddenSpellRollMode = "normal" | "advantage" | "disadvantage"
 
 export type HiddenSpellCommitment = {
   id: string
@@ -15,10 +16,17 @@ export type HiddenSpellCommitment = {
   spellIndex: string
   spellName: string
   castLevel: number
-  /** Generic serializable payment descriptor stored only on the server. */
+  sourceId?: string
   payment?: Record<string, unknown>
+  targetEntryId?: string
+  selectedDamageType?: string
+  selectedWeaponId?: string
+  mode: HiddenSpellRollMode
+  counterspellTargetId?: string
   createdAt: string
   revealedAt?: string
+  counterspelled?: boolean
+  counterspellCheck?: { die: number; modifier: number; total: number; dc: number; success: boolean }
 }
 
 export type HiddenSpellPublicEntry = {
@@ -29,10 +37,25 @@ export type HiddenSpellPublicEntry = {
   status: "hidden" | "revealed"
   spellName?: string
   castLevel?: number
+  counterspelled?: boolean
+  counterspellCheck?: HiddenSpellCommitment["counterspellCheck"]
 }
 
 export type HiddenSpellClientMessage =
-  | { type: "session.hiddenSpell.commit"; requestId: string; actor: HiddenSpellActor; spellIndex: string; spellName: string; castLevel: number; payment?: Record<string, unknown> }
+  | {
+      type: "session.hiddenSpell.commit"
+      requestId: string
+      actor: HiddenSpellActor
+      spellIndex: string
+      castLevel: number
+      sourceId?: string
+      payment?: Record<string, unknown>
+      targetEntryId?: string
+      selectedDamageType?: string
+      selectedWeaponId?: string
+      mode?: HiddenSpellRollMode
+      counterspellTargetId?: string
+    }
   | { type: "session.hiddenSpell.reveal"; id: string }
 
 export type HiddenSpellServerMessage = {
@@ -41,51 +64,69 @@ export type HiddenSpellServerMessage = {
 }
 
 export function projectHiddenSpell(entry: HiddenSpellCommitment): HiddenSpellPublicEntry {
-  const publicBase: HiddenSpellPublicEntry = {
+  const base: HiddenSpellPublicEntry = {
     id: entry.id,
     actor: entry.actor,
     actorLabel: entry.actorLabel,
     createdAt: entry.createdAt,
     status: entry.revealedAt ? "revealed" : "hidden",
   }
-  if (!entry.revealedAt) return publicBase
-  return { ...publicBase, spellName: entry.spellName, castLevel: entry.castLevel }
+  if (!entry.revealedAt) return base
+  return {
+    ...base,
+    spellName: entry.spellName,
+    castLevel: entry.castLevel,
+    counterspelled: entry.counterspelled,
+    counterspellCheck: entry.counterspellCheck,
+  }
 }
+
+const isRecord = (v: unknown): v is Record<string, unknown> =>
+  Boolean(v) && typeof v === "object" && !Array.isArray(v)
+const validId = (v: unknown): v is string =>
+  typeof v === "string" && /^[A-Za-z0-9_-]{1,120}$/.test(v)
+const bounded = (v: unknown, n = 200) =>
+  v === undefined || (typeof v === "string" && v.trim().length > 0 && v.length <= n)
 
 export function parseHiddenSpellClientMessage(raw: string): HiddenSpellClientMessage | null {
   if (raw.length > 12000) return null
   let value: unknown
   try { value = JSON.parse(raw) } catch { return null }
-  if (!value || typeof value !== "object" || Array.isArray(value)) return null
-  const data = value as Record<string, unknown>
-  if (data.type === "session.hiddenSpell.reveal") {
-    return typeof data.id === "string" && /^[\w-]{1,120}$/.test(data.id)
-      ? { type: "session.hiddenSpell.reveal", id: data.id } : null
+  if (!isRecord(value)) return null
+  if (value.type === "session.hiddenSpell.reveal") {
+    return validId(value.id) ? { type: "session.hiddenSpell.reveal", id: value.id } : null
   }
-  if (data.type !== "session.hiddenSpell.commit") return null
-  if (typeof data.requestId !== "string" || !/^[\w-]{1,120}$/.test(data.requestId)
-    || typeof data.spellIndex !== "string" || !/^[\w-]{1,120}$/.test(data.spellIndex)
-    || typeof data.spellName !== "string" || !data.spellName.trim() || data.spellName.length > 150
-    || !Number.isInteger(data.castLevel) || (data.castLevel as number) < 0 || (data.castLevel as number) > 9) return null
-  const actor = data.actor
-  if (!actor || typeof actor !== "object" || Array.isArray(actor)) return null
-  const a = actor as Record<string, unknown>
-  const validId = (id: unknown): id is string => typeof id === "string" && /^[\w-]{1,120}$/.test(id)
-  let normalizedActor: HiddenSpellActor
+  if (value.type !== "session.hiddenSpell.commit") return null
+  if (!validId(value.requestId) || !validId(value.spellIndex)
+      || !Number.isInteger(value.castLevel) || (value.castLevel as number) < 0 || (value.castLevel as number) > 9
+      || !bounded(value.sourceId) || !bounded(value.targetEntryId)
+      || !bounded(value.selectedDamageType, 32) || !bounded(value.selectedWeaponId, 160)
+      || (value.mode !== undefined && !["normal", "advantage", "disadvantage"].includes(String(value.mode)))
+      || (value.counterspellTargetId !== undefined && !validId(value.counterspellTargetId))) return null
+  if (!isRecord(value.actor)) return null
+  const a = value.actor
+  let actor: HiddenSpellActor
   if (a.kind === "character" && validId(a.characterId)) {
-    normalizedActor = { kind: "character", characterId: a.characterId }
-  } else if (a.kind === "creature" && validId(a.creatureId) && (a.initiativeEntryId === undefined || validId(a.initiativeEntryId))) {
-    normalizedActor = { kind: "creature", creatureId: a.creatureId, initiativeEntryId: a.initiativeEntryId as string | undefined }
+    if (typeof value.sourceId !== "string" || !isRecord(value.payment)) return null
+    actor = { kind: "character", characterId: a.characterId }
+  } else if (a.kind === "creature" && validId(a.creatureId)
+      && (a.initiativeEntryId === undefined || validId(a.initiativeEntryId))) {
+    actor = { kind: "creature", creatureId: a.creatureId,
+      ...(a.initiativeEntryId ? { initiativeEntryId: a.initiativeEntryId as string } : {}) }
   } else return null
-  const payment = data.payment
-  if (payment !== undefined && (!payment || typeof payment !== "object" || Array.isArray(payment) || JSON.stringify(payment).length > 2000)) return null
+  if (value.payment !== undefined && (!isRecord(value.payment) || JSON.stringify(value.payment).length > 2000)) return null
   return {
     type: "session.hiddenSpell.commit",
-    requestId: data.requestId,
-    actor: normalizedActor,
-    spellIndex: data.spellIndex,
-    spellName: data.spellName,
-    castLevel: data.castLevel as number,
-    ...(payment ? { payment: payment as Record<string, unknown> } : {}),
+    requestId: value.requestId,
+    actor,
+    spellIndex: value.spellIndex,
+    castLevel: value.castLevel as number,
+    ...(typeof value.sourceId === "string" ? { sourceId: value.sourceId } : {}),
+    ...(isRecord(value.payment) ? { payment: value.payment } : {}),
+    ...(typeof value.targetEntryId === "string" ? { targetEntryId: value.targetEntryId } : {}),
+    ...(typeof value.selectedDamageType === "string" ? { selectedDamageType: value.selectedDamageType } : {}),
+    ...(typeof value.selectedWeaponId === "string" ? { selectedWeaponId: value.selectedWeaponId } : {}),
+    mode: (value.mode as HiddenSpellRollMode | undefined) ?? "normal",
+    ...(typeof value.counterspellTargetId === "string" ? { counterspellTargetId: value.counterspellTargetId } : {}),
   }
 }
