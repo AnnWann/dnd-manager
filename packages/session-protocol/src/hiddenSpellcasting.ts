@@ -28,6 +28,7 @@ export type HiddenSpellCommitment = {
   resolvedAt?: string
   revealedAt?: string
   privateResult?: Record<string, unknown>
+  privateRiders?: Array<Record<string, unknown>>
   counterspelled?: boolean
   counterspellCheck?: { die: number; modifier: number; total: number; dc: number; success: boolean }
 }
