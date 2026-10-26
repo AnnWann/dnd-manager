@@ -625,7 +625,7 @@ function DiceRollPanel({
           <div className="rounded-xl border border-dashed border-border px-4 py-8 text-center text-xs leading-5 text-textMuted">
             As rolagens da sessão aparecerão aqui.
           </div>
-        )}
+        ) : null}
       </div>
     </>
   )
