@@ -258,6 +258,7 @@ export function SessionActionLog() {
     ) : (
       <DiceRollPanel
         hiddenSpells={runtime?.hiddenSpellEntries ?? []}
+        resolveHiddenSpell={isMaster ? (id) => { runtime?.dispatchHiddenSpell({ type: "session.hiddenSpell.resolve", id }) } : undefined}
         revealHiddenSpell={isMaster ? (id) => { runtime?.dispatchHiddenSpell({ type: "session.hiddenSpell.reveal", id }) } : undefined}
         entries={displayedRolls}
         characterNames={characterNames}
@@ -400,6 +401,7 @@ export function SessionActionLog() {
 function DiceRollPanel({
   hiddenSpells,
   revealHiddenSpell,
+  resolveHiddenSpell,
   entries,
   characterNames,
   manualTarget,
@@ -411,6 +413,7 @@ function DiceRollPanel({
 }: {
   hiddenSpells: HiddenSpellPublicEntry[]
   revealHiddenSpell?: (id: string) => void
+  resolveHiddenSpell?: (id: string) => void
   entries: RollFeedEntry[]
   characterNames: ReadonlyMap<string, string>
   manualTarget?: {
@@ -459,10 +462,15 @@ function DiceRollPanel({
           {hiddenSpells.slice().reverse().map(entry => (
             <div key={entry.id} className="flex items-center justify-between gap-2 rounded-lg border border-border p-2 text-xs">
               <div>
-                <div className="font-semibold">{entry.actorLabel} — {entry.status === "hidden" ? "magia oculta" : entry.spellName}</div>
-                {entry.status === "revealed" ? <span>{entry.castLevel}º círculo</span> : <span className="text-textMuted">Aguardando revelação</span>}
+                <div className="font-semibold">{entry.actorLabel} — {entry.status === "revealed" ? entry.spellName : "magia oculta"}</div>
+                {entry.status === "revealed" ? <span>{entry.castLevel}º círculo</span> : <span className="text-textMuted">{entry.status === "resolved" ? "Resolvida — aguardando revelação" : "Aguardando resolução e reações"}</span>}
               </div>
-              {entry.status === "hidden" && revealHiddenSpell ? (
+              {entry.status === "hidden" && resolveHiddenSpell ? (
+                <button type="button" className="rounded-lg border border-border px-2 py-1 font-semibold" onClick={() => resolveHiddenSpell(entry.id)}>
+                  Resolver ocultamente
+                </button>
+              ) : null}
+              {entry.status === "resolved" && revealHiddenSpell ? (
                 <button type="button" className="rounded-lg border border-border px-2 py-1 font-semibold" onClick={() => revealHiddenSpell(entry.id)}>
                   Revelar para todos
                 </button>
