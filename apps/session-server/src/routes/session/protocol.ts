@@ -266,7 +266,8 @@ function isCreatureRollRequest(value: unknown): value is SessionCreatureRollRequ
           || value.source.intent === "announce"
         )
         && (value.source.counterspelled === undefined || typeof value.source.counterspelled === "boolean")
-        && (value.source.hiddenResolution === undefined || typeof value.source.hiddenResolution === "boolean");
+        && (value.source.hiddenResolution === undefined || typeof value.source.hiddenResolution === "boolean")
+        && (value.source.preResolvedResult === undefined || (isRecord(value.source.preResolvedResult) && JSON.stringify(value.source.preResolvedResult).length < 100000));
     case "feature":
       return nonEmpty(value.source.featureId)
         && value.source.featureId.length <= 200
