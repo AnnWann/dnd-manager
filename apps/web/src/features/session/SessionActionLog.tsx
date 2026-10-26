@@ -1,3 +1,4 @@
+import type { HiddenSpellPublicEntry } from "../../../../../packages/session-protocol/src/hiddenSpellcasting"
 import { ChevronDown, ChevronUp, Dices, History, PanelRightClose, PanelRightOpen, Undo2 } from "lucide-react"
 import { useEffect, useMemo, useState, type FormEvent } from "react"
 
@@ -256,6 +257,8 @@ export function SessionActionLog() {
       </>
     ) : (
       <DiceRollPanel
+        hiddenSpells={runtime?.hiddenSpellEntries ?? []}
+        revealHiddenSpell={isMaster ? (id) => { runtime?.dispatchHiddenSpell({ type: "session.hiddenSpell.reveal", id }) } : undefined}
         entries={displayedRolls}
         characterNames={characterNames}
         manualTarget={manualRollTarget}
@@ -395,6 +398,8 @@ export function SessionActionLog() {
 }
 
 function DiceRollPanel({
+  hiddenSpells,
+  revealHiddenSpell,
   entries,
   characterNames,
   manualTarget,
@@ -404,6 +409,8 @@ function DiceRollPanel({
   onPrivateRollsChange,
   onClear,
 }: {
+  hiddenSpells: HiddenSpellPublicEntry[]
+  revealHiddenSpell?: (id: string) => void
   entries: RollFeedEntry[]
   characterNames: ReadonlyMap<string, string>
   manualTarget?: {
@@ -446,6 +453,24 @@ function DiceRollPanel({
 
   return (
     <>
+      {hiddenSpells.length > 0 ? (
+        <section className="grid gap-2 border-b border-border bg-bg px-3 py-3">
+          <h4 className="text-xs font-semibold text-textH">Declarações de magia</h4>
+          {hiddenSpells.slice().reverse().map(entry => (
+            <div key={entry.id} className="flex items-center justify-between gap-2 rounded-lg border border-border p-2 text-xs">
+              <div>
+                <div className="font-semibold">{entry.actorLabel} — {entry.status === "hidden" ? "magia oculta" : entry.spellName}</div>
+                {entry.status === "revealed" ? <span>{entry.castLevel}º círculo</span> : <span className="text-textMuted">Aguardando revelação</span>}
+              </div>
+              {entry.status === "hidden" && revealHiddenSpell ? (
+                <button type="button" className="rounded-lg border border-border px-2 py-1 font-semibold" onClick={() => revealHiddenSpell(entry.id)}>
+                  Revelar para todos
+                </button>
+              ) : null}
+            </div>
+          ))}
+        </section>
+      ) : null}
       <div className="border-b border-border bg-bg px-3 py-2.5">
         <label className="flex cursor-pointer items-center justify-between gap-3">
           <span className="min-w-0">
