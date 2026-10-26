@@ -25,7 +25,9 @@ export type HiddenSpellCommitment = {
   counterspellTargetId?: string
   createdAt: string
   round?: number
+  resolvedAt?: string
   revealedAt?: string
+  privateResult?: Record<string, unknown>
   counterspelled?: boolean
   counterspellCheck?: { die: number; modifier: number; total: number; dc: number; success: boolean }
 }
@@ -35,7 +37,7 @@ export type HiddenSpellPublicEntry = {
   actorLabel: string
   actor: HiddenSpellActor
   createdAt: string
-  status: "hidden" | "revealed"
+  status: "hidden" | "resolved" | "revealed"
   spellName?: string
   castLevel?: number
   counterspelled?: boolean
@@ -57,6 +59,7 @@ export type HiddenSpellClientMessage =
       mode?: HiddenSpellRollMode
       counterspellTargetId?: string
     }
+  | { type: "session.hiddenSpell.resolve"; id: string }
   | { type: "session.hiddenSpell.reveal"; id: string }
 
 export type HiddenSpellServerMessage = {
@@ -70,7 +73,7 @@ export function projectHiddenSpell(entry: HiddenSpellCommitment): HiddenSpellPub
     actor: entry.actor,
     actorLabel: entry.actorLabel,
     createdAt: entry.createdAt,
-    status: entry.revealedAt ? "revealed" : "hidden",
+    status: entry.revealedAt ? "revealed" : entry.resolvedAt ? "resolved" : "hidden",
   }
   if (!entry.revealedAt) return base
   return {
@@ -94,8 +97,8 @@ export function parseHiddenSpellClientMessage(raw: string): HiddenSpellClientMes
   let value: unknown
   try { value = JSON.parse(raw) } catch { return null }
   if (!isRecord(value)) return null
-  if (value.type === "session.hiddenSpell.reveal") {
-    return validId(value.id) ? { type: "session.hiddenSpell.reveal", id: value.id } : null
+  if (value.type === "session.hiddenSpell.reveal" || value.type === "session.hiddenSpell.resolve") {
+    return validId(value.id) ? { type: value.type, id: value.id } : null
   }
   if (value.type !== "session.hiddenSpell.commit") return null
   if (!validId(value.requestId) || !validId(value.spellIndex)
