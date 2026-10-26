@@ -59,9 +59,13 @@ export function validateAbilityRoll(roll: AbilityRollDefinition | undefined, cha
 /** Keep dice separate so critical hits never multiply the numeric formula. */
 export function parseAbilityDamageFormula(expression: string) {
   if (expression.length > 2000) return undefined
-  const match = expression.trim().match(/^(?:([1-9]|1\d|20)d(4|6|8|10|12|20))(?=\s*(?:[+-]|$))(.*)$/i)
+  const input = expression.trim()
+  // Keep generated class IDs intact: d6 + character.class.__custom__-uuid.level.
+  // Only the initial dice term is parsed here; suffixes use sheet formulas.
+  const match = /^([1-9]|1\\d|20)d(4|6|8|10|12|20)(.*)$/i.exec(input)
   if (!match) return undefined
   const suffix = match[3].trim()
+  if (suffix && !/^[+-](?![+=])/.test(suffix)) return undefined
   return { quantity: Number(match[1]), sides: Number(match[2]), formula: suffix ? `0 ${suffix}` : "0" }
 }
 
