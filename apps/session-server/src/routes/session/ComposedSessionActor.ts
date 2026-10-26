@@ -313,7 +313,7 @@ export class SessionActor extends BaseSessionActor {
     }
     const entries = (await this.ctx.storage.get<HiddenSpellCommitment[]>(HIDDEN_SPELL_STATE_KEY)) ?? [];
 
-    if (operation.type === "session.hiddenSpell.reveal") {
+    if (operation.type === "session.hiddenSpell.resolve" || operation.type === "session.hiddenSpell.reveal") {
       if (connection.role !== "MASTER") {
         sendError(socket, "HIDDEN_SPELL_MASTER_REQUIRED", "Somente o mestre pode revelar conjurações.");
         return;
@@ -342,6 +342,28 @@ export class SessionActor extends BaseSessionActor {
         chain.push(candidate);
       };
       visit(root);
+      if (operation.type === "session.hiddenSpell.reveal") {
+        if (!chain.every(cast => Boolean(cast.resolvedAt))) {
+          sendError(socket, "HIDDEN_SPELL_UNRESOLVED", "Resolva as conjurações ocultamente antes de revelá-las.");
+          return;
+        }
+        const now = new Date().toISOString();
+        for (const cast of chain) cast.revealedAt = now;
+        await this.ctx.storage.put(HIDDEN_SPELL_STATE_KEY, entries);
+        await this.broadcastHiddenSpellSnapshot();
+        for (const cast of chain) {
+          if (cast.privateResult) {
+            broadcast(this.ctx.getWebSockets(), {
+              type: "session.action.result", result: cast.privateResult,
+            });
+          }
+        }
+        return;
+      }
+      if (chain.some(cast => Boolean(cast.resolvedAt))) {
+        sendError(socket, "HIDDEN_SPELL_ALREADY_RESOLVED", "Esta cadeia já foi resolvida.");
+        return;
+      }
       const abilityState = (await this.ctx.storage.get<Record<string, SessionAbilityState>>("abilities-state")) ?? {};
       const runtimeConfig = await readRuntimeConfig(this.ctx.storage);
       for (const cast of chain) {
@@ -357,10 +379,10 @@ export class SessionActor extends BaseSessionActor {
           return total >= dc;
         });
       }
-      // Persist the resolved public disclosure before running the authoritative
-      // cast handlers; a duplicate reveal must never spend resources twice.
+      // Seal the resolution before spending any resources so duplicate resolve
+      // messages cannot apply the same spell twice. Details stay redacted.
       const now = new Date().toISOString();
-      for (const cast of chain) cast.revealedAt = now;
+      for (const cast of chain) cast.resolvedAt = now;
       await this.ctx.storage.put(HIDDEN_SPELL_STATE_KEY, entries);
       await this.broadcastHiddenSpellSnapshot();
       for (const cast of chain) {
@@ -381,6 +403,7 @@ export class SessionActor extends BaseSessionActor {
               selectedDamageType: cast.selectedDamageType,
               selectedWeaponId: cast.selectedWeaponId,
               counterspelled: Boolean(cast.counterspelled),
+              hiddenResolution: true,
             },
           }));
         } else {
@@ -398,6 +421,7 @@ export class SessionActor extends BaseSessionActor {
                 castLevel: cast.castLevel,
                 intent: "resolve",
                 counterspelled: Boolean(cast.counterspelled),
+                hiddenResolution: true,
               },
             },
           }));
