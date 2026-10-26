@@ -206,6 +206,26 @@ export function SessionActionLog() {
     return activeView === "logs" ? (
       <>
         <div className="min-h-0 flex-1 overflow-y-auto p-3">
+        {hiddenSpells.length > 0 ? (
+          <div className="mb-2 flex flex-col gap-2">
+            {hiddenSpells.slice().reverse().filter(cast => cast.status !== "revealed" || !entries.some(entry => entry.type === "action" && entry.result.requestId === cast.id)).map(cast => (
+              <article key={cast.id} className="rounded-xl border border-border bg-bg px-3 py-2.5">
+                <div className="flex items-center justify-between gap-2">
+                  <div className="min-w-0">
+                    <div className="truncate text-xs font-semibold text-textH">{cast.actorLabel} — {cast.status === "revealed" ? cast.spellName : "Conjuração oculta"}</div>
+                    <div className="text-[10px] text-textMuted">{cast.status === "revealed" ? `${cast.castLevel}º círculo` : "Magia e resultado ocultos"}</div>
+                  </div>
+                  {cast.status !== "revealed" && revealHiddenSpell ? (
+                    <button type="button" onClick={() => revealHiddenSpell(cast.id)}
+                      className="shrink-0 rounded-lg border border-border px-2 py-1 text-xs font-semibold text-textH">
+                      Exibir
+                    </button>
+                  ) : null}
+                </div>
+              </article>
+            ))}
+          </div>
+        ) : null}
           {records.length ? (
             <div className="flex flex-col gap-2">
               {visibleRecords.map((entry) => entry.source === "session" ? (
@@ -258,7 +278,6 @@ export function SessionActionLog() {
     ) : (
       <DiceRollPanel
         hiddenSpells={runtime?.hiddenSpellEntries ?? []}
-        resolveHiddenSpell={isMaster ? (id) => { runtime?.dispatchHiddenSpell({ type: "session.hiddenSpell.resolve", id }) } : undefined}
         revealHiddenSpell={isMaster ? (id) => { runtime?.dispatchHiddenSpell({ type: "session.hiddenSpell.reveal", id }) } : undefined}
         entries={displayedRolls}
         characterNames={characterNames}
@@ -401,7 +420,6 @@ export function SessionActionLog() {
 function DiceRollPanel({
   hiddenSpells,
   revealHiddenSpell,
-  resolveHiddenSpell,
   entries,
   characterNames,
   manualTarget,
@@ -413,7 +431,6 @@ function DiceRollPanel({
 }: {
   hiddenSpells: HiddenSpellPublicEntry[]
   revealHiddenSpell?: (id: string) => void
-  resolveHiddenSpell?: (id: string) => void
   entries: RollFeedEntry[]
   characterNames: ReadonlyMap<string, string>
   manualTarget?: {
@@ -456,29 +473,6 @@ function DiceRollPanel({
 
   return (
     <>
-      {hiddenSpells.length > 0 ? (
-        <section className="grid gap-2 border-b border-border bg-bg px-3 py-3">
-          <h4 className="text-xs font-semibold text-textH">Declarações de magia</h4>
-          {hiddenSpells.slice().reverse().map(entry => (
-            <div key={entry.id} className="flex items-center justify-between gap-2 rounded-lg border border-border p-2 text-xs">
-              <div>
-                <div className="font-semibold">{entry.actorLabel} — {entry.status === "revealed" ? entry.spellName : "magia oculta"}</div>
-                {entry.status === "revealed" ? <span>{entry.castLevel}º círculo</span> : <span className="text-textMuted">{entry.status === "resolved" ? "Resolvida — aguardando revelação" : "Aguardando resolução e reações"}</span>}
-              </div>
-              {entry.status === "hidden" && resolveHiddenSpell ? (
-                <button type="button" className="rounded-lg border border-border px-2 py-1 font-semibold" onClick={() => resolveHiddenSpell(entry.id)}>
-                  Resolver ocultamente
-                </button>
-              ) : null}
-              {entry.status === "resolved" && revealHiddenSpell ? (
-                <button type="button" className="rounded-lg border border-border px-2 py-1 font-semibold" onClick={() => revealHiddenSpell(entry.id)}>
-                  Revelar para todos
-                </button>
-              ) : null}
-            </div>
-          ))}
-        </section>
-      ) : null}
       <div className="border-b border-border bg-bg px-3 py-2.5">
         <label className="flex cursor-pointer items-center justify-between gap-3">
           <span className="min-w-0">
