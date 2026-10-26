@@ -1,3 +1,5 @@
+import { parseAbilityDamageFormula } from "../../../../../packages/session-protocol/src/abilityDamageFormula"
+export { parseAbilityDamageFormula } from "../../../../../packages/session-protocol/src/abilityDamageFormula"
 import type { CharacterTemplate } from "../characters/CharacterTemplate"
 import { evaluateCharacterSheetFormula, validateCharacterSheetFormula } from "../../lib/customSystems/CharacterSheetFormula"
 import type { HpEffectType } from "../combat/Damage"
@@ -54,15 +56,6 @@ export function validateAbilityRoll(roll: AbilityRollDefinition | undefined, cha
   if (roll.modifier !== undefined && (!Number.isInteger(roll.modifier) || Math.abs(roll.modifier) > 1000)) return "Modificador inválido."
   if (roll.dc !== undefined && (!Number.isInteger(roll.dc) || roll.dc < 1 || roll.dc > 1000)) return "CD inválida."
   return undefined
-}
-
-/** Keep dice separate so critical hits never multiply the numeric formula. */
-export function parseAbilityDamageFormula(expression: string) {
-  if (expression.length > 2000) return undefined
-  const match = expression.trim().match(/^(?:([1-9]|1\d|20)d(4|6|8|10|12|20))(?=\s*(?:[+-]|$))(.*)$/i)
-  if (!match) return undefined
-  const suffix = match[3].trim()
-  return { quantity: Number(match[1]), sides: Number(match[2]), formula: suffix ? `0 ${suffix}` : "0" }
 }
 
 export function resolveAbilityDamageFormula(expression: string, character: CharacterTemplate) {
