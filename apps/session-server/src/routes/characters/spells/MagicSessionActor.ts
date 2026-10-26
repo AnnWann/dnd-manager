@@ -234,6 +234,11 @@ export class SessionActor extends AbilitySessionActor {
     runtimeConfig: RuntimeConfigSnapshot,
     log: Awaited<ReturnType<typeof readSessionLog>>,
   ): Promise<void> {
+    if (operation.counterspelled && connection.role !== "MASTER") {
+      sendError(webSocket, "COUNTERSPELL_INTERNAL_ONLY", "A anulação de magias é controlada pelo servidor.");
+      return;
+    }
+    const counterspelled = operation.counterspelled === true;
     const spell = findRuntimeSpell(runtimeConfig, operation.spellIndex);
     if (!spell) {
       sendError(webSocket, "SPELL_NOT_FOUND", "The requested spell is not part of the active session configuration.");
@@ -303,7 +308,7 @@ export class SessionActor extends AbilitySessionActor {
     }
 
     let nextConditions = conditions;
-    if (spell.concentration) {
+    if (spell.concentration && !counterspelled) {
       const concentration = applyConcentrationOperation(
         conditions,
         {
@@ -342,8 +347,8 @@ export class SessionActor extends AbilitySessionActor {
       }
     }
 
-    let actionResult: ReturnType<typeof resolveSpellCastAction>;
-    try {
+    let actionResult: ReturnType<typeof resolveSpellCastAction> | undefined;
+    if (!counterspelled) try {
       actionResult = resolveSpellCastAction({
         requestId: operation.requestId,
         actorId: connection.userId,
@@ -424,7 +429,7 @@ export class SessionActor extends AbilitySessionActor {
       }
     }
 
-    broadcastVisibilityFiltered(this.ctx.getWebSockets(), {
+    if (actionResult) broadcastVisibilityFiltered(this.ctx.getWebSockets(), {
       type: "session.action.result",
       result: actionResult,
     });
