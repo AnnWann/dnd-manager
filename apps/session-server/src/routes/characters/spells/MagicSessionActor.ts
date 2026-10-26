@@ -355,7 +355,6 @@ export class SessionActor extends AbilitySessionActor {
       actionResult = operation.preResolvedResult
         ? operation.preResolvedResult as unknown as ReturnType<typeof resolveSpellCastAction>
         : resolveSpellCastAction({
-
         requestId: operation.requestId,
         actorId: connection.userId,
         character: payment.character,
@@ -423,16 +422,7 @@ export class SessionActor extends AbilitySessionActor {
         maxRecords: MAX_CHARACTER_STATE_LOG_RECORDS,
         record: createSessionLogRecord({
           actorId: connection.userId,
-          operation: hiddenResolution ? {
-            ...operation,
-            spellIndex: "hidden",
-            sourceId: "hidden",
-            castLevel: 0,
-            payment: { type: "none" },
-            selectedDamageType: undefined,
-            targetEntryId: undefined,
-            selectedWeaponId: undefined,
-          } : operation,
+          operation,
           reverseOperation: {
             type: "character.ability.restore",
             characterId: operation.characterId,
