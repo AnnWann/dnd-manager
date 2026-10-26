@@ -1,3 +1,4 @@
+import { parseHiddenSpellClientMessage, projectHiddenSpell, type HiddenSpellCommitment } from "../../../../../packages/session-protocol/src/hiddenSpellcasting";
 import { SessionActor as BaseSessionActor } from "./SessionActor";
 import { readRuntimeConfig } from "./runtimeConfigAccess";
 import { isSessionPlayerOperationBlocked, parseSessionPauseMessage, type SessionPauseState } from "../../../../web/src/shared/session-runtime/sessionPause";
@@ -57,6 +58,7 @@ import {
 } from "./visibilityDelivery";
 
 const SESSION_PAUSE_STATE_KEY = "session-pause-state";
+const HIDDEN_SPELL_STATE_KEY = "hidden-spell-commitments-v1";
 const COMPANIONS_STATE_KEY = "companions-state";
 const INITIATIVE_STATE_KEY = "initiative-state";
 const ABILITIES_STATE_KEY = "abilities-state";
@@ -201,6 +203,7 @@ export class SessionActor extends BaseSessionActor {
     sendVisibilityFiltered(socket, { type: "session.pause.state", state: await this.readPauseState() });
 
     await Promise.all([
+      this.sendHiddenSpellSnapshot(socket),
       this.sendAbilitySnapshot(socket),
       this.sendInventorySnapshot(socket),
       this.sendCharacterLifecycleSnapshot(socket),
@@ -213,6 +216,11 @@ export class SessionActor extends BaseSessionActor {
     message: string | ArrayBuffer,
   ): Promise<void> {
     const raw = typeof message === "string" ? message : new TextDecoder().decode(message);
+    const hiddenSpell = parseHiddenSpellClientMessage(raw);
+    if (hiddenSpell) {
+      await this.handleHiddenSpell(webSocket, hiddenSpell);
+      return;
+    }
     const sessionControl = parseSessionPauseMessage(raw);
     if (sessionControl) {
       const connection = readSessionConnection(webSocket);
@@ -281,6 +289,62 @@ export class SessionActor extends BaseSessionActor {
     }
 
     await super.webSocketMessage(webSocket, message);
+  }
+
+  private async sendHiddenSpellSnapshot(socket: WebSocket): Promise<void> {
+    const entries = (await this.ctx.storage.get<HiddenSpellCommitment[]>(HIDDEN_SPELL_STATE_KEY)) ?? [];
+    send(socket, { type: "session.hiddenSpell.snapshot", entries: entries.map(projectHiddenSpell) });
+  }
+
+  private async broadcastHiddenSpellSnapshot(): Promise<void> {
+    const entries = (await this.ctx.storage.get<HiddenSpellCommitment[]>(HIDDEN_SPELL_STATE_KEY)) ?? [];
+    broadcast(this.ctx.getWebSockets(), { type: "session.hiddenSpell.snapshot", entries: entries.map(projectHiddenSpell) });
+  }
+
+  private async handleHiddenSpell(
+    socket: WebSocket,
+    operation: NonNullable<ReturnType<typeof parseHiddenSpellClientMessage>>,
+  ): Promise<void> {
+    const connection = readSessionConnection(socket);
+    if (!connection) return;
+    const entries = (await this.ctx.storage.get<HiddenSpellCommitment[]>(HIDDEN_SPELL_STATE_KEY)) ?? [];
+    if (operation.type === "session.hiddenSpell.reveal") {
+      if (connection.role !== "MASTER") {
+        sendError(socket, "HIDDEN_SPELL_MASTER_REQUIRED", "Somente o mestre pode revelar conjurações.");
+        return;
+      }
+      const entry = entries.find(candidate => candidate.id === operation.id);
+      if (!entry || entry.revealedAt) {
+        sendError(socket, "HIDDEN_SPELL_NOT_PENDING", "Conjuração inexistente ou já revelada.");
+        return;
+      }
+      entry.revealedAt = new Date().toISOString();
+    } else {
+      if (entries.some(candidate => candidate.id === operation.requestId)) {
+        sendError(socket, "HIDDEN_SPELL_DUPLICATE", "Esta conjuração já foi registrada.");
+        return;
+      }
+      // A creature is never player-controlled through this master-only channel.
+      if (operation.actor.kind === "creature" && connection.role !== "MASTER") {
+        sendError(socket, "HIDDEN_SPELL_CREATURE_FORBIDDEN", "Somente o mestre pode registrar conjurações desta criatura.");
+        return;
+      }
+      if (entries.length >= 250) {
+        sendError(socket, "HIDDEN_SPELL_LIMIT", "Limite de registros ocultos atingido.");
+        return;
+      }
+      // This is a private declaration record, not a paid spell cast. Do not
+      // claim resources were consumed or effects resolved by this operation.
+      entries.push({
+        id: operation.requestId, ownerUserId: connection.userId,
+        actor: operation.actor, actorLabel: operation.actor.kind === "creature" ? "Criatura" : "Personagem",
+        spellIndex: operation.spellIndex, spellName: operation.spellName,
+        castLevel: operation.castLevel, payment: operation.payment,
+        createdAt: new Date().toISOString(),
+      });
+    }
+    await this.ctx.storage.put(HIDDEN_SPELL_STATE_KEY, entries);
+    await this.broadcastHiddenSpellSnapshot();
   }
 
   private async handleCentralUndo(webSocket: WebSocket, logId: string): Promise<void> {
