@@ -16,6 +16,10 @@ test("unrevealed choices never leak spell, level, payment, or counterspell check
   for (const secret of ["fireball", "Bola de Fogo", "slot", "counterspellCheck", '"castLevel"']) {
     assert.equal(JSON.stringify(pending).includes(secret), false, secret)
   }
+  const resolved = projectHiddenSpell({ ...commitment, resolvedAt: "2026-10-26T12:00:30.000Z" })
+  assert.equal(resolved.status, "resolved")
+  assert.equal(JSON.stringify(resolved).includes("Bola de Fogo"), false)
+  assert.equal(JSON.stringify(resolved).includes("counterspellCheck"), false)
   const revealed = projectHiddenSpell({ ...commitment, revealedAt: "2026-10-26T12:01:00.000Z" })
   assert.equal(revealed.spellName, "Bola de Fogo")
   assert.equal(revealed.castLevel, 5)
@@ -35,6 +39,7 @@ test("creature commitments validate identity, circle and counterspell target", (
   assert.equal(parseHiddenSpellClientMessage(JSON.stringify({ ...valid, actor: { kind: "creature", creatureId: "" } })), null)
   assert.equal(parseHiddenSpellClientMessage(JSON.stringify({ ...valid, spellIndex: "" })), null)
   assert.equal(parseHiddenSpellClientMessage(JSON.stringify({ ...valid, counterspellTargetId: "invalid!" })), null)
+  assert.deepEqual(parseHiddenSpellClientMessage('{"type":"session.hiddenSpell.resolve","id":"cast-1"}'), { type: "session.hiddenSpell.resolve", id: "cast-1" })
   assert.deepEqual(parseHiddenSpellClientMessage('{"type":"session.hiddenSpell.reveal","id":"cast-1"}'), { type: "session.hiddenSpell.reveal", id: "cast-1" })
 })
 
