@@ -7,6 +7,8 @@ import {
   abilityRequiresActivation,
   endAbilityEffect,
   getAbilityUsageMax,
+  getSharedAbilityUsage,
+  synchronizeSharedAbilityUsage,
   useAbilityEffect,
   restoreAbilityUse,
 } from "../abilities/abilityActivation"
@@ -271,23 +273,22 @@ export function resetAbility(
   if (!target) {
     const projected = findConditionAbility(character, abilityId)
     if (!projected) return character
-    return updateConditionAbility(
-      character,
-      projected.conditionId,
-      projected.ability.id,
-      (ability) => ({
-        ...ability,
-        benefitsActive: abilityRequiresActivation(ability) ? false : undefined,
-        modifiersActive: undefined,
-        usage: ability.usage
-          ? { ...ability.usage, used: 0, cooldownRemaining: undefined }
-          : ability.usage,
-      }),
+    const reset = {
+      ...projected.ability,
+      benefitsActive: abilityRequiresActivation(projected.ability) ? false : undefined,
+      modifiersActive: undefined,
+      usage: projected.ability.usage
+        ? { ...projected.ability.usage, used: 0, cooldownRemaining: undefined }
+        : projected.ability.usage,
+    }
+    return synchronizeSharedAbilityUsage(
+      updateConditionAbility(character, projected.conditionId, projected.ability.id, () => reset),
+      reset,
     )
   }
 
   if (!target.usage) return character
-  return updateAbility(character, {
+  const reset = {
     ...target,
     benefitsActive: abilityRequiresActivation(target) ? false : undefined,
     modifiersActive: undefined,
@@ -296,7 +297,8 @@ export function resetAbility(
       used: 0,
       cooldownRemaining: undefined,
     },
-  })
+  }
+  return synchronizeSharedAbilityUsage(updateAbility(character, reset), reset)
 }
 
 export function getCharacterAbilities(
@@ -340,15 +342,20 @@ export function restoreAbility(
   if (!target) {
     const projected = findConditionAbility(character, abilityId)
     if (!projected) return character
-    return updateConditionAbility(
-      character,
-      projected.conditionId,
-      projected.ability.id,
-      restoreAbilityUse,
+    const pool = getSharedAbilityUsage(character, projected.ability)
+    const restored = restoreAbilityUse({
+      ...projected.ability,
+      usage: pool ?? projected.ability.usage,
+    })
+    return synchronizeSharedAbilityUsage(
+      updateConditionAbility(character, projected.conditionId, projected.ability.id, () => restored),
+      restored,
     )
   }
 
-  return updateAbility(character, restoreAbilityUse(target))
+  const pool = getSharedAbilityUsage(character, target)
+  const restored = restoreAbilityUse({ ...target, usage: pool ?? target.usage })
+  return synchronizeSharedAbilityUsage(updateAbility(character, restored), restored)
 }
 
 function findStoredCharacterAbility(
