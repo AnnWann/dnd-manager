@@ -526,6 +526,11 @@ export class SessionActor extends DurableObject<Env> {
 
     if (request.source.type === "spell") {
       const spellSource = request.source;
+      if (spellSource.counterspelled && connection.role !== "MASTER") {
+        this.sendError(webSocket, "COUNTERSPELL_INTERNAL_ONLY", "A anulação de magias é controlada pelo servidor.");
+        return;
+      }
+      const counterspelled = spellSource.counterspelled === true;
       const spellcasting = creature.spellcasting;
       if (!spellcasting) {
         this.sendError(webSocket, "CREATURE_SPELLCASTING_UNAVAILABLE", "This creature does not have spellcasting configured.");
@@ -583,8 +588,8 @@ export class SessionActor extends DurableObject<Env> {
         }
       }
 
-      let actionResult: SessionActionRollResult;
-      try {
+      let actionResult: SessionActionRollResult | undefined;
+      if (!counterspelled) try {
         actionResult = resolveCreatureSpellCastAction({
           requestId: request.requestId,
           actorId: connection.userId,
@@ -620,7 +625,7 @@ export class SessionActor extends DurableObject<Env> {
           configuredSpell,
           castLevel,
           spell.displayName || spell.name,
-          spell.concentration,
+          spell.concentration && !counterspelled,
           spell.index,
         );
 
@@ -642,12 +647,12 @@ export class SessionActor extends DurableObject<Env> {
         const virtual = { ...createInitiativeSession(), entries: [entry] };
         const updated = consumeCreatureSpellResource(
           virtual, entry.id, creature, configuredSpell, castLevel,
-          spell.displayName || spell.name, spell.concentration, spell.index,
+          spell.displayName || spell.name, spell.concentration && !counterspelled, spell.index,
         ).entries[0];
         if (updated) await this.persistCompanionResources(creature, updated);
       }
 
-      this.broadcast({
+      if (actionResult) this.broadcast({
         type: "session.action.result",
         result: actionResult,
       });
