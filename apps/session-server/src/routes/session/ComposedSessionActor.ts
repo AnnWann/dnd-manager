@@ -546,7 +546,8 @@ export class SessionActor extends BaseSessionActor {
         }
         const usage = creature.spellcasting.spells.find(item => item.spellIndex === spell.index);
         if (usage?.usage.type === "slots") {
-          const available = entry.creatureSpellResources?.slots?.[operation.castLevel]?.current ?? 0;
+          const slotLevel = operation.castLevel as keyof NonNullable<typeof entry.creatureSpellResources>["slots"];
+          const available = entry.creatureSpellResources?.slots?.[slotLevel]?.current ?? 0;
           const reserved = entries.filter(other => !other.revealedAt
             && other.actor.kind === "creature"
             && other.actor.initiativeEntryId === actor.initiativeEntryId
