@@ -241,9 +241,16 @@ export function CreatureDropsDialog({
               </div>
             </div>
             {drops.conditional.map((entry) => (
-              <div key={entry.id} className="grid gap-2 rounded-lg border border-border bg-bg p-3 sm:grid-cols-[minmax(0,1fr)_minmax(0,2fr)_auto_auto] sm:items-center">
+              <div key={entry.id} className="grid gap-2 rounded-lg border border-border bg-bg p-3 sm:grid-cols-[minmax(0,1fr)_minmax(0,2fr)_9rem_auto_auto] sm:items-center">
                 <div className="text-sm font-medium text-textH">{entry.item.name}</div>
                 <Input value={entry.dmHint ?? ""} placeholder="Lembrete para o mestre (ex.: se o olho estiver intacto)" onChange={(event) => setDrops((current) => ({ ...current, conditional: current.conditional.map((candidate) => candidate.id === entry.id ? { ...candidate, dmHint: event.target.value } : candidate) }))} />
+                <DropQuantityField
+                  item={entry.item}
+                  onChange={(patch) => updateItems(
+                    { kind: "conditional", conditionalId: entry.id },
+                    (items) => items.map((item) => ({ ...item, ...patch })),
+                  )}
+                />
                 <Button size="icon" variant="ghost" title="Editar item do drop condicional" aria-label={`Editar ${entry.item.name}`} onClick={() => editItem({ kind: "conditional", conditionalId: entry.id }, entry.item.id)}><Pencil className="h-4 w-4" /></Button>
                 <Button size="icon" variant="ghost" title="Remover drop condicional" onClick={() => setDrops((current) => ({ ...current, conditional: current.conditional.filter((candidate) => candidate.id !== entry.id) }))}><Trash2 className="h-4 w-4 text-danger" /></Button>
               </div>
@@ -603,7 +610,7 @@ function DropQuantityField({
         value={value}
         placeholder="1 ou 1d6"
         aria-invalid={Boolean(error)}
-        title={error ?? "Quantidade fixa ou rolagem, como 1d6 ou 2d4+1."}
+        title={error ?? "Quantidade fixa ou rolagem, como 1d6 ou 2d8+1."}
         onChange={(event) => {
           const raw = event.target.value
           const trimmed = raw.trim()
@@ -624,7 +631,7 @@ function DropQuantityField({
       {error ? (
         <span className="text-[10px] leading-4 text-danger">{error}</span>
       ) : (
-        <span className="text-[10px] leading-4">Fixo ou dado, ex.: 1d6.</span>
+        <span className="text-[10px] leading-4">Fixo ou dado, ex.: 2d8+1.</span>
       )}
     </label>
   )
