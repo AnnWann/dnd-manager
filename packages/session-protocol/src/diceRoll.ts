@@ -186,6 +186,7 @@ export type SessionCreatureRollSource =
       spellIndex: string
       castLevel: number
       intent?: "resolve" | "announce"
+      counterspelled?: boolean
     }
   | {
       type: "feature"
