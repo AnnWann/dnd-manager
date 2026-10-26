@@ -1,3 +1,4 @@
+import type { HiddenSpellCommitment } from "../../../../../../packages/session-protocol/src/hiddenSpellcasting";
 import { applyCriticalDamageRule } from "../../../../../web/src/shared/session-runtime/criticalDamage";
 import type { CharacterTemplateProps } from "../../../../../web/src/models/characters/CharacterTemplate";
 import { getSpellCastDamageChoices, getSpellOnCastAttackRiders } from "../../../../../web/src/models/magic/spells/spellAttackRiders";
@@ -55,6 +56,7 @@ import { broadcastVisibilityFiltered } from "../../session/visibilityDelivery";
 const ABILITIES_STATE_KEY = "abilities-state";
 const HP_STATE_KEY = "hp-state";
 const CONDITIONS_STATE_KEY = "conditions-state";
+const HIDDEN_SPELL_STATE_KEY = "hidden-spell-commitments-v1";
 const MANUAL_SOURCE_IDS = new Set([
   "manual-feat",
   "manual-race",
@@ -234,11 +236,12 @@ export class SessionActor extends AbilitySessionActor {
     runtimeConfig: RuntimeConfigSnapshot,
     log: Awaited<ReturnType<typeof readSessionLog>>,
   ): Promise<void> {
-    if (operation.counterspelled && connection.role !== "MASTER") {
+    if ((operation.counterspelled || operation.hiddenResolution) && connection.role !== "MASTER") {
       sendError(webSocket, "COUNTERSPELL_INTERNAL_ONLY", "A anulação de magias é controlada pelo servidor.");
       return;
     }
     const counterspelled = operation.counterspelled === true;
+    const hiddenResolution = operation.hiddenResolution === true;
     const spell = findRuntimeSpell(runtimeConfig, operation.spellIndex);
     if (!spell) {
       sendError(webSocket, "SPELL_NOT_FOUND", "The requested spell is not part of the active session configuration.");
@@ -314,8 +317,8 @@ export class SessionActor extends AbilitySessionActor {
         {
           type: "character.concentration.start",
           characterId: operation.characterId,
-          spellIndex: spell.index,
-          spellName: spell.displayName || spell.name,
+          spellIndex: hiddenResolution ? "hidden" : spell.index,
+          spellName: hiddenResolution ? "Magia oculta" : (spell.displayName || spell.name),
         },
         connection,
         hp.ownerUserId,
@@ -402,7 +405,16 @@ export class SessionActor extends AbilitySessionActor {
         maxRecords: MAX_CHARACTER_STATE_LOG_RECORDS,
         record: createSessionLogRecord({
           actorId: connection.userId,
-          operation,
+          operation: hiddenResolution ? {
+            ...operation,
+            spellIndex: "hidden",
+            sourceId: "hidden",
+            castLevel: 0,
+            payment: { type: "none" },
+            selectedDamageType: undefined,
+            targetEntryId: undefined,
+            selectedWeaponId: undefined,
+          } : operation,
           reverseOperation: {
             type: "character.ability.restore",
             characterId: operation.characterId,
@@ -429,10 +441,19 @@ export class SessionActor extends AbilitySessionActor {
       }
     }
 
-    if (actionResult) broadcastVisibilityFiltered(this.ctx.getWebSockets(), {
-      type: "session.action.result",
-      result: actionResult,
-    });
+    if (hiddenResolution) {
+      const entries = (await this.ctx.storage.get<HiddenSpellCommitment[]>(HIDDEN_SPELL_STATE_KEY)) ?? [];
+      const commitment = entries.find(item => item.id === operation.requestId);
+      if (commitment && actionResult) {
+        commitment.privateResult = actionResult as unknown as Record<string, unknown>;
+        await this.ctx.storage.put(HIDDEN_SPELL_STATE_KEY, entries);
+      }
+    } else if (actionResult) {
+      broadcastVisibilityFiltered(this.ctx.getWebSockets(), {
+        type: "session.action.result",
+        result: actionResult,
+      });
+    }
   }
 }
 
