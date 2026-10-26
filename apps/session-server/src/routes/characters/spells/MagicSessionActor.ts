@@ -317,7 +317,7 @@ export class SessionActor extends AbilitySessionActor {
         {
           type: "character.concentration.start",
           characterId: operation.characterId,
-          spellIndex: hiddenResolution ? "hidden" : spell.index,
+          spellIndex: hiddenResolution ? "hidden-" + operation.requestId : spell.index,
           spellName: hiddenResolution ? "Magia oculta" : (spell.displayName || spell.name),
         },
         connection,
@@ -328,7 +328,7 @@ export class SessionActor extends AbilitySessionActor {
         return;
       }
       nextConditions = concentration.next;
-      if (spellRiders.length) {
+      if (spellRiders.length && !hiddenResolution) {
         const targetEntryId = operation.targetEntryId!;
         nextConditions = {
           ...nextConditions,
@@ -444,8 +444,11 @@ export class SessionActor extends AbilitySessionActor {
     if (hiddenResolution) {
       const entries = (await this.ctx.storage.get<HiddenSpellCommitment[]>(HIDDEN_SPELL_STATE_KEY)) ?? [];
       const commitment = entries.find(item => item.id === operation.requestId);
-      if (commitment && actionResult) {
-        commitment.privateResult = actionResult as unknown as Record<string, unknown>;
+      if (commitment) {
+        if (actionResult) commitment.privateResult = actionResult as unknown as Record<string, unknown>;
+        if (!counterspelled && spellRiders.length) {
+          commitment.privateRiders = spellRiders as unknown as Array<Record<string, unknown>>;
+        }
         await this.ctx.storage.put(HIDDEN_SPELL_STATE_KEY, entries);
       }
     } else if (actionResult) {
