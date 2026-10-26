@@ -1,3 +1,4 @@
+import type { HiddenSpellCommitment } from "../../../../../../packages/session-protocol/src/hiddenSpellcasting";
 import { applyCriticalDamageRule } from "../../../../../web/src/shared/session-runtime/criticalDamage";
 import type { CharacterTemplateProps } from "../../../../../web/src/models/characters/CharacterTemplate";
 import { getSpellCastDamageChoices, getSpellOnCastAttackRiders } from "../../../../../web/src/models/magic/spells/spellAttackRiders";
@@ -55,6 +56,7 @@ import { broadcastVisibilityFiltered } from "../../session/visibilityDelivery";
 const ABILITIES_STATE_KEY = "abilities-state";
 const HP_STATE_KEY = "hp-state";
 const CONDITIONS_STATE_KEY = "conditions-state";
+const HIDDEN_SPELL_STATE_KEY = "hidden-spell-commitments-v1";
 const MANUAL_SOURCE_IDS = new Set([
   "manual-feat",
   "manual-race",
@@ -90,6 +92,14 @@ export class SessionActor extends AbilitySessionActor {
     const operations = parsed.type === "session.magic.operation"
       ? [parsed.operation]
       : parsed.operations;
+    const secretEntries = (await this.ctx.storage.get<HiddenSpellCommitment[]>(HIDDEN_SPELL_STATE_KEY)) ?? [];
+    const pendingForActor = secretEntries.some(item => item.actor.kind === "character"
+      && item.actor.characterId === operations[0]?.characterId && !item.revealedAt);
+    if (pendingForActor && !operations.every(item =>
+      item.type === "character.spell.cast" && item.hiddenResolution === true && connection.role === "MASTER")) {
+      sendError(webSocket, "HIDDEN_SPELL_PENDING", "Resolva e revele a conjuração oculta antes de modificar os recursos mágicos.");
+      return;
+    }
     await this.handleMagicOperations(webSocket, connection, operations);
   }
 
@@ -234,6 +244,12 @@ export class SessionActor extends AbilitySessionActor {
     runtimeConfig: RuntimeConfigSnapshot,
     log: Awaited<ReturnType<typeof readSessionLog>>,
   ): Promise<void> {
+    if ((operation.counterspelled || operation.hiddenResolution || operation.preResolvedResult) && connection.role !== "MASTER") {
+      sendError(webSocket, "COUNTERSPELL_INTERNAL_ONLY", "A anulação de magias é controlada pelo servidor.");
+      return;
+    }
+    const counterspelled = operation.counterspelled === true;
+    const hiddenResolution = operation.hiddenResolution === true;
     const spell = findRuntimeSpell(runtimeConfig, operation.spellIndex);
     if (!spell) {
       sendError(webSocket, "SPELL_NOT_FOUND", "The requested spell is not part of the active session configuration.");
@@ -303,7 +319,7 @@ export class SessionActor extends AbilitySessionActor {
     }
 
     let nextConditions = conditions;
-    if (spell.concentration) {
+    if (spell.concentration && !counterspelled) {
       const concentration = applyConcentrationOperation(
         conditions,
         {
@@ -342,9 +358,11 @@ export class SessionActor extends AbilitySessionActor {
       }
     }
 
-    let actionResult: ReturnType<typeof resolveSpellCastAction>;
-    try {
-      actionResult = resolveSpellCastAction({
+    let actionResult: ReturnType<typeof resolveSpellCastAction> | undefined;
+    if (!counterspelled) try {
+      actionResult = operation.preResolvedResult
+        ? operation.preResolvedResult as unknown as ReturnType<typeof resolveSpellCastAction>
+        : resolveSpellCastAction({
         requestId: operation.requestId,
         actorId: connection.userId,
         character: payment.character,
@@ -357,7 +375,7 @@ export class SessionActor extends AbilitySessionActor {
         targetEntryId: operation.targetEntryId,
         selectedDamageType: chosenType,
       });
-      applyCriticalDamageRule(actionResult, runtimeConfig?.config.criticalDamage);
+      if (!operation.preResolvedResult) applyCriticalDamageRule(actionResult, runtimeConfig?.config.criticalDamage);
     } catch (error) {
       sendError(
         webSocket,
@@ -366,6 +384,21 @@ export class SessionActor extends AbilitySessionActor {
           ? error.message
           : "The structured spell resolution is invalid.",
       );
+      return;
+    }
+
+    if (hiddenResolution) {
+      const entries = (await this.ctx.storage.get<HiddenSpellCommitment[]>(HIDDEN_SPELL_STATE_KEY)) ?? [];
+      const commitment = entries.find(item => item.id === operation.requestId && item.resolvedAt && !item.revealedAt);
+      if (!commitment) {
+        sendError(webSocket, "HIDDEN_SPELL_NOT_PENDING", "Conjuração oculta não encontrada para resolução.");
+        return;
+      }
+      if (actionResult) commitment.privateResult = actionResult as unknown as Record<string, unknown>;
+      if (!counterspelled && spellRiders.length) {
+        commitment.privateRiders = spellRiders as unknown as Array<Record<string, unknown>>;
+      }
+      await this.ctx.storage.put(HIDDEN_SPELL_STATE_KEY, entries);
       return;
     }
 
@@ -424,9 +457,8 @@ export class SessionActor extends AbilitySessionActor {
       }
     }
 
-    broadcastVisibilityFiltered(this.ctx.getWebSockets(), {
-      type: "session.action.result",
-      result: actionResult,
+    if (actionResult) broadcastVisibilityFiltered(this.ctx.getWebSockets(), {
+      type: "session.action.result", result: actionResult,
     });
   }
 }

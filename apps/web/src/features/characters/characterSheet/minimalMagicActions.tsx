@@ -50,6 +50,7 @@ export function MinimalMagicActions({ character, updateCharacter, scrollOnlyItem
   const [targetEntryId, setTargetEntryId] = useState("")
   const [selectedDamageType, setSelectedDamageType] = useState<DamageType | "">("")
   const [selectedWeaponId, setSelectedWeaponId] = useState("")
+  const [counterspellTargetId, setCounterspellTargetId] = useState("")
   const [castLevel, setCastLevel] = useState<number | null>(null)
   const [castingResource, setCastingResource] = useState<CastingResource>("slot")
   const [confirmConcentrationReplacement, setConfirmConcentrationReplacement] = useState(false)
@@ -74,7 +75,7 @@ export function MinimalMagicActions({ character, updateCharacter, scrollOnlyItem
   const asksCastLevel = Boolean(selected && selected.spell.slotLevel > 0 && (castingResource === "slot" || selectedBaseCost))
 
   function openSpell(entry: MinimalSpellEntry) {
-    setSelectedDamageType(""); setSelectedWeaponId(""); setTargetEntryId(""); setSelected(entry); setError(""); setConfirmConcentrationReplacement(false); setCastLevel(entry.spell.slotLevel)
+    setSelectedDamageType(""); setSelectedWeaponId(""); setTargetEntryId(""); setCounterspellTargetId(""); setSelected(entry); setError(""); setConfirmConcentrationReplacement(false); setCastLevel(entry.spell.slotLevel)
     if (entry.sourceResourceCost) return setCastingResource(entry.sourceResourceCost.resource)
     if (entry.sourceCastingMode === "source" && (entry.sourceUsageSource || entry.sourceEquipmentSpellUsageSource || entry.scrollItemId)) return setCastingResource("ability")
     const choices = getSlotChoices(character, entry.spell)
@@ -95,6 +96,41 @@ export function MinimalMagicActions({ character, updateCharacter, scrollOnlyItem
       return
     }
     executeSelectedCast(mode)
+  }
+  function declareHiddenCast(mode: SessionDiceRollMode) {
+    if (!selected || !sessionRuntime || sessionRuntime.status !== "connected") {
+      setError("É necessário estar conectado à sessão para conjurar ocultamente.")
+      return
+    }
+    if (getSpellCastDamageChoices(selected.spell).length && !getSpellCastDamageChoices(selected.spell).includes(selectedDamageType as DamageType)) {
+      setError("Escolha o tipo de dano permitido para esta magia.")
+      return
+    }
+    if (selected.spell.index === "counterspell" && !counterspellTargetId) {
+      setError("Escolha a conjuração que deseja anular.")
+      return
+    }
+    const resolved = resolveAuthoritativeCastPayment()
+    if (!resolved) return
+    const sent = sessionRuntime.dispatchHiddenSpell({
+      type: "session.hiddenSpell.commit",
+      requestId: crypto.randomUUID(),
+      actor: { kind: "character", characterId: character.get("id") },
+      spellIndex: selected.spell.index,
+      castLevel: resolved.castLevel,
+      sourceId: selected.source.sourceId,
+      payment: resolved.payment,
+      mode,
+      targetEntryId: targetEntryId || undefined,
+      selectedDamageType: selectedDamageType || undefined,
+      selectedWeaponId: selectedWeaponId || undefined,
+      counterspellTargetId: selected.spell.index === "counterspell" ? counterspellTargetId : undefined,
+    })
+    if (!sent) {
+      setError("Não foi possível registrar esta conjuração oculta.")
+      return
+    }
+    finishCast()
   }
   function finishCast() { setConfirmConcentrationReplacement(false); setSelected(null) }
 
@@ -311,13 +347,27 @@ export function MinimalMagicActions({ character, updateCharacter, scrollOnlyItem
   onChange={setSelectedDamageType}
   options={[{ value: "" as const, label: "Escolha o tipo de dano" }, ...DAMAGE_TYPE_OPTIONS.filter(option => getSpellCastDamageChoices(selected.spell).includes(option.value)).map(option => ({ value: option.value, label: option.label }))]}
 /> : null}
+{selected.spell.index === "counterspell" && sessionRuntime ? <SpellCastChoiceField
+  label="Conjuração oculta a anular"
+  value={counterspellTargetId}
+  onChange={setCounterspellTargetId}
+  options={[{ value: "", label: "Selecione uma conjuração pendente" }, ...sessionRuntime.hiddenSpellEntries.filter(entry => entry.status === "hidden").map(entry => ({ value: entry.id, label: entry.actorLabel + " — magia oculta" }))]}
+/> : null}
 {getSpellOnCastAttackRiders(selected.spell).some(rider => rider.weaponSelection === "onActivation") ? <label className="grid gap-1 text-xs text-textMuted">Arma afetada pela magia
   <SharedSelect className="h-9 rounded-lg border border-border bg-bg px-2 text-textH" value={selectedWeaponId} onChange={event => setSelectedWeaponId(event.target.value)}>
     <option value="">Escolha uma arma equipada</option>
     {character.get("equipment").weapons.map(weapon => <option key={weapon.id} value={weapon.id}>{weapon.name}</option>)}
   </SharedSelect>
 </label> : null}
-{error ? <div className="rounded-lg border border-danger bg-dangerBg px-3 py-2 text-xs text-danger">{error}</div> : null}{confirmConcentrationReplacement ? <div className="rounded-lg border border-warning bg-bg-subtle p-3 text-xs text-text"><p>O personagem já está concentrando. Usar esta magia encerra a concentração atual.</p><div className="mt-2 flex justify-end gap-2"><Button variant="secondary" onClick={() => setConfirmConcentrationReplacement(false)}>Cancelar</Button><Button variant="primary" onClick={() => executeSelectedCast(pendingRollMode)}>Substituir e usar</Button></div></div> : <div className="flex justify-end border-t border-border pt-3">
+{error ? <div className="rounded-lg border border-danger bg-dangerBg px-3 py-2 text-xs text-danger">{error}</div> : null}{confirmConcentrationReplacement ? <div className="rounded-lg border border-warning bg-bg-subtle p-3 text-xs text-text"><p>O personagem já está concentrando. Usar esta magia encerra a concentração atual.</p><div className="mt-2 flex justify-end gap-2"><Button variant="secondary" onClick={() => setConfirmConcentrationReplacement(false)}>Cancelar</Button><Button variant="primary" onClick={() => executeSelectedCast(pendingRollMode)}>Substituir e usar</Button></div></div> : <div className="flex justify-end gap-2 border-t border-border pt-3">
+  {sessionRuntime ? <Button
+    variant="secondary"
+    disabled={useDisabled || sessionRuntime.status !== "connected" || (selected.spell.index === "counterspell" && !counterspellTargetId)}
+    title="Registra a magia e o círculo em segredo. O mestre resolve e revela após as reações."
+    onClick={(event) => declareHiddenCast(rollModeFromEvent(event.nativeEvent))}
+  >
+    Conjurar ocultamente
+  </Button> : null}
   <Button
     variant="primary"
     disabled={useDisabled || Boolean(selected && getSpellCastDamageChoices(selected.spell).length && !getSpellCastDamageChoices(selected.spell).includes(selectedDamageType as DamageType)) || Boolean(sessionRuntime && selected && getSpellOnCastAttackRiders(selected.spell).some(rider => rider.targetSelection === "onCast") && !targetEntryId)}

@@ -7,7 +7,7 @@ export type SessionSpellCastPayment<TResource, TGranted, TEquipmentGranted> =
   | { type: "equipment-spell-use"; source: TEquipmentGranted }
 
 export type SessionMagicOperation<TResource, TGranted, TEquipmentGranted, TDamage, TRollMode, TVisibility> =
-  | { type: "character.spell.cast"; characterId: string; requestId: string; spellIndex: string; sourceId: string; castLevel: number; mode: TRollMode; visibility?: TVisibility; payment: SessionSpellCastPayment<TResource, TGranted, TEquipmentGranted>; targetEntryId?: string; selectedDamageType?: TDamage; selectedWeaponId?: string }
+  | { type: "character.spell.cast"; characterId: string; requestId: string; spellIndex: string; sourceId: string; castLevel: number; mode: TRollMode; visibility?: TVisibility; payment: SessionSpellCastPayment<TResource, TGranted, TEquipmentGranted>; targetEntryId?: string; selectedDamageType?: TDamage; selectedWeaponId?: string; counterspelled?: boolean; hiddenResolution?: boolean; preResolvedResult?: Record<string, unknown> }
   | { type: "character.spell.prepare"; characterId: string; spellIndex: string; prepared: boolean }
   | { type: "character.spell.add"; characterId: string; spellEntry: Record<string, unknown> }
   | { type: "character.spell.remove"; characterId: string; spellIndex: string }

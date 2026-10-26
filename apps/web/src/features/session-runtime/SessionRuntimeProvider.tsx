@@ -1,3 +1,4 @@
+import type { HiddenSpellClientMessage, HiddenSpellPublicEntry } from "../../../../../packages/session-protocol/src/hiddenSpellcasting"
 import {
   createContext,
   useCallback,
@@ -90,6 +91,8 @@ export type SessionRuntimeContextValue = {
   lastHeartbeatAckAt: number | null
   runtimeConfigSnapshot: SessionRuntimeConfigSnapshot | null
   panelsState?: SessionPanelsState | null
+  hiddenSpellEntries: HiddenSpellPublicEntry[]
+  dispatchHiddenSpell: (operation: HiddenSpellClientMessage) => boolean
   dispatchPanelOperation?: (operation: SessionPanelOperation) => boolean
   hpByCharacterId: Readonly<Record<string, SessionHpState>>
   conditionsByCharacterId: Readonly<Record<string, SessionConditionsState>>
@@ -180,6 +183,7 @@ function SessionRuntimeProviderInner({ sessionId, userId, role, children }: {
   const [lastHeartbeatAckAt, setLastHeartbeatAckAt] = useState<number | null>(null)
   const [runtimeConfigSnapshot, setRuntimeConfigSnapshot] = useState<SessionRuntimeConfigSnapshot | null>(null)
   const [panelsState, setPanelsState] = useState<SessionPanelsState | null>(null)
+  const [hiddenSpellEntries, setHiddenSpellEntries] = useState<HiddenSpellPublicEntry[]>([])
   const digitalDiceEnabledRef = useRef(true)
 
   useEffect(() => {
@@ -207,6 +211,7 @@ function SessionRuntimeProviderInner({ sessionId, userId, role, children }: {
     setLastHeartbeatAckAt(null)
     setRuntimeConfigSnapshot(null)
     setPanelsState(null)
+    setHiddenSpellEntries([])
     setHpByCharacterId({})
     setConditionsByCharacterId({})
     setAbilitiesByCharacterId({})
@@ -232,6 +237,7 @@ function SessionRuntimeProviderInner({ sessionId, userId, role, children }: {
       clientId,
       onStatusChange: setStatus,
       onMessage: (message) => {
+        if (message.type === "session.hiddenSpell.snapshot") { setHiddenSpellEntries(message.entries); return }
         if (message.type === "session.pause.state") { setPauseState(message.state); return }
         if (message.type === "session.panels.snapshot") {
           setPanelsState(message.state)
@@ -375,6 +381,8 @@ function SessionRuntimeProviderInner({ sessionId, userId, role, children }: {
     }
   }, [baseUrl, clientId, role, sessionId, userId])
 
+  const dispatchHiddenSpell = useCallback((operation: HiddenSpellClientMessage) =>
+    socketRef.current?.send(operation) ?? false, [])
   const dispatchPanelOperation = useCallback((operation: SessionPanelOperation) =>
     socketRef.current?.send({ type: "session.panels.operation", operation }) ?? false, [])
   const publishRuntimeConfig = useCallback((snapshot: SessionRuntimeConfigSnapshot) =>
@@ -473,7 +481,7 @@ function SessionRuntimeProviderInner({ sessionId, userId, role, children }: {
 
   const value = useMemo<SessionRuntimeContextValue>(() => ({
     status, sessionId, clientId, role, presence, lastHeartbeatAckAt, runtimeConfigSnapshot,
-    panelsState, dispatchPanelOperation,
+    panelsState, dispatchPanelOperation, hiddenSpellEntries, dispatchHiddenSpell,
     hpByCharacterId, conditionsByCharacterId, abilitiesByCharacterId, sessionCharactersById, characterSnapshotReady,
     inventoryState, missionState, initiativeState, pauseState, setSessionPaused, companionsById, dispatchCompanionOperation,
     publishRuntimeConfig,
@@ -491,7 +499,7 @@ function SessionRuntimeProviderInner({ sessionId, userId, role, children }: {
     dispatchProficiencyOperation, dispatchProfileOperation, dispatchRaceOperation, dispatchSheetOperation,
     hpByCharacterId, initializeAbilities, initializeConditions, initializeHp, initializeInitiative, initializeInventory, initializeMissions,
     initiativeState, inventoryState, lastHeartbeatAckAt, missionState, pauseState, setSessionPaused, presence, publishRuntimeConfig, role, runtimeConfigSnapshot,
-    panelsState, dispatchPanelOperation,
+    panelsState, dispatchPanelOperation, hiddenSpellEntries, dispatchHiddenSpell,
     sessionCharactersById, sessionId, status,
   ])
 

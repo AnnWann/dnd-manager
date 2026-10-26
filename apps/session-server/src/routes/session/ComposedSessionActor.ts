@@ -1,8 +1,11 @@
+import { getCharacterGrantedSpells } from "../../../../web/src/models/characters/characterGrantedSpells";
+import { parseHiddenSpellClientMessage, projectHiddenSpell, type HiddenSpellCommitment } from "../../../../../packages/session-protocol/src/hiddenSpellcasting";
 import { SessionActor as BaseSessionActor } from "./SessionActor";
-import { readRuntimeConfig } from "./runtimeConfigAccess";
+import { authorizeCharacterMutation, findRuntimeSpell, readRuntimeConfig } from "./runtimeConfigAccess";
 import { isSessionPlayerOperationBlocked, parseSessionPauseMessage, type SessionPauseState } from "../../../../web/src/shared/session-runtime/sessionPause";
 import type { CompanionState } from "../../../../web/src/shared/session-runtime/companionRuntime";
 import type { SessionInitiativeState } from "../initiative/initiativeProtocol";
+import type { InitiativeSession } from "../../../../web/src/models/initiative/Initiative";
 import { SessionActor as AbilitySessionActor } from "../characters/abilities/AbilitySessionActor";
 import { SessionActor as MagicSessionActor } from "../characters/spells/MagicSessionActor";
 import { SessionActor as EquipmentSessionActor } from "../characters/equipment/EquipmentSessionActor";
@@ -57,6 +60,7 @@ import {
 } from "./visibilityDelivery";
 
 const SESSION_PAUSE_STATE_KEY = "session-pause-state";
+const HIDDEN_SPELL_STATE_KEY = "hidden-spell-commitments-v1";
 const COMPANIONS_STATE_KEY = "companions-state";
 const INITIATIVE_STATE_KEY = "initiative-state";
 const ABILITIES_STATE_KEY = "abilities-state";
@@ -201,6 +205,7 @@ export class SessionActor extends BaseSessionActor {
     sendVisibilityFiltered(socket, { type: "session.pause.state", state: await this.readPauseState() });
 
     await Promise.all([
+      this.sendHiddenSpellSnapshot(socket),
       this.sendAbilitySnapshot(socket),
       this.sendInventorySnapshot(socket),
       this.sendCharacterLifecycleSnapshot(socket),
@@ -213,6 +218,11 @@ export class SessionActor extends BaseSessionActor {
     message: string | ArrayBuffer,
   ): Promise<void> {
     const raw = typeof message === "string" ? message : new TextDecoder().decode(message);
+    const hiddenSpell = parseHiddenSpellClientMessage(raw);
+    if (hiddenSpell) {
+      await this.handleHiddenSpell(webSocket, hiddenSpell);
+      return;
+    }
     const sessionControl = parseSessionPauseMessage(raw);
     if (sessionControl) {
       const connection = readSessionConnection(webSocket);
@@ -281,6 +291,334 @@ export class SessionActor extends BaseSessionActor {
     }
 
     await super.webSocketMessage(webSocket, message);
+  }
+
+  private async sendHiddenSpellSnapshot(socket: WebSocket): Promise<void> {
+    const entries = (await this.ctx.storage.get<HiddenSpellCommitment[]>(HIDDEN_SPELL_STATE_KEY)) ?? [];
+    send(socket, { type: "session.hiddenSpell.snapshot", entries: entries.map(projectHiddenSpell) });
+  }
+
+  private async broadcastHiddenSpellSnapshot(): Promise<void> {
+    const entries = (await this.ctx.storage.get<HiddenSpellCommitment[]>(HIDDEN_SPELL_STATE_KEY)) ?? [];
+    broadcast(this.ctx.getWebSockets(), { type: "session.hiddenSpell.snapshot", entries: entries.map(projectHiddenSpell) });
+  }
+
+  private async handleHiddenSpell(
+    socket: WebSocket,
+    operation: NonNullable<ReturnType<typeof parseHiddenSpellClientMessage>>,
+  ): Promise<void> {
+    const connection = readSessionConnection(socket);
+    if (!connection) return;
+    if (connection.role !== "MASTER" && (await this.readPauseState()).paused) {
+      sendError(socket, "SESSION_PAUSED", "A sessão está pausada.");
+      return;
+    }
+    const entries = (await this.ctx.storage.get<HiddenSpellCommitment[]>(HIDDEN_SPELL_STATE_KEY)) ?? [];
+
+    if (operation.type === "session.hiddenSpell.resolve" || operation.type === "session.hiddenSpell.reveal") {
+      if (connection.role !== "MASTER") {
+        sendError(socket, "HIDDEN_SPELL_MASTER_REQUIRED", "Somente o mestre pode revelar conjurações.");
+        return;
+      }
+      const requested = entries.find(candidate => candidate.id === operation.id);
+      if (!requested || requested.revealedAt) {
+        sendError(socket, "HIDDEN_SPELL_NOT_PENDING", "Conjuração inexistente ou já revelada.");
+        return;
+      }
+      // Counterspells may themselves be counterspelled. Reveal an entire
+      // dependency chain, rather than allowing partial disclosure of levels.
+      let root = requested;
+      while (root.counterspellTargetId) {
+        const target = entries.find(candidate => candidate.id === root.counterspellTargetId);
+        if (!target || target.revealedAt) {
+          sendError(socket, "HIDDEN_SPELL_CHAIN_INVALID", "A cadeia de Contramágica não está disponível.");
+          return;
+        }
+        root = target;
+      }
+      const chain: HiddenSpellCommitment[] = [];
+      const visit = (candidate: HiddenSpellCommitment) => {
+        for (const reaction of entries.filter(entry => entry.counterspellTargetId === candidate.id && !entry.revealedAt)) {
+          visit(reaction);
+        }
+        chain.push(candidate);
+      };
+      visit(root);
+      if (operation.type === "session.hiddenSpell.reveal") {
+        if (!chain.every(cast => Boolean(cast.resolvedAt) && (cast.counterspelled || Boolean(cast.privateResult)))) {
+          sendError(socket, "HIDDEN_SPELL_UNRESOLVED", "Resolva as conjurações ocultamente antes de revelá-las.");
+          return;
+        }
+        const now = new Date().toISOString();
+        for (const cast of chain) cast.revealedAt = now;
+        await this.ctx.storage.put(HIDDEN_SPELL_STATE_KEY, entries);
+        await this.broadcastHiddenSpellSnapshot();
+      for (const cast of chain) {
+        if (cast.actor.kind === "character") {
+          await this.magicRoute.webSocketMessage(socket, JSON.stringify({
+            type: "session.magic.operation",
+            operation: {
+              type: "character.spell.cast",
+              characterId: cast.actor.characterId,
+              requestId: cast.id,
+              spellIndex: cast.spellIndex,
+              sourceId: cast.sourceId,
+              castLevel: cast.castLevel,
+              mode: cast.mode,
+              visibility: "public",
+              payment: cast.payment,
+              targetEntryId: cast.targetEntryId,
+              selectedDamageType: cast.selectedDamageType,
+              selectedWeaponId: cast.selectedWeaponId,
+              counterspelled: Boolean(cast.counterspelled),
+              preResolvedResult: cast.privateResult,
+            },
+          }));
+        } else {
+          await super.webSocketMessage(socket, JSON.stringify({
+            type: "session.creature.roll",
+            request: {
+              requestId: cast.id,
+              creatureId: cast.actor.creatureId,
+              initiativeEntryId: cast.actor.initiativeEntryId,
+              mode: cast.mode,
+              visibility: "public",
+              source: {
+                type: "spell",
+                spellIndex: cast.spellIndex,
+                castLevel: cast.castLevel,
+                intent: "resolve",
+                counterspelled: Boolean(cast.counterspelled),
+                preResolvedResult: cast.privateResult,
+              },
+            },
+          }));
+        }
+      }
+        return;
+      }
+      if (chain.some(cast => Boolean(cast.resolvedAt))) {
+        sendError(socket, "HIDDEN_SPELL_ALREADY_RESOLVED", "Esta cadeia já foi resolvida.");
+        return;
+      }
+      const abilityState = (await this.ctx.storage.get<Record<string, SessionAbilityState>>("abilities-state")) ?? {};
+      const runtimeConfig = await readRuntimeConfig(this.ctx.storage);
+      for (const cast of chain) {
+        const attackers = chain.filter(candidate => candidate.counterspellTargetId === cast.id);
+        cast.counterspelled = attackers.some(attacker => {
+          if (attacker.counterspelled) return false;
+          if (attacker.castLevel >= cast.castLevel) return true;
+          const modifier = this.hiddenCounterspellModifier(attacker, abilityState, runtimeConfig);
+          const die = Math.floor(Math.random() * 20) + 1;
+          const dc = 10 + cast.castLevel;
+          const total = die + modifier;
+          attacker.counterspellCheck = { die, modifier, total, dc, success: total >= dc };
+          return total >= dc;
+        });
+      }
+      // Seal the resolution before spending any resources so duplicate resolve
+      // messages cannot apply the same spell twice. Details stay redacted.
+      const now = new Date().toISOString();
+      for (const cast of chain) cast.resolvedAt = now;
+      await this.ctx.storage.put(HIDDEN_SPELL_STATE_KEY, entries);
+      await this.broadcastHiddenSpellSnapshot();
+      for (const cast of chain) {
+        if (cast.actor.kind === "character") {
+          await this.magicRoute.webSocketMessage(socket, JSON.stringify({
+            type: "session.magic.operation",
+            operation: {
+              type: "character.spell.cast",
+              characterId: cast.actor.characterId,
+              requestId: cast.id,
+              spellIndex: cast.spellIndex,
+              sourceId: cast.sourceId,
+              castLevel: cast.castLevel,
+              mode: cast.mode,
+              visibility: "public",
+              payment: cast.payment,
+              targetEntryId: cast.targetEntryId,
+              selectedDamageType: cast.selectedDamageType,
+              selectedWeaponId: cast.selectedWeaponId,
+              counterspelled: Boolean(cast.counterspelled),
+              hiddenResolution: true,
+            },
+          }));
+        } else {
+          await super.webSocketMessage(socket, JSON.stringify({
+            type: "session.creature.roll",
+            request: {
+              requestId: cast.id,
+              creatureId: cast.actor.creatureId,
+              initiativeEntryId: cast.actor.initiativeEntryId,
+              mode: cast.mode,
+              visibility: "public",
+              source: {
+                type: "spell",
+                spellIndex: cast.spellIndex,
+                castLevel: cast.castLevel,
+                intent: "resolve",
+                counterspelled: Boolean(cast.counterspelled),
+                hiddenResolution: true,
+              },
+            },
+          }));
+        }
+      }
+      return;
+    }
+
+    if (entries.some(candidate => candidate.id === operation.requestId)) {
+      sendError(socket, "HIDDEN_SPELL_DUPLICATE", "Esta conjuração já foi registrada.");
+      return;
+    }
+    if (entries.length >= 250) {
+      sendError(socket, "HIDDEN_SPELL_LIMIT", "Limite de conjurações registradas atingido.");
+      return;
+    }
+    const config = await readRuntimeConfig(this.ctx.storage);
+    const spell = findRuntimeSpell(config, operation.spellIndex);
+    if (!spell || operation.castLevel < spell.slotLevel
+      || (spell.slotLevel === 0 && operation.castLevel !== 0)) {
+      sendError(socket, "HIDDEN_SPELL_INVALID", "Magia ou círculo inválido na sessão.");
+      return;
+    }
+    const actor = operation.actor;
+    let actorLabel: string;
+    if (actor.kind === "character") {
+      const authorized = authorizeCharacterMutation(connection, config, actor.characterId);
+      const hp = (await this.ctx.storage.get<Record<string, SessionHpState>>("hp-state"))?.[actor.characterId];
+      const ability = (await this.ctx.storage.get<Record<string, SessionAbilityState>>("abilities-state"))?.[actor.characterId];
+      if (!authorized.ok || !hp || !ability?.initialized || (connection.role !== "MASTER" && hp.ownerUserId !== connection.userId)) {
+        sendError(socket, "HIDDEN_SPELL_ACCESS_DENIED", "Este conjurador não pertence a você.");
+        return;
+      }
+      if (!operation.sourceId || !operation.payment) {
+        sendError(socket, "HIDDEN_SPELL_SOURCE_INVALID", "Fonte e recurso da magia são obrigatórios.");
+        return;
+      }
+      const character = CharacterTemplate.fromJSON(ability.character as Partial<CharacterTemplateProps>);
+      const known = character.getOrCreateMagic().spells.knownSpells.some(item =>
+        item.spells.id === spell.index && item.source.sourceId === operation.sourceId)
+        || getCharacterGrantedSpells(character).some(item =>
+          item.index === spell.index && item.source.sourceId === operation.sourceId);
+      if (!known) {
+        sendError(socket, "HIDDEN_SPELL_UNKNOWN", "A magia escolhida não consta nas magias deste personagem.");
+        return;
+      }
+      if (operation.payment.type === "slot") {
+        const level = Number(operation.payment.level);
+        const slots = operation.payment.pool === "pact"
+          ? character.getPactSlots()
+          : character.getSpellSlots()[level as keyof ReturnType<typeof character.getSpellSlots>];
+        const current = slots?.current ?? 0;
+        const reserved = entries.filter(other => !other.revealedAt
+          && other.actor.kind === "character"
+          && other.actor.characterId === actor.characterId
+          && other.payment?.type === "slot"
+          && other.payment.pool === operation.payment?.pool
+          && other.payment.level === level).length;
+        if (current <= reserved) {
+          sendError(socket, "HIDDEN_SPELL_SLOTS", "Espaços de magia insuficientes.");
+          return;
+        }
+      }
+      actorLabel = character.get("name") || "Personagem";
+    } else {
+      const creature = config?.config.creatureCompendium.find(candidate => candidate.id === actor.creatureId);
+      if (!creature || (connection.role !== "MASTER" && creature.ownerUserId !== connection.userId)
+        || !creature.spellcasting?.spells.some(item => item.spellIndex === spell.index)) {
+        sendError(socket, "HIDDEN_SPELL_CREATURE_DENIED", "A criatura não pode conjurar esta magia.");
+        return;
+      }
+      const configuredSpell = creature.spellcasting.spells.find(item => item.spellIndex === spell.index);
+      if (configuredSpell && configuredSpell.usage.type !== "slots"
+        && operation.castLevel !== (configuredSpell.castLevel ?? spell.slotLevel)) {
+        sendError(socket, "HIDDEN_SPELL_FIXED_LEVEL", "Esta magia possui círculo fixo.");
+        return;
+      }
+      if (actor.initiativeEntryId) {
+        const initiative = await this.ctx.storage.get<SessionInitiativeState>("initiative-state");
+        const initiativeSession = initiative?.session as Partial<InitiativeSession> | undefined;
+        const entry = initiativeSession?.entries?.find(item => item.id === actor.initiativeEntryId);
+        if (!entry || entry.sourceId !== "compendium:" + actor.creatureId) {
+          sendError(socket, "HIDDEN_SPELL_ENTRY_INVALID", "Combatente inválido para a criatura.");
+          return;
+        }
+        const usage = creature.spellcasting.spells.find(item => item.spellIndex === spell.index);
+        if (usage?.usage.type === "slots") {
+          const slotLevel = operation.castLevel as keyof NonNullable<typeof entry.creatureSpellResources>["slots"];
+          const available = entry.creatureSpellResources?.slots?.[slotLevel]?.current ?? 0;
+          const reserved = entries.filter(other => !other.revealedAt
+            && other.actor.kind === "creature"
+            && other.actor.initiativeEntryId === actor.initiativeEntryId
+            && other.castLevel === operation.castLevel).length;
+          if (available <= reserved) {
+            sendError(socket, "HIDDEN_SPELL_SLOTS", "Espaços de magia insuficientes.");
+            return;
+          }
+        }
+      } else if (!creature.ownerUserId) {
+        sendError(socket, "HIDDEN_SPELL_ENTRY_REQUIRED", "Adicione a criatura à iniciativa antes de conjurar ocultamente.");
+        return;
+      }
+      actorLabel = creature.basicName || "Criatura";
+    }
+
+    const initiative = await this.ctx.storage.get<SessionInitiativeState>("initiative-state");
+    const initiativeSession = initiative?.session as Partial<InitiativeSession> | undefined;
+    const round = typeof initiativeSession?.round === "number" ? initiativeSession.round : 0;
+    if (operation.counterspellTargetId) {
+      const target = entries.find(candidate => candidate.id === operation.counterspellTargetId && !candidate.resolvedAt && !candidate.revealedAt);
+      if (!target || spell.index !== "counterspell" || spell.slotLevel > operation.castLevel) {
+        sendError(socket, "HIDDEN_SPELL_REACTION_INVALID", "A reação deve ser Contramágica contra uma conjuração pendente.");
+        return;
+      }
+      if (entries.some(candidate => candidate.counterspellTargetId && candidate.round === round
+          && candidate.actor.kind === actor.kind && (
+            actor.kind === "character"
+              ? candidate.actor.kind === "character" && candidate.actor.characterId === actor.characterId
+              : candidate.actor.kind === "creature" && candidate.actor.creatureId === actor.creatureId && candidate.actor.initiativeEntryId === actor.initiativeEntryId
+          ))) {
+        sendError(socket, "HIDDEN_SPELL_REACTION_SPENT", "Esta criatura já utilizou uma reação de Contramágica nesta rodada.");
+        return;
+      }
+    }
+    entries.push({
+      id: operation.requestId, ownerUserId: connection.userId, actor, actorLabel,
+      spellIndex: spell.index, spellName: spell.displayName || spell.name,
+      castLevel: operation.castLevel,
+      sourceId: operation.sourceId, payment: operation.payment,
+      targetEntryId: operation.targetEntryId,
+      selectedDamageType: operation.selectedDamageType,
+      selectedWeaponId: operation.selectedWeaponId,
+      mode: operation.mode ?? "normal",
+      counterspellTargetId: operation.counterspellTargetId,
+      createdAt: new Date().toISOString(), round,
+    });
+    await this.ctx.storage.put(HIDDEN_SPELL_STATE_KEY, entries);
+    await this.broadcastHiddenSpellSnapshot();
+  }
+
+  private hiddenCounterspellModifier(
+    cast: HiddenSpellCommitment,
+    abilities: Record<string, SessionAbilityState>,
+    config: Awaited<ReturnType<typeof readRuntimeConfig>>,
+  ): number {
+    if (cast.actor.kind === "creature") {
+      const creatureId = cast.actor.creatureId;
+      const creature = config?.config.creatureCompendium.find(item => item.id === creatureId);
+      const attr = creature?.spellcasting?.ability;
+      return attr && creature?.abilityScores
+        ? Math.floor(((creature.abilityScores[attr] ?? 10) - 10) / 2) : 0;
+    }
+    const state = abilities[cast.actor.characterId];
+    if (!state) return 0;
+    try {
+      const character = CharacterTemplate.fromJSON(state.character as Partial<CharacterTemplateProps>);
+      const known = character.getOrCreateMagic().spells.knownSpells.find(item =>
+        item.spells.id === "counterspell" && item.source.sourceId === cast.sourceId);
+      return character.getEffectiveAttributeModifier(known?.source.attribute || "int");
+    } catch { return 0; }
   }
 
   private async handleCentralUndo(webSocket: WebSocket, logId: string): Promise<void> {
