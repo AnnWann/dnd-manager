@@ -629,7 +629,7 @@ export class SessionActor extends DurableObject<Env> {
           castLevel,
           hiddenResolution ? "Magia oculta" : (spell.displayName || spell.name),
           spell.concentration && !counterspelled,
-          hiddenResolution ? "hidden" : spell.index,
+          hiddenResolution ? "hidden-" + request.requestId : spell.index,
         );
 
         if (nextInitiative !== currentInitiative) {
@@ -650,7 +650,7 @@ export class SessionActor extends DurableObject<Env> {
         const virtual = { ...createInitiativeSession(), entries: [entry] };
         const updated = consumeCreatureSpellResource(
           virtual, entry.id, creature, configuredSpell, castLevel,
-          hiddenResolution ? "Magia oculta" : (spell.displayName || spell.name), spell.concentration && !counterspelled, hiddenResolution ? "hidden" : spell.index,
+          hiddenResolution ? "Magia oculta" : (spell.displayName || spell.name), spell.concentration && !counterspelled, hiddenResolution ? "hidden-" + request.requestId : spell.index,
         ).entries[0];
         if (updated) await this.persistCompanionResources(creature, updated);
       }
