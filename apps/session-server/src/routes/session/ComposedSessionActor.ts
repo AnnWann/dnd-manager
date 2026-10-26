@@ -295,7 +295,7 @@ export class SessionActor extends BaseSessionActor {
 
   private async sendHiddenSpellSnapshot(socket: WebSocket): Promise<void> {
     const entries = (await this.ctx.storage.get<HiddenSpellCommitment[]>(HIDDEN_SPELL_STATE_KEY)) ?? [];
-    send(socket, { type: "session.hiddenSpell.snapshot", entries: entries.map(projectHiddenSpell) });
+    send(socket, { type: "session.hiddenSpell.snapshot", entries: entries.filter(entry => !entry.revealedAt).map(projectHiddenSpell) });
   }
 
   private async broadcastHiddenSpellSnapshot(): Promise<void> {
@@ -488,7 +488,7 @@ export class SessionActor extends BaseSessionActor {
       sendError(socket, "HIDDEN_SPELL_DUPLICATE", "Esta conjuração já foi registrada.");
       return;
     }
-    if (entries.length >= 250) {
+    if (entries.filter(entry => !entry.revealedAt).length >= 250) {
       sendError(socket, "HIDDEN_SPELL_LIMIT", "Limite de conjurações registradas atingido.");
       return;
     }
