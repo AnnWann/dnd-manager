@@ -507,7 +507,7 @@ function SessionRuntimeProviderInner({ sessionId, userId, role, children }: {
     dispatchProficiencyOperation, dispatchProfileOperation, dispatchRaceOperation, dispatchSheetOperation,
     hpByCharacterId, initializeAbilities, initializeConditions, initializeHp, initializeInitiative, initializeInventory, initializeMissions,
     initiativeState, inventoryState, lastHeartbeatAckAt, missionState, pauseState, setSessionPaused, presence, publishRuntimeConfig, role, runtimeConfigSnapshot,
-    panelsState, dispatchPanelOperation, hiddenSpellEntries, dispatchHiddenSpell,
+    panelsState, dispatchPanelOperation, hiddenSpellEntries, hiddenSpellError, dispatchHiddenSpell,
     sessionCharactersById, sessionId, status,
   ])
 
