@@ -96,6 +96,7 @@ function isMagicOperation(value: unknown): value is SessionMagicOperation {
         && (value.selectedWeaponId === undefined || (nonEmpty(value.selectedWeaponId) && value.selectedWeaponId.length <= 160))
         && (value.counterspelled === undefined || typeof value.counterspelled === "boolean")
         && (value.hiddenResolution === undefined || typeof value.hiddenResolution === "boolean")
+        && (value.preResolvedResult === undefined || (isRecord(value.preResolvedResult) && JSON.stringify(value.preResolvedResult).length < 100000))
         && isSpellCastPayment(value.payment);
     case "character.spell.prepare": return nonEmpty(value.spellIndex) && typeof value.prepared === "boolean";
     case "character.spell.add": return isKnownSpellEntry(value.spellEntry);
