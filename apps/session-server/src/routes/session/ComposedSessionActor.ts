@@ -345,9 +345,26 @@ export class SessionActor extends BaseSessionActor {
       };
       visit(root);
       if (operation.type === "session.hiddenSpell.reveal") {
-        if (!chain.every(cast => Boolean(cast.resolvedAt) && (cast.counterspelled || Boolean(cast.privateResult)))) {
+        if (!chain.every(cast => Boolean(cast.resolvedAt) && Boolean(cast.privateResult))) {
           sendError(socket, "HIDDEN_SPELL_UNRESOLVED", "Resolva as conjurações ocultamente antes de revelá-las.");
           return;
+        }
+        const abilityState = (await this.ctx.storage.get<Record<string, SessionAbilityState>>("abilities-state")) ?? {};
+        const runtimeConfig = await readRuntimeConfig(this.ctx.storage);
+        // Determine Counterspell outcomes at disclosure; all cast dice have
+        // already been calculated privately at declaration time.
+        for (const cast of chain) {
+          const counters = chain.filter(candidate => candidate.counterspellTargetId === cast.id);
+          cast.counterspelled = counters.some(counter => {
+            if (counter.counterspelled) return false;
+            if (counter.castLevel >= cast.castLevel) return true;
+            const modifier = this.hiddenCounterspellModifier(counter, abilityState, runtimeConfig);
+            const die = Math.floor(Math.random() * 20) + 1;
+            const dc = 10 + cast.castLevel;
+            const total = die + modifier;
+            counter.counterspellCheck = { die, modifier, total, dc, success: total >= dc };
+            return total >= dc;
+          });
         }
         const now = new Date().toISOString();
         for (const cast of chain) cast.revealedAt = now;
@@ -568,7 +585,7 @@ export class SessionActor extends BaseSessionActor {
     const initiativeSession = initiative?.session as Partial<InitiativeSession> | undefined;
     const round = typeof initiativeSession?.round === "number" ? initiativeSession.round : 0;
     if (operation.counterspellTargetId) {
-      const target = entries.find(candidate => candidate.id === operation.counterspellTargetId && !candidate.resolvedAt && !candidate.revealedAt);
+      const target = entries.find(candidate => candidate.id === operation.counterspellTargetId && !candidate.revealedAt);
       if (!target || spell.index !== "counterspell" || spell.slotLevel > operation.castLevel) {
         sendError(socket, "HIDDEN_SPELL_REACTION_INVALID", "A reação deve ser Contramágica contra uma conjuração pendente.");
         return;
@@ -596,6 +613,67 @@ export class SessionActor extends BaseSessionActor {
       createdAt: new Date().toISOString(), round,
     });
     await this.ctx.storage.put(HIDDEN_SPELL_STATE_KEY, entries);
+    await this.broadcastHiddenSpellSnapshot();
+    // Compute and seal the actual dice immediately; no public roll, damage,
+    // slot consumption or identifiable concentration information is sent.
+    const last = entries[entries.length - 1]!;
+    await this.preRollHiddenSpell(socket, connection, last);
+  }
+
+  private async preRollHiddenSpell(
+    socket: WebSocket,
+    connection: SessionConnection,
+    cast: HiddenSpellCommitment,
+  ): Promise<void> {
+    const entries = (await this.ctx.storage.get<HiddenSpellCommitment[]>(HIDDEN_SPELL_STATE_KEY)) ?? [];
+    const saved = entries.find(entry => entry.id === cast.id);
+    if (!saved || saved.resolvedAt) return;
+    saved.resolvedAt = new Date().toISOString();
+    await this.ctx.storage.put(HIDDEN_SPELL_STATE_KEY, entries);
+    const internal = {
+      deserializeAttachment: () => ({ ...connection, role: "MASTER" }),
+      serializeAttachment: () => {},
+      send: (raw: string) => socket.send(raw),
+      close: (code?: number, reason?: string) => socket.close(code, reason),
+    } as unknown as WebSocket;
+    if (cast.actor.kind === "character") {
+      await this.magicRoute.webSocketMessage(internal, JSON.stringify({
+        type: "session.magic.operation",
+        operation: {
+          type: "character.spell.cast",
+          characterId: cast.actor.characterId,
+          requestId: cast.id,
+          spellIndex: cast.spellIndex,
+          sourceId: cast.sourceId,
+          castLevel: cast.castLevel,
+          mode: cast.mode,
+          visibility: "public",
+          payment: cast.payment,
+          targetEntryId: cast.targetEntryId,
+          selectedDamageType: cast.selectedDamageType,
+          selectedWeaponId: cast.selectedWeaponId,
+          hiddenResolution: true,
+        },
+      }));
+    } else {
+      await super.webSocketMessage(internal, JSON.stringify({
+        type: "session.creature.roll",
+        request: {
+          requestId: cast.id,
+          creatureId: cast.actor.creatureId,
+          initiativeEntryId: cast.actor.initiativeEntryId,
+          mode: cast.mode,
+          visibility: "public",
+          source: {
+            type: "spell",
+            spellIndex: cast.spellIndex,
+            castLevel: cast.castLevel,
+            intent: "resolve",
+            hiddenResolution: true,
+          },
+        },
+      }));
+    }
     await this.broadcastHiddenSpellSnapshot();
   }
 
