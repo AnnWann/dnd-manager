@@ -379,6 +379,8 @@ function CreatureSpellcastingSection({
   const { getSpellByIndex, ensureOfficialSpells } = useMagicContext()
   const [expanded, setExpanded] = useState<Set<string>>(() => new Set())
   const [castLevels, setCastLevels] = useState<Record<string, number>>({})
+  const [counterspellTargetId, setCounterspellTargetId] = useState("")
+  const [hiddenError, setHiddenError] = useState("")
 
   useEffect(() => {
     if (!spellcasting.spells.length) return
@@ -433,6 +435,7 @@ function CreatureSpellcastingSection({
       </div>
 
       {restoreError ? <p role="alert" className="mt-2 text-xs text-danger">{restoreError}</p> : null}
+      {hiddenError ? <p role="alert" className="mt-2 text-xs text-danger">{hiddenError}</p> : null}
 
       {spellcasting.spells.length ? (
         <div className="mt-3 grid gap-2">
@@ -569,6 +572,40 @@ function CreatureSpellcastingSection({
                           )}
                         </Select>
                       </label>
+                    ) : null}
+                    {entry.spellIndex === "counterspell" && runtime ? (
+                      <label className="grid min-w-40 gap-1 text-[10px] font-medium text-textMuted">
+                        Anular conjuração
+                        <Select value={counterspellTargetId} onChange={event => setCounterspellTargetId(event.target.value)}>
+                          <option value="">Selecione magia oculta</option>
+                          {runtime.hiddenSpellEntries.filter(cast => cast.status === "hidden").map(cast => (
+                            <option key={cast.id} value={cast.id}>{cast.actorLabel} — magia oculta</option>
+                          ))}
+                        </Select>
+                      </label>
+                    ) : null}
+                    {runtime && (rollContext.initiativeEntryId || rollContext.canSpendOutsideInitiative) ? (
+                      <button
+                        type="button"
+                        className="h-10 rounded-lg border border-border bg-bg px-3 text-xs font-semibold text-textH hover:bg-bg-subtle disabled:opacity-50"
+                        disabled={!canCast || runtime.status !== "connected" || (entry.spellIndex === "counterspell" && !counterspellTargetId)}
+                        title="Registra a escolha secreta; o mestre resolve e revela após as reações."
+                        onClick={event => {
+                          const sent = runtime.dispatchHiddenSpell({
+                            type: "session.hiddenSpell.commit",
+                            requestId: crypto.randomUUID(),
+                            actor: { kind: "creature", creatureId: rollContext.creatureId, initiativeEntryId: rollContext.initiativeEntryId },
+                            spellIndex: entry.spellIndex,
+                            castLevel: selectedCastLevel,
+                            mode: rollModeFromEvent(event.nativeEvent),
+                            counterspellTargetId: entry.spellIndex === "counterspell" ? counterspellTargetId : undefined,
+                          })
+                          setHiddenError(sent ? "" : "Não foi possível registrar a conjuração oculta.")
+                          if (sent) setCounterspellTargetId("")
+                        }}
+                      >
+                        Conjurar ocultamente
+                      </button>
                     ) : null}
                     <button
                       type="button"
