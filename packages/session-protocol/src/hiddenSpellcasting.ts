@@ -24,6 +24,7 @@ export type HiddenSpellCommitment = {
   mode: HiddenSpellRollMode
   counterspellTargetId?: string
   createdAt: string
+  round?: number
   revealedAt?: string
   counterspelled?: boolean
   counterspellCheck?: { die: number; modifier: number; total: number; dc: number; success: boolean }
