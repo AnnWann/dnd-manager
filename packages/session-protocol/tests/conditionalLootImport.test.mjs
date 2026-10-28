@@ -3,10 +3,12 @@ import test from 'node:test'
 import { build } from 'esbuild'
 import { createRequire } from 'node:module'
 import JSZip from 'jszip'
-import { pathToFileURL } from 'node:url'
+import { fileURLToPath, pathToFileURL } from 'node:url'
 const require = createRequire(import.meta.url)
 const built = await build({
-  entryPoints: ['apps/web/src/features/creatures/creatureCompendiumIO.ts'],
+  entryPoints: [fileURLToPath(new URL('../../../apps/web/src/features/creatures/creatureCompendiumIO.ts', import.meta.url))],
+  // CI runs these tests before building game-core's runtime exports.
+  alias: { '@dnd-manager/game-core/manual-dice': fileURLToPath(new URL('../../game-core/src/manualDiceExpression.ts', import.meta.url)) },
   bundle: true, platform: 'node', format: 'esm', write: false,
   plugins: [{ name: 'node-jszip', setup(b) {
     b.onResolve({ filter: /^jszip$/ }, () => ({ path: pathToFileURL(require.resolve('jszip')).href, external: true }))
