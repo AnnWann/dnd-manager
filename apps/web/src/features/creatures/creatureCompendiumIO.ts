@@ -190,6 +190,20 @@ export function getCreatureJsonTemplate(): string {
       combatNotes: "Observações gerais de combate.",
 
       drops: {
+        conditional: [
+          {
+            dmHint: "Se o componente estiver intacto e for extraído.",
+            item: {
+              name: "Componente da criatura",
+              desc: "Descrição do componente.",
+              quantity: 1,
+              dropQuantityFormula: "1d6",
+              weight: 0,
+              pocketable: true,
+              kind: "common",
+            },
+          },
+        ],
         guaranteed: [
           {
             name: "Item garantido",
@@ -314,7 +328,7 @@ export async function downloadCreaturePackZip(
       "Traços, ações, ações bônus, reações e ações lendárias são listas de objetos com name, description e mechanics opcional.",
       "Mecânicas das características: kind attack, save, check, contest ou damage. Os componentes damage[] aceitam formula, damageType (incluindo healing), label e optional.",
       "Para ações limitadas, use usage: { max: 3, reset: \"longRest\" }, ou shortRest/manual.",
-      "Afinidades estruturadas usam damageAffinities[] e drops usam guaranteed[] + rollGroups[].",
+      "Afinidades estruturadas usam damageAffinities[] e drops usam guaranteed[] + rollGroups[] + conditional[] (cada entrada condicional contém item e dmHint).",
       "Conjuração de criatura usa spellcasting: casterLevel, ability, saveDc/attackBonus opcionais, slots e spells[] com uso atWill, perDay ou slots.",
       "IDs e timestamps podem ser omitidos em JSONs manuais; o aplicativo os gera automaticamente.",
       "Cada JSON usa imagePath para referenciar a imagem correspondente dentro do pack.",

@@ -131,13 +131,15 @@ function normalizeConditionalDrops(value: unknown): CreatureConditionalDrop[] {
   return value.flatMap((entry) => {
     const record = asRecord(entry)
     if (!record) return []
-    const items = normalizeDropItems([record.item])
-    if (!items.length) return []
-    return [{
-      id: stringValue(record.id).trim() || crypto.randomUUID(),
-      item: items[0],
-      ...(stringValue(record.dmHint).trim() ? { dmHint: stringValue(record.dmHint).trim() } : {}),
-    }]
+    // Accept native entries, flat item entries and grouped imported drops.
+    const sourceItems = Array.isArray(record.items) ? record.items : [record.item ?? record]
+    const items = normalizeDropItems(sourceItems)
+    const hint = stringValue(record.dmHint ?? record.condition ?? record.hint).trim()
+    return items.map((item, index) => ({
+      id: index === 0 ? stringValue(record.id).trim() || crypto.randomUUID() : crypto.randomUUID(),
+      item,
+      ...(hint ? { dmHint: hint } : {}),
+    }))
   })
 }
 
