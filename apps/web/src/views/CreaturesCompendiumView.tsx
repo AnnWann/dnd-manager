@@ -16,7 +16,7 @@ import {
   Shield,
   Trash2,
 } from "lucide-react"
-import { useMemo, useState } from "react"
+import { useMemo, useState, type DragEvent, type ComponentProps } from "react"
 
 import { Button } from "../components/ui/Button"
 import { Input } from "../components/ui/Input"
@@ -66,6 +66,8 @@ export function CreaturesCompendiumView() {
     folders: storedFolders,
     setFolders,
   } = useCreatureCompendium()
+  const [draggedFolder, setDraggedFolder] = useState<string>()
+  const [dropTarget, setDropTarget] = useState<string>()
   const [query, setQuery] = useState("")
   const [sideFilter, setSideFilter] = useState<CreatureSide | "all">("all")
   const [activeFolder, setActiveFolder] = useState<string>()
@@ -200,6 +202,11 @@ export function CreaturesCompendiumView() {
       window.alert("Informe um nome para a pasta.")
       return
     }
+    relocateFolder(folder, nextFolder)
+  }
+
+  function relocateFolder(folder: string, nextFolder: string) {
+    if (creatureFolderWithin(nextFolder, folder, false)) return
     if (sameFolder(folder, nextFolder)) return
 
     const duplicateFolder = folderNames.find(
@@ -214,7 +221,7 @@ export function CreaturesCompendiumView() {
       creationEditor.updateDraft((draft) => ({
         ...draft,
         creatureFolders: mergeFolderNames([
-          ...(draft.creatureFolders ?? []).map(entry => replaceCreatureFolderPrefix(entry, folder, nextFolder) ?? ""),
+          ...creatureFolderPaths(draft.creatureFolders ?? [], draft.creatureCompendium).map(entry => replaceCreatureFolderPrefix(entry, folder, nextFolder) ?? ""),
           nextFolder,
         ]),
         creatureCompendium: draft.creatureCompendium.map((creature) =>
@@ -238,9 +245,37 @@ export function CreaturesCompendiumView() {
       )
     }
 
-    if (!creationEditor?.draft) setFolders(mergeFolderNames(storedFolders.map(entry => replaceCreatureFolderPrefix(entry, folder, nextFolder) ?? "")))
+    if (!creationEditor?.draft) setFolders(mergeFolderNames([...folderNames.map(entry => replaceCreatureFolderPrefix(entry, folder, nextFolder) ?? ""), nextFolder]))
     if (activeFolder && creatureFolderWithin(activeFolder, folder)) {
       setActiveFolder(replaceCreatureFolderPrefix(activeFolder, folder, nextFolder))
+    }
+  }
+
+  function canDropFolder(target: string) {
+    return Boolean(draggedFolder && !creatureFolderWithin(target, draggedFolder)
+      && !sameFolder(creatureFolderParent(draggedFolder), target))
+  }
+
+  function folderDropHandlers(target: string) {
+    return {
+      onDragOver: (event: DragEvent) => {
+        if (!canDropFolder(target)) return
+        event.preventDefault()
+        event.dataTransfer.dropEffect = "move"
+        setDropTarget(target)
+      },
+      onDragLeave: (event: DragEvent) => {
+        if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setDropTarget(undefined)
+      },
+      onDrop: (event: DragEvent) => {
+        event.preventDefault()
+        event.stopPropagation()
+        if (draggedFolder && canDropFolder(target)) {
+          relocateFolder(draggedFolder, creatureFolderPath(target, creatureFolderLabel(draggedFolder)))
+        }
+        setDraggedFolder(undefined)
+        setDropTarget(undefined)
+      },
     }
   }
 
@@ -360,14 +395,17 @@ export function CreaturesCompendiumView() {
               </nav>
             ) : (
               <p className="mt-2 max-w-3xl text-sm text-text">
-                Organize as fichas em pastas e abra cada pasta para consultar suas criaturas.
+                Organize as fichas em pastas. Arraste uma pasta sobre outra para movê-la com todo o conteúdo.
               </p>
             )}
           </div>
 
           <div className="flex flex-wrap gap-2">
             {activeFolder ? (
-              <Button variant="secondary" onClick={leaveFolder}>
+              <Button variant="secondary" onClick={leaveFolder}
+                {...folderDropHandlers(creatureFolderParent(activeFolder))}
+                className={dropTarget === creatureFolderParent(activeFolder) ? "ring-2 ring-accent" : undefined}
+                title="Solte uma pasta aqui para movê-la para a pasta acima">
                 <ArrowLeft className="h-4 w-4" /> Voltar
               </Button>
             ) : null}
@@ -484,6 +522,17 @@ export function CreaturesCompendiumView() {
                   .filter((url): url is string => Boolean(url))
                   .slice(0, 4)}
                 onOpen={() => openFolder(folder)}
+                dragProps={{
+                  draggable: true,
+                  onDragStart: event => {
+                    event.dataTransfer.effectAllowed = "move"
+                    event.dataTransfer.setData("text/plain", folder)
+                    setDraggedFolder(folder)
+                  },
+                  onDragEnd: () => { setDraggedFolder(undefined); setDropTarget(undefined) },
+                  ...folderDropHandlers(folder),
+                }}
+                isDropTarget={dropTarget === folder}
               />
             )
           })}
@@ -625,7 +674,11 @@ function FolderCard({
   creatureCount,
   imageUrls,
   onOpen,
+  dragProps,
+  isDropTarget,
 }: {
+  dragProps?: ComponentProps<"button">
+  isDropTarget?: boolean
   folder: string
   creatureCount: number
   imageUrls: string[]
@@ -634,7 +687,9 @@ function FolderCard({
   return (
     <button
       type="button"
-      className="group overflow-hidden rounded-xl border border-border bg-bg text-left shadow-theme-sm transition-colors hover:border-accentBorder hover:bg-bg-subtle"
+      className={`group overflow-hidden rounded-xl border border-border bg-bg text-left shadow-theme-sm transition-colors hover:border-accentBorder hover:bg-bg-subtle ${isDropTarget ? "ring-2 ring-accent bg-accentBg" : ""}`}
+      {...dragProps}
+      title="Arraste para outra pasta para mover"
       onClick={onOpen}
     >
       <div className="relative h-28 border-b border-border bg-bg-subtle">
@@ -652,6 +707,7 @@ function FolderCard({
                 key={url}
                 src={url}
                 alt=""
+                draggable={false}
                 className="h-full min-h-0 w-full object-cover object-top"
               />
             ))}
