@@ -94,6 +94,7 @@ export async function saveCreationSnapshot(
   campaignId: string,
   baseRevision: number,
   data: CreationState,
+  options: { notifyContentChanged?: boolean } = {},
 ): Promise<CreationSnapshot> {
   if (LOCAL_AUTH_BYPASS) {
     const snapshot = {
@@ -114,6 +115,6 @@ export async function saveCreationSnapshot(
   )
 
   primeCreationSnapshot(campaignId, response.data)
-  notifySessionContentChanged()
+  if (options.notifyContentChanged !== false) notifySessionContentChanged()
   return response.data
 }

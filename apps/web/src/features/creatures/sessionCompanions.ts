@@ -17,7 +17,7 @@ export async function saveSessionCompanionVisibility(
     creatureCompendium: current.data.creatureCompendium.map(creature => creature.id === creatureId
       ? { ...creature, showInCompanions: visible, updatedAt: Date.now() }
       : creature),
-  })
+  }, { notifyContentChanged: false })
   return buildSessionRuntimeConfigSnapshot({
     creationRevision: saved.revision,
     creation: saved.data,

@@ -13,16 +13,28 @@ export function CompanionsView() {
   const [query, setQuery] = useState("")
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState("")
+  const [optimistic, setOptimistic] = useState<Record<string, { sessionId: string; revision: number; visible: boolean }>>({})
   const isMaster = runtime?.role === "MASTER"
   const canEdit = isMaster && runtime.status === "connected"
   const config = runtime?.runtimeConfigSnapshot?.config
-  const companions = config?.companionPortraits ?? projectCompanionPortraits(config?.creatureCompendium ?? [])
-  const candidates = (config?.creatureCompendium ?? []).filter(creature =>
+  const revision = runtime?.runtimeConfigSnapshot?.creationRevision ?? 0
+  const pendingVisibility = Object.entries(optimistic).filter(([, change]) => change.sessionId === runtime?.sessionId && revision <= change.revision)
+  const galleryCreatures = (config?.creatureCompendium ?? []).map(creature => {
+    const change = pendingVisibility.find(([id]) => id === creature.id)?.[1]
+    return change ? { ...creature, showInCompanions: change.visible } : creature
+  })
+  const companions = isMaster && pendingVisibility.length
+    ? projectCompanionPortraits(galleryCreatures)
+    : config?.companionPortraits ?? projectCompanionPortraits(config?.creatureCompendium ?? [])
+  const candidates = galleryCreatures.filter(creature =>
     !creature.showInCompanions && creature.name.toLocaleLowerCase("pt-BR").includes(query.trim().toLocaleLowerCase("pt-BR")),
   )
 
   async function setVisible(creatureId: string, visible: boolean) {
     if (!runtime || runtime.role !== "MASTER" || runtime.status !== "connected" || saving) return
+    setOptimistic(current => ({ ...current, [creatureId]: { sessionId: runtime.sessionId, revision, visible } }))
+    setAdding(false)
+    setQuery("")
     setSaving(true)
     setError("")
     try {
@@ -31,6 +43,11 @@ export function CompanionsView() {
       setAdding(false)
       setQuery("")
     } catch (cause) {
+      setOptimistic(current => {
+        const next = { ...current }
+        delete next[creatureId]
+        return next
+      })
       setError(cause instanceof Error ? cause.message : "Não foi possível atualizar os acompanhantes.")
     } finally {
       setSaving(false)
@@ -52,13 +69,14 @@ export function CompanionsView() {
         </div>
         {isMaster && !canEdit ? <p className="mt-2 text-sm text-textMuted">Conecte-se à sessão para alterar os acompanhantes.</p> : null}
       </section>
+      {saving ? <p role="status" className="text-sm text-textMuted">Salvando acompanhantes…</p> : null}
       {error ? <p role="alert" className="text-sm text-danger">{error}</p> : null}
       {companions.length ? (
         <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
           {companions.map(companion => (
             <article key={companion.id} className="overflow-hidden rounded-xl border border-border bg-bg shadow-theme-sm">
               <div className="aspect-[16/9] overflow-hidden bg-bg-subtle">
-                {companion.imageUrl ? <img src={companion.imageUrl} alt={companion.name} className="h-full w-full object-cover object-center" />
+                {companion.imageUrl ? <img src={companion.imageUrl} alt={companion.name} className="h-full w-full object-contain object-center" />
                   : <div className="flex h-full items-center justify-center"><FileImage className="h-10 w-10 text-textMuted" /></div>}
               </div>
               <div className="flex items-center justify-between gap-2 p-4">
