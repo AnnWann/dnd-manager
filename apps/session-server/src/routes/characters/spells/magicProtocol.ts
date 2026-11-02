@@ -124,7 +124,7 @@ function isMagicOperation(value: unknown): value is SessionMagicOperation {
 
 function isSpellCastPayment(value: unknown): value is SessionSpellCastPayment {
   if (!isRecord(value) || !nonEmpty(value.type)) return false;
-  if (value.type === "none") return true;
+  if (value.type === "none" || value.type === "linked-resource") return true;
   if (value.type === "scroll") return nonEmpty(value.itemId) && value.itemId.length <= 200;
   if (value.type === "slot") {
     return (value.pool === "normal" || value.pool === "pact") && slotLevel(value.level);

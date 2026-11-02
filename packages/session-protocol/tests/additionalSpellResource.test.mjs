@@ -133,3 +133,85 @@ test('additional resource recovery uses the same linked ID and reports missing c
   assert.equal(getAdditionalSpellResourceRecovery(character([ability]), { resourceId: 'pool', amount: 1 }), 'Após o cooldown de 2 minuto(s).')
   assert.match(getAdditionalSpellResourceRecovery(character(), { resourceId: 'unknown', amount: 1 }), /Recurso não encontrado/)
 })
+
+const eitherCost = { ...cost, mode: 'oneOf' }
+test('OR spends only the selected counter, without requiring a spell slot', () => {
+  const c = character(undefined, 0)
+  const result = pay(c, { slotLevel: 1 }, eitherCost, 1, { type: 'linked-resource' })
+  assert.equal(result.ok, true)
+  assert.equal(result.character.get('abilities')[0].usage.used, 2)
+  assert.equal(result.character.getSpellSlots()[1].current, 0)
+})
+
+test('OR spends only the selected slot, even when the counter is exhausted or absent', () => {
+  for (const c of [character([counter('pool', 5)]), character([])]) {
+    const result = pay(c, { slotLevel: 1 }, eitherCost, 2, { ...slot, level: 2 })
+    assert.equal(result.ok, true)
+    assert.equal(result.character.getSpellSlots()[2].current, 1)
+    assert.deepEqual(result.character.get('abilities'), c.get('abilities'))
+  }
+})
+
+test('AND cannot be bypassed using resource-only payment', () => {
+  assert.equal(pay(character(), { slotLevel: 1 }, cost, 1, { type: 'linked-resource' }).ok, false)
+})
+
+test('OR rejects free noncantrip casts and resource-only upcasting', () => {
+  for (const [level, payment] of [[1, { type: 'none' }], [2, { type: 'linked-resource' }]]) {
+    assert.equal(pay(character(), { slotLevel: 1 }, eitherCost, level, payment).ok, false)
+  }
+  const c = character([counter('pool', 5)])
+  assert.equal(pay(c, { slotLevel: 1 }, eitherCost, 1, { type: 'linked-resource' }).ok, false)
+  assert.equal(c.getSpellSlots()[1].current, 2)
+})
+
+test('OR cantrip can use its ordinary free casting or the optional counter', () => {
+  const free = pay(character([counter('pool', 5)]), { slotLevel: 0 }, eitherCost, 0, { type: 'none' })
+  assert.equal(free.ok, true)
+  assert.equal(free.character.get('abilities')[0].usage.used, 5)
+  const paid = pay(character(), { slotLevel: 0 }, eitherCost, 0, { type: 'linked-resource' })
+  assert.equal(paid.ok, true)
+  assert.equal(paid.character.get('abilities')[0].usage.used, 2)
+})
+
+test('server accepts linked resource only for the matching OR grant', () => {
+  const c = character([{ ...counter(), grantedSpells: [{ index: 'test', castingMode: 'known', additionalResourceCost: eitherCost }] }])
+  const spell = { index: 'test', slotLevel: 1 }
+  const grant = getCharacterGrantedSpells(c)[0]
+  const result = applySpellCastPayment(c, spell, grant, 1, { type: 'linked-resource' })
+  assert.equal(result.ok, true)
+  assert.equal(result.character.getSpellSlots()[1].current, 2)
+  assert.equal(result.character.get('abilities')[0].usage.used, 2)
+  assert.equal(applySpellCastPayment(c, spell, undefined, 1, { type: 'linked-resource' }).ok, false)
+})
+
+const protocolBuilt = await build({ entryPoints: [fileURLToPath(new URL('../../../apps/session-server/src/routes/characters/spells/magicProtocol.ts', import.meta.url))], bundle: true, platform: 'node', format: 'esm', write: false, conditions: ['types'] })
+const { parseMagicClientMessage } = await import('data:text/javascript;base64,' + Buffer.from(protocolBuilt.outputFiles[0].contents).toString('base64'))
+test('magic protocol accepts a linked-resource choice without client-supplied cost', () => {
+  const operation = { type: 'character.spell.cast', characterId: 'caster', requestId: 'request', spellIndex: 'test', sourceId: 'pool', castLevel: 1, mode: 'normal', payment: { type: 'linked-resource' } }
+  const parsed = parseMagicClientMessage(JSON.stringify({ type: 'session.magic.operation', operation }))
+  assert.equal(parsed.operation.payment.type, 'linked-resource')
+})
+
+const actionsUrl = new URL('../../../apps/web/src/features/characters/characterSheet/minimalMagicActions.tsx', import.meta.url)
+const actionsSource = await readFile(actionsUrl, 'utf8')
+const choicesSource = actionsSource.slice(actionsSource.indexOf('function getResourceChoices('), actionsSource.indexOf('function buildAvailableSpells('))
+const resolverSource = actionsSource.slice(actionsSource.indexOf('  function resolveAuthoritativeCastPayment()'), actionsSource.indexOf('  const linkedResourceError ='))
+const choicesBuilt = await build({ stdin: { contents: `import { additionalSpellResourceError } from '../../../models/magic/spells/additionalSpellResource'; export ${choicesSource} export function makeResolver(selected, castingResource, setError) { ${resolverSource}; return resolveAuthoritativeCastPayment }`, loader: 'ts', resolveDir: fileURLToPath(new URL('.', actionsUrl)) }, bundle: true, platform: 'node', format: 'esm', write: false, conditions: ['types'] })
+const { getResourceChoices, makeResolver } = await import('data:text/javascript;base64,' + Buffer.from(choicesBuilt.outputFiles[0].contents).toString('base64'))
+test('cast dialog offers separate OR choices and disables only the unavailable payment', () => {
+  const entry = { spell: { slotLevel: 1 }, additionalResourceCost: eitherCost }
+  const exhaustedResource = getResourceChoices(character([counter('pool', 5)]), entry, [{ level: 1, pool: 'normal' }])
+  assert.deepEqual(exhaustedResource.map(choice => [choice.value, choice.disabled]), [['slot', false], ['linked', true]])
+  const exhaustedSlots = getResourceChoices(character(undefined, 0), entry, [])
+  assert.deepEqual(exhaustedSlots.map(choice => [choice.value, choice.disabled]), [['slot', true], ['linked', false]])
+})
+
+test('cast dialog sends the resource-only choice at base level and rejects it for AND', () => {
+  const errors = []
+  const selected = { spell: { slotLevel: 1 }, additionalResourceCost: eitherCost }
+  const resolved = makeResolver(selected, 'linked', value => errors.push(value))()
+  assert.deepEqual(resolved, { castLevel: 1, payment: { type: 'linked-resource' } })
+  assert.equal(makeResolver({ ...selected, additionalResourceCost: cost }, 'linked', value => errors.push(value))(), null)
+  assert.equal(errors.length, 1)
+})

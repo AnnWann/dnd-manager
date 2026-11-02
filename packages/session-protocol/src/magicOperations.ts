@@ -1,5 +1,6 @@
 export type SessionSpellCastPayment<TResource, TGranted, TEquipmentGranted> =
   | { type: "none" }
+  | { type: "linked-resource" }
   | { type: "scroll"; itemId: string }
   | { type: "slot"; pool: "normal" | "pact"; level: number }
   | { type: "resource"; resource: TResource }
