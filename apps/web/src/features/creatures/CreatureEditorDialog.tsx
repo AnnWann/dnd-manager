@@ -1,3 +1,4 @@
+import { inferCreatureHitDice, normalizeCreatureHitDice } from "../../models/creatures/CreatureHitDice"
 import { CREATURE_ATTRIBUTE_LABELS, CREATURE_SKILL_OPTIONS } from "../../models/creatures/CreatureRolls"
 import type { Attribute } from "../../models/sheet/Attribute"
 import type { Skill } from "../../models/sheet/Skills"
@@ -63,14 +64,14 @@ export function CreatureEditorDialog({
   onClose,
   onSave,
 }: CreatureEditorDialogProps) {
-  const [draft, setDraft] = useState(creature)
+  const [draft, setDraft] = useState(() => normalizeCompendiumCreature(creature))
   const [uploading, setUploading] = useState(false)
   const [jsonOpen, setJsonOpen] = useState(false)
   const [jsonText, setJsonText] = useState("")
   const [jsonError, setJsonError] = useState<string>()
 
   useEffect(() => {
-    setDraft(creature)
+    setDraft(normalizeCompendiumCreature(creature))
     setJsonOpen(false)
     setJsonText("")
     setJsonError(undefined)
@@ -154,6 +155,7 @@ export function CreatureEditorDialog({
   }
 
   function save() {
+    if (!normalizeCreatureHitDice(draft.hitDice)) return
     const name = draft.name.trim()
     if (!name) return
 
@@ -332,13 +334,18 @@ export function CreatureEditorDialog({
                 onChange={(basicName) => patch({ basicName })}
               />
               <Field label="Tipo de acompanhante">
-                <SharedSelect className={selectClassName} value={draft.controlKind ?? "familiar"}
+                <SharedSelect className={selectClassName} value={draft.controlKind ?? "companion"}
                   onChange={event => patch({ controlKind: event.target.value as CompendiumCreature["controlKind"] })}>
                   <option value="familiar">Familiar</option>
                   <option value="companion">Acompanhante</option>
                   <option value="mount">Montaria</option>
                 </SharedSelect>
               </Field>
+              <label className="flex items-center gap-2 text-xs text-textMuted sm:col-span-2">
+                <input type="checkbox" checked={draft.showInCompanions === true}
+                  onChange={event => patch({ showInCompanions: event.target.checked })} />
+                Exibir em Acompanhantes do grupo (apenas nome e imagem para os jogadores)
+              </label>
               <p className="text-xs leading-5 text-textMuted sm:col-span-2">
                 O nome básico é o que os jogadores veem na iniciativa até o mestre revelar o nome verdadeiro ou definir um nome de combate.
               </p>
@@ -452,6 +459,13 @@ export function CreatureEditorDialog({
               min={0}
               onChange={(value) => patch({ maxHp: value })}
             />
+            <div className="col-span-2 grid gap-1">
+              <TextInput label="Dados de vida" value={draft.hitDice ?? ""} placeholder="Ex.: 6d8+18"
+                onChange={hitDice => patch({ hitDice })} />
+              <Button size="sm" variant="secondary" onClick={() => patch({ hitDice: inferCreatureHitDice(draft) })}>Reestimar pelos PV / ND</Button>
+              <p className="text-[11px] text-textMuted">Estimados nas fichas antigas usando PV, porte e CON; ND é a referência sem PV. Editar não altera os PV máximos.</p>
+              {!normalizeCreatureHitDice(draft.hitDice) ? <p role="alert" className="text-xs text-danger">Use uma fórmula como 6d8+18.</p> : null}
+            </div>
             <TextInput
               label="Deslocamento"
               value={draft.speed}
