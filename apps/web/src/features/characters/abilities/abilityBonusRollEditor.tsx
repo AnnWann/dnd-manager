@@ -1,3 +1,7 @@
+import { FormulaVariablePicker } from "../../customSystems/FormulaVariablePicker"
+import { listCharacterFormulaVariables } from "../../../lib/customSystems/CharacterFormulaVariables"
+import { useAbilityFormulaInputs } from "./AbilityFormulaInputContext"
+import { abilityInputPreviewValues } from "../../../models/abilities/abilityManualInputs"
 import { Dice5 } from "lucide-react"
 
 import { Input } from "../../../components/ui/Input"
@@ -57,6 +61,7 @@ export function AbilityBonusRollEditor({
   character?: CharacterTemplate
   onChange: (bonuses: BonusCollection) => void
 }) {
+  const manualInputs = useAbilityFormulaInputs()
   const entries = collectEntries(bonuses)
   if (!entries.length) return null
 
@@ -77,7 +82,7 @@ export function AbilityBonusRollEditor({
           const roll = entry.bonus.roll
           const diceError = roll ? validateBonusRollDiceExpression(roll.dice) : undefined
           const formulaError = roll?.formula?.trim()
-            ? validateCharacterSheetFormula(roll.formula, character)
+            ? validateCharacterSheetFormula(roll.formula, character, abilityInputPreviewValues(manualInputs))
             : undefined
 
           const patchRoll = (next: BonusRollDefinition | undefined) =>
@@ -139,6 +144,10 @@ export function AbilityBonusRollEditor({
                   </label>
                 ) : null}
               </div>
+
+              {roll ? <FormulaVariablePicker
+                variables={[...listCharacterFormulaVariables(character), ...manualInputs.map(input => ({ path: `input.${input.id}`, label: input.label, valueType: "number" as const }))]}
+                onSelect={path => patchRoll({ ...roll, formula: roll.formula ? `${roll.formula} ${path}` : path })} /> : null}
 
               {roll ? (
                 <div className="text-[10px] leading-4">

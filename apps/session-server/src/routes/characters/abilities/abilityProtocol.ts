@@ -102,6 +102,8 @@ function isDamageAffinity(value: unknown): value is DamageAffinity {
 
 function isResourceSelection(value: unknown): value is AbilityResourceSelection {
   if (!isRecord(value)) return false;
+  if (value.inputValues !== undefined && (!isRecord(value.inputValues) || Object.keys(value.inputValues).length > 12 ||
+    !Object.entries(value.inputValues).every(([key, candidate]) => /^[A-Za-z][A-Za-z0-9_]{0,39}$/.test(key) && typeof candidate === "number" && Number.isFinite(candidate) && Math.abs(candidate) <= 100000))) return false;
   if (value.activationLevel !== undefined && (!Number.isInteger(value.activationLevel) || value.activationLevel < 1 || value.activationLevel > 9)) {
     return false;
   }

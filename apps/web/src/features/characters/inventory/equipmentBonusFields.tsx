@@ -1,3 +1,5 @@
+import { useAbilityFormulaInputs } from "../abilities/AbilityFormulaInputContext"
+import { abilityInputPreviewValues } from "../../../models/abilities/abilityManualInputs"
 import { useState } from "react"
 import { AttackRidersEditor } from "../abilities/AttackRidersEditor"
 import { Plus, Trash2, X } from "lucide-react"
@@ -416,6 +418,7 @@ function AddBonusDialog({
   onClose: () => void
   onAdd: (entry: AddBonusEntry) => void
 }) {
+  const manualInputs = useAbilityFormulaInputs()
   const [target, setTarget] = useState<BonusDialogTarget>(onlyOnUseHp ? "onUseDamage" : "armorClass")
   const [attribute, setAttribute] = useState<Attribute>("str")
   const [scopeAttribute, setScopeAttribute] = useState<"all" | Attribute>("all")
@@ -444,7 +447,7 @@ function AddBonusDialog({
   const supportsAttributeScope = !isHpOnUse && isScopedTarget(target as BonusTarget)
   const supportsSkillScope = target === "skillCheckBonus"
   const formulaError = !isDamageAffinity && !useDice && useFormula
-    ? validateCharacterSheetFormula(formula, character)
+    ? validateCharacterSheetFormula(formula, character, abilityInputPreviewValues(manualInputs))
     : undefined
 
   function close() {
@@ -552,11 +555,15 @@ function AddBonusDialog({
                     Calcular valor por fórmula
                   </label>
                   {useFormula ? (
-                    <label className="grid gap-1 text-xs text-textMuted">
-                      Fórmula
-                      <Input value={formula} onChange={event => setFormula(event.target.value)} />
+                    <div className="grid gap-2 text-xs text-textMuted">
+                      <label className="grid gap-1">Fórmula
+                        <Input value={formula} onChange={event => setFormula(event.target.value)} />
+                      </label>
+                      <FormulaVariablePicker
+                        variables={[...listCharacterFormulaVariables(character), ...manualInputs.map(input => ({ path: `input.${input.id}`, label: input.label, valueType: "number" as const }))]}
+                        onSelect={path => setFormula(current => current ? current + " " + path : path)} />
                       {formulaError ? <span className="text-danger">{formulaError}</span> : null}
-                    </label>
+                    </div>
                   ) : (
                     <label className="grid gap-1 text-xs text-textMuted">
                       Valor fixo
@@ -713,7 +720,7 @@ function AddBonusDialog({
                   </label>
                   <div className="flex flex-wrap items-center justify-between gap-2">
                     <FormulaVariablePicker
-                      variables={listCharacterFormulaVariables(character)}
+                      variables={[...listCharacterFormulaVariables(character), ...manualInputs.map(input => ({ path: `input.${input.id}`, label: input.label, valueType: "number" as const }))]}
                       onSelect={(path) => setFormula((current) => current ? current + " " + path : path)}
                     />
                     {formulaError ? (

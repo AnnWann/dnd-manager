@@ -801,6 +801,7 @@ export function useEquipmentAbility(
   selectedWeaponId?: string,
   selectedDamageType?: import("../combat/Damage").DamageType,
   selectedWeaponAttribute?: import("../sheet/Attribute").Attribute,
+  inputValues?: Record<string, number>,
 ): CharacterTemplate {
   const ability = getEquipmentAbilities(character).find(
     (current) =>
@@ -823,6 +824,7 @@ export function useEquipmentAbility(
     selectedWeaponId,
     selectedDamageType,
     selectedWeaponAttribute,
+    inputValues,
   )
 }
 

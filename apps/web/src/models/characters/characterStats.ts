@@ -565,7 +565,7 @@ export function resolveBonus(
   bonus: Bonus,
 ): Bonus {
   if (!bonus.formula?.trim()) return bonus
-  const evaluated = evaluateCharacterSheetFormula(bonus.formula, character)
+  const evaluated = evaluateCharacterSheetFormula(bonus.formula, character, bonus.activationInputs)
   return evaluated === undefined ? bonus : { ...bonus, value: evaluated }
 }
 

@@ -123,7 +123,7 @@ export function resolveBonusCollectionRolls(
 
     const formula = bonus.roll.formula?.trim()
     const evaluated = formula
-      ? evaluateCharacterSheetFormula(formula, character)
+      ? evaluateCharacterSheetFormula(formula, character, bonus.activationInputs)
       : 0
     if (formula && evaluated === undefined) {
       throw new Error(`Não foi possível calcular a fórmula da rolagem ${label}.`)

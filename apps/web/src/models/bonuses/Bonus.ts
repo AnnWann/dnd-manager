@@ -26,6 +26,8 @@ export type BonusRollResolution = {
 }
 
 export type Bonus = {
+  /** Frozen manual values for this activation. Original formulas remain reusable. */
+  activationInputs?: Record<string, number>
   type: "add" | "sub" | "flat"
   /** Fallback numérico e compatibilidade com bônus antigos. */
   value: number
