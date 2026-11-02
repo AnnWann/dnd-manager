@@ -341,7 +341,7 @@ function MiniAbilityEditor({ ability, character, onChange }: { ability: Ability;
         {tab === "grants" ? (
           <div className="grid gap-3">
             <GrantedProficienciesEditor proficiencies={ability.grantedProficiencies ?? []} onChange={(grantedProficiencies) => onChange({ ...ability, grantedProficiencies })} />
-            <GrantedSpellsEditor variant="ability" grants={(ability.grantedSpells ?? []) as EditableSpellGrant[]} abilityHasUsage={hasUsage} onChange={(grantedSpells) => onChange({ ...ability, grantedSpells })} />
+            <GrantedSpellsEditor character={character} variant="ability" grants={(ability.grantedSpells ?? []) as EditableSpellGrant[]} abilityHasUsage={hasUsage} onChange={(grantedSpells) => onChange({ ...ability, grantedSpells })} />
           </div>
         ) : null}
       </div>

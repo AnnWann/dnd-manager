@@ -651,6 +651,7 @@ export function AbilityDialog({
               />
               <div className="border-t border-border pt-4">
                 <GrantedSpellsEditor
+                  character={character}
                   variant="ability"
                   grants={(draft.grantedSpells ?? []) as EditableSpellGrant[]}
                   abilityHasUsage={hasUsage}

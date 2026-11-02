@@ -35,7 +35,7 @@ function resourceEntries(character: CharacterTemplate): ResourceEntry[] {
   return result.filter(entry => entry.ability.usage && entry.ability.usage.reset !== "spellSlot")
 }
 
-function resolveResource(character: CharacterTemplate, cost: AdditionalSpellResourceCost) {
+function findResource(character: CharacterTemplate, cost: AdditionalSpellResourceCost) {
   const invalid = validateAdditionalSpellResource(cost)
   if (invalid) return { error: invalid }
   const id = cost.resourceId.trim()
@@ -45,10 +45,32 @@ function resolveResource(character: CharacterTemplate, cost: AdditionalSpellReso
   if (!shared.length && direct.length !== 1) return { error: `Recurso “${id}” não encontrado ou ambíguo. Use o ID compartilhado ou o ID de uma habilidade com contador.` }
   const sharedId = shared.length ? id : direct[0].ability.usage?.sharedResourceId?.trim()
   const matches = sharedId ? entries.filter(entry => entry.ability.usage?.sharedResourceId?.trim() === sharedId) : direct
+  return { matches }
+}
+
+/** Recovery belongs to the linked counter, even when it has no uses remaining. */
+export function getAdditionalSpellResourceRecovery(character: CharacterTemplate, cost: AdditionalSpellResourceCost): string {
+  const resource = findResource(character, cost)
+  if (!resource.matches) return "Recurso não encontrado. Configure um contador na aba Recurso da habilidade e use seu ID aqui."
+  const usage = resource.matches[0].ability.usage!
+  switch (usage.reset) {
+    case "shortRest": return "Descanso curto ou longo."
+    case "longRest": return "Descanso longo."
+    case "turn": return "A cada turno."
+    case "cooldown": return `Após o cooldown de ${usage.cooldownAmount ?? 1} ${({ turns: "turno(s)", minutes: "minuto(s)", hours: "hora(s)", days: "dia(s)", tenDays: "dezena(s) de dias" })[usage.cooldownUnit ?? "turns"]}.`
+    case "limited": return "Reposição manual; não recupera ao descansar."
+    default: return "Conforme a configuração do contador de origem."
+  }
+}
+
+function resolveResource(character: CharacterTemplate, cost: AdditionalSpellResourceCost) {
+  const resource = findResource(character, cost)
+  if (!resource.matches) return resource
+  const { matches } = resource
   const max = getAbilityUsageMax(character, matches[0].ability.usage!)
   const used = Math.max(...matches.map(entry => Math.max(0, entry.ability.usage!.used)))
-  if (!Number.isFinite(used) || max - used < cost.amount) return { error: `Não há usos suficientes no recurso “${id}”.` }
-  return { matches, used }
+  if (!Number.isFinite(used) || max - used < cost.amount) return { error: `Não há usos suficientes no recurso “${cost.resourceId.trim()}”.` }
+  return { matches, used, error: undefined }
 }
 
 export function additionalSpellResourceError(character: CharacterTemplate, cost?: AdditionalSpellResourceCost): string | undefined {
