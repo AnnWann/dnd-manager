@@ -1,3 +1,4 @@
+import { canControlCompanion } from "../../../../web/src/shared/session-runtime/companionRuntime";
 import { projectCompanionPortraits } from "../../../../web/src/shared/session-runtime/companionPortraits";
 import type {
   SessionRuntimeCharacterConfig,
@@ -99,7 +100,7 @@ export function visibleRuntimeConfigSnapshot(
       // assigned to this session user is projected so familiars, mounts and
       // companions can use the same quick-sheet rules as MASTER creatures.
       creatureCompendium: snapshot.config.creatureCompendium.filter(
-        (creature) => creature.ownerUserId === connection.userId,
+        (creature) => canControlCompanion(creature, connection.role, connection.userId),
       ),
     },
   };

@@ -1,3 +1,4 @@
+import { canControlCompanion, hasPersistentCompanionState } from "../../../../web/src/shared/session-runtime/companionRuntime";
 import { MAX_CHARACTER_STATE_LOG_RECORDS } from "../characters/sheet/characterState";
 import type { SessionAbilityState } from "../characters/abilities/abilityProtocol";
 import type { SessionCondition, SessionConditionsState, SessionConnection, SessionHpState } from "../session/protocol";
@@ -309,12 +310,12 @@ export class SessionActor {
     broadcastVisibilityFiltered(this.ctx.getWebSockets(), { type: "session.initiative.updated", state });
     for (const creatureId of companionSync.changedIds) {
       const creature = runtimeConfig?.config.creatureCompendium.find(item => item.id === creatureId);
-      if (!creature?.ownerUserId) continue;
+      if (!creature || !hasPersistentCompanionState(creature)) continue;
       const payload = JSON.stringify({ type: "session.companions.updated", companion: companionSync.companions[creatureId] });
       for (const socket of this.ctx.getWebSockets()) {
         try {
           const recipient = socket.deserializeAttachment() as SessionConnection | null;
-          if (recipient && (recipient.role === "MASTER" || recipient.userId === creature.ownerUserId)) socket.send(payload);
+          if (recipient && canControlCompanion(creature, recipient.role, recipient.userId)) socket.send(payload);
         } catch { /* stale socket */ }
       }
     }

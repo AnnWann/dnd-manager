@@ -1,5 +1,5 @@
 import type { SessionRuntimeConfigSnapshot } from "../../../../web/src/shared/session-runtime/sessionRuntimeConfig"
-import { allCreatureFeatures, defaultCompanionState, type CompanionState } from "../../../../web/src/shared/session-runtime/companionRuntime"
+import { allCreatureFeatures, defaultCompanionState, hasPersistentCompanionState, type CompanionState } from "../../../../web/src/shared/session-runtime/companionRuntime"
 import type { InitiativeEntry, InitiativeSession } from "../../../../web/src/models/initiative/Initiative"
 
 /**
@@ -15,7 +15,7 @@ export function synchronizeCompanionInitiative(
 ): { session: InitiativeSession; companions: Record<string, CompanionState>; changedIds: string[] } {
   if (!config) return { session: after, companions: stored, changedIds: [] }
   const controlled = new Map(config.config.creatureCompendium
-    .filter(creature => creature.ownerUserId)
+    .filter(hasPersistentCompanionState)
     .map(creature => [creature.id, creature]))
   const previous = new Map(before.entries
     .filter(entry => entry.sourceId?.startsWith("compendium:"))

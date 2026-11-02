@@ -55,9 +55,11 @@ test('missing creatures and revision conflicts cannot silently overwrite campaig
   await assert.rejects(saveSessionCompanionVisibility('campaign', 'nessa', true, []), /revision conflict/)
 })
 const uiMocks = { name: 'companion-view', setup(b) {
+  b.onResolve({ filter: /useInitiativeSession$/ }, () => ({ path: 'initiative', namespace: 'test-ui' }))
   b.onResolve({ filter: /useSessionRuntime$/ }, () => ({ path: 'runtime', namespace: 'test-ui' }))
+  b.onResolve({ filter: /CreatureStateDialog$/ }, () => ({ path: 'dialog', namespace: 'test-ui' }))
   b.onResolve({ filter: /sessionCompanions$/ }, () => ({ path: 'service', namespace: 'test-ui' }))
-  b.onLoad({ filter: /.*/, namespace: 'test-ui' }, args => ({ contents: args.path === 'runtime' ? 'export const useOptionalSessionRuntime = () => globalThis.companionRuntime' : 'export const saveSessionCompanionVisibility = (...args) => globalThis.companionSave(...args)' }))
+  b.onLoad({ filter: /.*/, namespace: 'test-ui' }, args => ({ contents: args.path === 'initiative' ? 'export const useInitiativeSession = () => ({ session: { entries: [] } })' : args.path === 'dialog' ? 'export const CreatureStateDialog = () => null' : args.path === 'runtime' ? 'export const useOptionalSessionRuntime = () => globalThis.companionRuntime' : 'export const saveSessionCompanionVisibility = (...args) => globalThis.companionSave(...args)' }))
   b.onResolve({ filter: /^(?:react(?:-dom)?(?:\/.*)?|lucide-react)$/ }, args => ({ path: pathToFileURL(require.resolve(args.path)).href, external: true }))
 } }
 const { CompanionsView } = await bundle('../../../apps/web/src/views/CompanionsView.tsx', [uiMocks])
@@ -65,6 +67,7 @@ for (const role of ['MASTER', 'PLAYER']) test(`gallery offers management only to
   globalThis.companionRuntime = { role, status: 'connected', runtimeConfigSnapshot: { config: { creatureCompendium: [creature], companionPortraits: [{ id: 'nessa', name: 'Nessa', imageUrl: 'https://example.com/nessa.png' }] } } }
   const markup = renderToStaticMarkup(createElement(CompanionsView))
   assert.equal(markup.includes('Adicionar acompanhante'), role === 'MASTER')
+  assert.equal(markup.includes('Abrir ficha de Nessa'), role === 'MASTER')
   assert.equal(markup.includes('Remover Nessa dos acompanhantes'), role === 'MASTER')
   assert.equal(markup.includes('SECRET SHEET'), false)
   assert.match(markup, /Nessa/)
@@ -88,6 +91,7 @@ const { CompanionsView: InteractiveGallery } = await bundle('../../../apps/web/s
 function walk(element, predicate) {
   if (!element || typeof element !== 'object') return undefined
   if (predicate(element)) return element
+  if (element.type?.name === 'CreaturePortraitCard') return walk(element.type(element.props), predicate)
   for (const child of [element.props?.children].flat(Infinity)) {
     const found = walk(child, predicate)
     if (found) return found
@@ -116,4 +120,13 @@ test('gallery updates immediately while saving and rolls back a failed add witho
   tree = render()
   assert.equal(walk(tree, node => node.type === 'h2' && node.props.children === 'Nessa'), undefined)
   assert.ok(walk(tree, node => node.props?.role === 'alert' && node.props.children === 'Falha de conexão'))
+})
+
+const { OwnedCreaturesView } = await bundle('../../../apps/web/src/views/OwnedCreaturesView.tsx', [uiMocks])
+test('owned familiars use the same uncropped gallery cards and retain sheet access', () => {
+  globalThis.companionRuntime = { sessionId: 'campaign', role: 'PLAYER', companionsById: {}, runtimeConfigSnapshot: { config: { creatureCompendium: [{ ...creature, ownerUserId: 'owner', controlKind: 'familiar' }] } } }
+  const markup = renderToStaticMarkup(createElement(OwnedCreaturesView))
+  assert.match(markup, /object-contain/)
+  assert.match(markup, /Abrir ficha de Nessa/)
+  assert.match(markup, /Familiares/)
 })

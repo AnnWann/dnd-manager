@@ -1,3 +1,4 @@
+import { canControlCompanion, hasPersistentCompanionState } from "../../../../web/src/shared/session-runtime/companionRuntime";
 import type { HiddenSpellCommitment } from "../../../../../packages/session-protocol/src/hiddenSpellcasting";
 import { applyCriticalDamageRule } from "../../../../web/src/shared/session-runtime/criticalDamage";
 import type { SessionRuntimeConfigSnapshot } from "../../../../web/src/shared/session-runtime/sessionRuntimeConfig";
@@ -325,7 +326,7 @@ export class SessionActor extends DurableObject<Env> {
     await this.scheduleNextAlarm(now);
   }
 
-  private async sendCompanionsSnapshot(webSocket: WebSocket): Promise<void> {
+  protected async sendCompanionsSnapshot(webSocket: WebSocket): Promise<void> {
     const connection = this.getConnection(webSocket);
     if (!connection) return;
     const [config, saved] = await Promise.all([
@@ -333,22 +334,21 @@ export class SessionActor extends DurableObject<Env> {
       this.ctx.storage.get<Record<string, CompanionState>>(COMPANIONS_STATE_KEY),
     ]);
     const companions = (config?.config.creatureCompendium ?? [])
-      .filter(creature => Boolean(creature.ownerUserId) &&
-        (connection.role === "MASTER" || creature.ownerUserId === connection.userId))
+      .filter(creature => hasPersistentCompanionState(creature) && canControlCompanion(creature, connection.role, connection.userId))
       .map(creature => saved?.[creature.id] ?? defaultCompanionState(creature));
     this.send(webSocket, { type: "session.companions.snapshot", companions });
   }
 
-  private broadcastCompanionState(companion: CompanionState, ownerUserId: string): void {
+  private broadcastCompanionState(companion: CompanionState, creature: CompendiumCreature): void {
     for (const socket of this.ctx.getWebSockets()) {
       const connection = this.getConnection(socket);
-      if (!connection || (connection.role !== "MASTER" && connection.userId !== ownerUserId)) continue;
+      if (!connection || !canControlCompanion(creature, connection.role, connection.userId)) continue;
       this.send(socket, { type: "session.companions.updated", companion });
     }
   }
 
   private async persistCompanionResources(creature: CompendiumCreature, entry: InitiativeEntry): Promise<void> {
-    if (!creature.ownerUserId) return;
+    if (!hasPersistentCompanionState(creature)) return;
     const stored = (await this.ctx.storage.get<Record<string, CompanionState>>(COMPANIONS_STATE_KEY)) ?? {};
     const previous = stored[creature.id] ?? defaultCompanionState(creature);
     const featureUses = Object.fromEntries(Object.entries(entry.creatureFeatureResources ?? {})
@@ -365,7 +365,7 @@ export class SessionActor extends DurableObject<Env> {
     };
     stored[creature.id] = next;
     await this.ctx.storage.put(COMPANIONS_STATE_KEY, stored);
-    this.broadcastCompanionState(next, creature.ownerUserId);
+    this.broadcastCompanionState(next, creature);
   }
 
   private async handleCompanionOperation(
@@ -375,11 +375,11 @@ export class SessionActor extends DurableObject<Env> {
   ): Promise<void> {
     const config = await readRuntimeConfig(this.ctx.storage);
     const creature = config?.config.creatureCompendium.find(item => item.id === operation.creatureId);
-    if (!creature?.ownerUserId) {
-      this.sendError(webSocket, "COMPANION_NOT_FOUND", "Este acompanhante não está atribuído a um jogador.");
+    if (!creature || !hasPersistentCompanionState(creature)) {
+      this.sendError(webSocket, "COMPANION_NOT_FOUND", "Este acompanhante não está disponível na sessão.");
       return;
     }
-    if (connection.role !== "MASTER" && connection.userId !== creature.ownerUserId) {
+    if (!canControlCompanion(creature, connection.role, connection.userId)) {
       this.sendError(webSocket, "COMPANION_ACCESS_DENIED", "Você não controla este acompanhante.");
       return;
     }
@@ -454,7 +454,7 @@ export class SessionActor extends DurableObject<Env> {
       }
     }
     await this.ctx.storage.put(COMPANIONS_STATE_KEY, states);
-    this.broadcastCompanionState(next, creature.ownerUserId);
+    this.broadcastCompanionState(next, creature);
   }
 
   private async handleCreatureRoll(
@@ -474,8 +474,7 @@ export class SessionActor extends DurableObject<Env> {
       return;
     }
     if (
-      connection.role !== "MASTER" &&
-      creature.ownerUserId !== connection.userId
+      !canControlCompanion(creature, connection.role, connection.userId)
     ) {
       this.sendError(
         webSocket,
@@ -501,7 +500,7 @@ export class SessionActor extends DurableObject<Env> {
       }
     }
 
-    if (!entry && !request.initiativeEntryId && creature.ownerUserId) {
+    if (!entry && !request.initiativeEntryId && hasPersistentCompanionState(creature)) {
       const saved = (await this.ctx.storage.get<Record<string, CompanionState>>(COMPANIONS_STATE_KEY)) ?? {};
       const state = saved[creature.id] ?? defaultCompanionState(creature);
       entry = createInitiativeEntry({
@@ -669,7 +668,7 @@ export class SessionActor extends DurableObject<Env> {
           const updatedEntry = nextInitiative.entries.find(candidate => candidate.id === entry.id);
           if (updatedEntry) await this.persistCompanionResources(creature, updatedEntry);
         }
-      } else if (!announcing && entry && creature.ownerUserId) {
+      } else if (!announcing && entry && hasPersistentCompanionState(creature)) {
         const virtual = { ...createInitiativeSession(), entries: [entry] };
         const updated = consumeCreatureSpellResource(
           virtual, entry.id, creature, configuredSpell, castLevel,
@@ -743,7 +742,7 @@ export class SessionActor extends DurableObject<Env> {
       });
       const updatedEntry = next.entries.find(candidate => candidate.id === entry.id);
       if (updatedEntry) await this.persistCompanionResources(creature, updatedEntry);
-    } else if (spendsFeatureUse && entry && feature?.usage && creature.ownerUserId) {
+    } else if (spendsFeatureUse && entry && feature?.usage && hasPersistentCompanionState(creature)) {
       const existingUsed = entry.creatureFeatureResources?.[feature.id]?.used ?? 0;
       const updated = {
         ...entry,
@@ -847,7 +846,7 @@ export class SessionActor extends DurableObject<Env> {
           const [kind, id] = [ref.slice(0, colon), ref.slice(colon + 1)];
           if (kind === "character") return Boolean(hpState[id]) &&
             (connection.role === "MASTER" || hpState[id].ownerUserId === connection.userId || connection.visibleCharacterIds?.includes(id));
-          if (kind === "companion") return Boolean(runtimeConfig?.config.creatureCompendium.some(creature => creature.id === id && creature.ownerUserId));
+          if (kind === "companion") return Boolean(runtimeConfig?.config.creatureCompendium.some(creature => creature.id === id && hasPersistentCompanionState(creature)));
           if (kind === "initiative") {
             const entry = initiative?.entries.find(entry => entry.id === id);
             return Boolean(entry && (connection.role === "MASTER" || !entry.hidden));
@@ -924,8 +923,8 @@ export class SessionActor extends DurableObject<Env> {
           broadcastVisibilityFiltered(this.ctx.getWebSockets(), { type: "session.initiative.updated", state: targetsState.initiative });
         }
         for (const id of targetsState.changedCompanions) {
-          const owner = runtimeConfig?.config.creatureCompendium.find(creature => creature.id === id)?.ownerUserId;
-          if (owner) this.broadcastCompanionState(savedCompanions[id], owner);
+          const creature = runtimeConfig?.config.creatureCompendium.find(creature => creature.id === id);
+          if (creature && hasPersistentCompanionState(creature)) this.broadcastCompanionState(savedCompanions[id], creature);
         }
       }
     }
