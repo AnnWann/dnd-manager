@@ -4,7 +4,11 @@ import type { SpellResourceCost } from "./Spell"
 
 export type SpellGrantCastingMode = "source" | "known"
 
+export type AdditionalSpellResourceCost = { resourceId: string; amount: number }
+
 export type SpellGrant = {
+  /** Cumulative cost: keep normal spell slots and also spend this counter. */
+  additionalResourceCost?: AdditionalSpellResourceCost
   index: string
   castingMode?: SpellGrantCastingMode
   attribute?: Attribute
@@ -19,5 +23,5 @@ export type SpellGrant = {
 export function getSpellGrantCastingMode(
   grant: SpellGrant,
 ): SpellGrantCastingMode {
-  return grant.castingMode ?? "source"
+  return grant.additionalResourceCost ? "known" : grant.castingMode ?? "source"
 }

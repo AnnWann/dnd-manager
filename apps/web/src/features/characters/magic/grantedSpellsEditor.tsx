@@ -1,3 +1,4 @@
+import { validateAdditionalSpellResource } from "../../../models/magic/spells/additionalSpellResource"
 import { useEffect, useMemo, useState } from "react"
 import { Plus, Search, Trash2, X } from "lucide-react"
 
@@ -153,7 +154,7 @@ export function GrantedSpellsEditor({
         <div className="grid gap-2">
           {grants.map((grant, index) => {
             const spell = getSpellByIndex(grant.index)
-            const castingMode = grant.castingMode ?? "source"
+            const castingMode = grant.additionalResourceCost ? "known" : grant.castingMode ?? "source"
             const usage = grant.usage
             const alternateResource = grant.resourceCost
 
@@ -182,14 +183,16 @@ export function GrantedSpellsEditor({
                   <label className="grid gap-1">
                     <span className="text-[11px] font-medium text-textMuted">Forma de acesso</span>
                     <Select
-                      value={castingMode}
+                      value={grant.additionalResourceCost ? "known-resource" : castingMode}
                       onChange={(event) => updateGrant(index, {
-                        castingMode: event.target.value as SpellGrantCastingMode,
-                        resourceCost: event.target.value === "known" ? undefined : grant.resourceCost,
+                        castingMode: event.target.value === "known-resource" ? "known" : event.target.value as SpellGrantCastingMode,
+                        resourceCost: event.target.value !== "source" ? undefined : grant.resourceCost,
+                        additionalResourceCost: event.target.value === "known-resource" ? (grant.additionalResourceCost ?? { resourceId: "", amount: 1 }) : undefined,
                       })}
                     >
                       <option value="source">Apenas pela origem</option>
                       <option value="known">Aprende e usa espaços normais</option>
+                      <option value="known-resource">Aprende e usa espaços + recurso</option>
                     </Select>
                   </label>
 
@@ -200,6 +203,19 @@ export function GrantedSpellsEditor({
                     </Select>
                   </label>
                 </div>
+
+                {grant.additionalResourceCost ? <section className="grid gap-2 rounded-lg border border-border bg-bg-subtle p-3">
+                  <label className="grid gap-1 text-xs text-textMuted">ID do recurso adicional
+                    <Input value={grant.additionalResourceCost.resourceId} placeholder="ID compartilhado ou ID da habilidade com contador"
+                      onChange={event => updateGrant(index, { additionalResourceCost: { ...grant.additionalResourceCost!, resourceId: event.target.value } })} />
+                  </label>
+                  <label className="grid gap-1 text-xs text-textMuted">Quantidade por conjuração
+                    <Input type="number" min={1} max={1000} value={grant.additionalResourceCost.amount}
+                      onChange={event => updateGrant(index, { additionalResourceCost: { ...grant.additionalResourceCost!, amount: Math.max(1, Math.trunc(Number(event.target.value) || 1)) } })} />
+                  </label>
+                  <p className="text-[11px] text-textMuted">Os dois custos são obrigatórios. Use o ID compartilhado configurado no recurso da habilidade, ou o ID da habilidade que possui o contador. Truques gastam apenas o recurso adicional.</p>
+                  {validateAdditionalSpellResource(grant.additionalResourceCost) ? <p role="alert" className="text-xs text-danger">{validateAdditionalSpellResource(grant.additionalResourceCost)}</p> : null}
+                </section> : null}
 
                 {variant === "ability" && castingMode === "source" ? (
                   <div className="grid gap-2 rounded-lg border border-border bg-bg-subtle p-3">
@@ -283,7 +299,7 @@ export function GrantedSpellsEditor({
 
                 {castingMode === "known" ? (
                   <div className="rounded-lg bg-accentBg px-3 py-2 text-[11px] text-textH">
-                    Esta magia aparecerá na lista de magias do personagem e poderá usar espaços normais de magia.
+                    Esta magia aparecerá na lista de magias do personagem e poderá usar espaços normais de magia.{grant.additionalResourceCost ? " O recurso adicional também será consumido a cada conjuração." : ""}
                   </div>
                 ) : null}
               </div>
