@@ -56,9 +56,10 @@ test('companion gallery renders only names and portraits without sheet controls'
     entryPoints: [fileURLToPath(new URL('../../../apps/web/src/views/CompanionsView.tsx', import.meta.url))],
     bundle: true, format: 'esm', platform: 'node', write: false, jsx: 'automatic',
     plugins: [{ name: 'gallery-runtime', setup(b) {
-      b.onResolve({ filter: /^(?:react(?:\/.*)?|lucide-react)$/ }, args => ({ path: pathToFileURL(require.resolve(args.path)).href, external: true }))
+      b.onResolve({ filter: /^(?:react(?:-dom)?(?:\/.*)?|lucide-react)$/ }, args => ({ path: pathToFileURL(require.resolve(args.path)).href, external: true }))
       b.onResolve({ filter: /\/useSessionRuntime$/ }, () => ({ path: 'runtime', namespace: 'gallery-test' }))
-      b.onLoad({ filter: /.*/, namespace: 'gallery-test' }, () => ({ contents: 'export const useOptionalSessionRuntime = () => globalThis.__companionGalleryRuntime' }))
+      b.onResolve({ filter: /\/sessionCompanions$/ }, () => ({ path: 'service', namespace: 'gallery-test' }))
+      b.onLoad({ filter: /.*/, namespace: 'gallery-test' }, args => ({ contents: args.path === 'service' ? 'export const saveSessionCompanionVisibility = async () => {}' : 'export const useOptionalSessionRuntime = () => globalThis.__companionGalleryRuntime' }))
     } }],
   })
   const { CompanionsView } = await import('data:text/javascript;base64,' + Buffer.from(built.outputFiles[0].contents).toString('base64'))
