@@ -7,7 +7,7 @@ const built = await build({
   stdin: { contents: `export { CharacterTemplate } from './apps/web/src/models/characters/CharacterTemplate'; export * from './apps/web/src/models/magic/spells/additionalSpellResource'; export { getCharacterGrantedSpells } from './apps/web/src/models/characters/characterGrantedSpells';`, resolveDir: fileURLToPath(root), loader: 'ts' },
   bundle: true, platform: 'node', format: 'esm', write: false, conditions: ['types'],
 })
-const { CharacterTemplate, paySpellSlotAndAdditionalResource: pay, additionalSpellResourceError, getCharacterGrantedSpells } = await import('data:text/javascript;base64,' + Buffer.from(built.outputFiles[0].contents).toString('base64'))
+const { CharacterTemplate, paySpellSlotAndAdditionalResource: pay, additionalSpellResourceError, getAdditionalSpellResourceRecovery, getCharacterGrantedSpells } = await import('data:text/javascript;base64,' + Buffer.from(built.outputFiles[0].contents).toString('base64'))
 const counter = (id = 'pool', used = 0) => ({ id, name: id, kind: 'passive', usage: { max: 5, used, reset: 'longRest', sharedResourceId: 'mana' } })
 const character = (abilities = [counter()], current = 2) => CharacterTemplate.fromJSON({
   id: 'caster', sheet: { type: 'npc' }, abilities,
@@ -112,4 +112,24 @@ test('server enforces extra cost for the matching learned grant and preserves in
   const normal = applySpellCastPayment(c, spell, independent.grant, 1, slot)
   assert.equal(normal.ok, true)
   assert.equal(normal.character.get('abilities')[0].usage.used, 0)
+})
+
+for (const [reset, expected] of [
+  ['shortRest', 'Descanso curto ou longo.'],
+  ['longRest', 'Descanso longo.'],
+  ['limited', 'Reposição manual; não recupera ao descansar.'],
+  ['turn', 'A cada turno.'],
+]) test(`additional resource recovery describes ${reset} even when depleted`, () => {
+  const ability = counter('pool', 5)
+  ability.usage.reset = reset
+  assert.equal(getAdditionalSpellResourceRecovery(character([ability]), cost), expected)
+})
+
+test('additional resource recovery uses the same linked ID and reports missing counters', () => {
+  const ability = counter()
+  ability.usage.reset = 'cooldown'
+  ability.usage.cooldownAmount = 2
+  ability.usage.cooldownUnit = 'minutes'
+  assert.equal(getAdditionalSpellResourceRecovery(character([ability]), { resourceId: 'pool', amount: 1 }), 'Após o cooldown de 2 minuto(s).')
+  assert.match(getAdditionalSpellResourceRecovery(character(), { resourceId: 'unknown', amount: 1 }), /Recurso não encontrado/)
 })

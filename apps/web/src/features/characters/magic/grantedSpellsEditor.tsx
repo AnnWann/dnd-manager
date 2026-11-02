@@ -1,4 +1,5 @@
-import { validateAdditionalSpellResource } from "../../../models/magic/spells/additionalSpellResource"
+import type { CharacterTemplate } from "../../../models/characters/CharacterTemplate"
+import { getAdditionalSpellResourceRecovery, validateAdditionalSpellResource } from "../../../models/magic/spells/additionalSpellResource"
 import { useEffect, useMemo, useState } from "react"
 import { Plus, Search, Trash2, X } from "lucide-react"
 
@@ -24,6 +25,7 @@ export type EditableSpellGrant = SpellGrant & {
 }
 
 type Props = {
+  character?: CharacterTemplate
   grants: EditableSpellGrant[]
   onChange: (grants: EditableSpellGrant[]) => void
   variant: "ability" | "equipment"
@@ -57,6 +59,7 @@ const RESET_OPTIONS: Array<{
 ]
 
 export function GrantedSpellsEditor({
+  character,
   grants,
   onChange,
   variant,
@@ -214,6 +217,11 @@ export function GrantedSpellsEditor({
                       onChange={event => updateGrant(index, { additionalResourceCost: { ...grant.additionalResourceCost!, amount: Math.max(1, Math.trunc(Number(event.target.value) || 1)) } })} />
                   </label>
                   <p className="text-[11px] text-textMuted">Os dois custos são obrigatórios. Use o ID compartilhado configurado no recurso da habilidade, ou o ID da habilidade que possui o contador. Truques gastam apenas o recurso adicional.</p>
+                  <div className="rounded-lg border border-border bg-bg p-3 text-xs text-textMuted">
+                    <p className="font-medium text-textH">Recuperação do recurso</p>
+                    <p>{character ? getAdditionalSpellResourceRecovery(character, grant.additionalResourceCost) : "Segue a recuperação do contador vinculado pelo ID."}</p>
+                    <p className="mt-1">Configure os usos máximos e a recuperação na aba Recurso da habilidade que fornece esse contador. O ID apenas vincula a magia ao recurso; ele não cria um contador novo.</p>
+                  </div>
                   {validateAdditionalSpellResource(grant.additionalResourceCost) ? <p role="alert" className="text-xs text-danger">{validateAdditionalSpellResource(grant.additionalResourceCost)}</p> : null}
                 </section> : null}
 
