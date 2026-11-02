@@ -3,7 +3,7 @@ import { getAbilityUsageMax } from "../abilities/abilityActivation"
 import type { Equipment } from "../items/equipment/EquipmentSlot"
 import type { SpellResourceCost } from "../magic/spells/Spell"
 import type { SpellSource } from "../magic/spells/SpellSource"
-import type { SpellGrantCastingMode } from "../magic/spells/SpellGrant"
+import type { SpellGrantCastingMode, AdditionalSpellResourceCost } from "../magic/spells/SpellGrant"
 import type { CharacterTemplate } from "./CharacterTemplate"
 import { getUsableScroll } from "./characterScrolls"
 import {
@@ -30,6 +30,7 @@ export type CharacterGrantedSpell = {
   usage?: Usage
   usageSource?: CharacterGrantedSpellUsageSource
   equipmentSpellUsageSource?: CharacterGrantedEquipmentSpellUsageSource
+  additionalResourceCost?: AdditionalSpellResourceCost
   resourceCost?: SpellResourceCost
   /** One scroll unit is destroyed by casting this grant. */
   scrollItemId?: string
@@ -72,7 +73,7 @@ export function getCharacterGrantedSpells(
     for (const grant of equipment.spells ?? []) {
       if (!grant.index) continue
 
-      const castingMode =
+      const castingMode = grant.additionalResourceCost ? "known" :
         grant.castingMode ??
         (grant.usage.reset === "spellSlot" ? "known" : "source")
 
@@ -86,6 +87,7 @@ export function getCharacterGrantedSpells(
           sourceId: equipment.id,
           attribute: grant.attribute ?? "cha",
         },
+        additionalResourceCost: castingMode === "known" ? grant.additionalResourceCost : undefined,
         usage: castingMode === "source" ? grant.usage : undefined,
         equipmentSpellUsageSource:
           castingMode === "source" && grant.usage.reset !== "spellSlot"
@@ -133,7 +135,7 @@ export function getCharacterGrantedSpells(
       results.push({
         key: `condition:${condition.id}:${grant.index}`,
         index: grant.index,
-        castingMode: grant.resourceCost
+        castingMode: grant.additionalResourceCost ? "known" : grant.resourceCost
           ? "source"
           : grant.castingMode === "source"
             ? "known"
@@ -144,7 +146,8 @@ export function getCharacterGrantedSpells(
           sourceId: `condition:${condition.id}`,
           attribute: grant.attribute ?? "cha",
         },
-        resourceCost: grant.resourceCost,
+        additionalResourceCost: grant.additionalResourceCost,
+        resourceCost: grant.additionalResourceCost ? undefined : grant.resourceCost,
       })
     }
 
@@ -173,7 +176,7 @@ function addAbilitySpellGrants(
   for (const grant of ability.grantedSpells ?? []) {
     if (!grant.index) continue
 
-    const castingMode = grant.castingMode ?? "source"
+    const castingMode = grant.additionalResourceCost ? "known" : grant.castingMode ?? "source"
     const usesAlternateResource = Boolean(grant.resourceCost)
 
     results.push({
@@ -184,7 +187,8 @@ function addAbilitySpellGrants(
         ...source,
         attribute: grant.attribute ?? "cha",
       },
-      resourceCost: grant.resourceCost,
+      additionalResourceCost: grant.additionalResourceCost,
+      resourceCost: grant.additionalResourceCost ? undefined : grant.resourceCost,
       usage: !usesAlternateResource && castingMode === "source" ? ability.usage : undefined,
       usageSource:
         !usesAlternateResource && castingMode === "source" && ability.usage

@@ -1,3 +1,4 @@
+import { paySpellSlotAndAdditionalResource } from "../../../../../web/src/models/magic/spells/additionalSpellResource";
 import type { HiddenSpellCommitment } from "../../../../../../packages/session-protocol/src/hiddenSpellcasting";
 import { applyCriticalDamageRule } from "../../../../../web/src/shared/session-runtime/criticalDamage";
 import type { CharacterTemplateProps } from "../../../../../web/src/models/characters/CharacterTemplate";
@@ -472,6 +473,7 @@ function resolveCastSource(
   spell: Spell,
   sourceId: string,
 ): CastSourceResolution {
+  const matchedGrant = getCharacterGrantedSpells(character).find(entry => entry.index === spell.index && entry.source.sourceId === sourceId);
   const known = character.getOrCreateMagic().spells.knownSpells.find(
     (entry) => entry.spells.id === spell.index && entry.source.sourceId === sourceId,
   );
@@ -489,7 +491,7 @@ function resolveCastSource(
         };
       }
     }
-    return { ok: true, source: known.source };
+    return { ok: true, source: known.source, grant: matchedGrant?.additionalResourceCost ? matchedGrant : undefined };
   }
 
   const grant = getCharacterGrantedSpells(character).find(
@@ -515,6 +517,7 @@ function applySpellCastPayment(
   castLevel: number,
   payment: SessionSpellCastPayment,
 ): CastPaymentResult {
+  if (grant?.additionalResourceCost) return paySpellSlotAndAdditionalResource(character, spell, grant.additionalResourceCost, castLevel, payment);
   if (grant?.scrollItemId) {
     if (payment.type !== "scroll" || payment.itemId !== grant.scrollItemId) {
       return { ok: false, code: "SCROLL_PAYMENT_REQUIRED", message: "This spell can only be cast by consuming its scroll." };
