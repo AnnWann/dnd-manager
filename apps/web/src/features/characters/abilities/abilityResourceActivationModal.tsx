@@ -1,3 +1,5 @@
+import { evaluateCharacterSheetFormula } from "../../../lib/customSystems/CharacterSheetFormula"
+import { validateAbilityInputValues, validateAbilityInputFormulaValues } from "../../../models/abilities/abilityManualInputs"
 import { useEffect, useMemo, useState } from "react"
 import { useCharacterWorkspace } from "../workspace/CharacterWorkspaceContext"
 import { useOptionalSessionRuntime } from "../../session-runtime/useSessionRuntime"
@@ -126,6 +128,13 @@ export function AbilityResourceActivationModal({
       key: entry.key, label: entry.label, dice: entry.dice, formula: undefined,
     })) : []),
   ]
+  const [inputValues, setInputValues] = useState<Record<string, string>>(() => Object.fromEntries(
+    (ability.manualInputs ?? []).map(input => [input.id, input.defaultValue === undefined ? "" : String(input.defaultValue)]),
+  ))
+  const parsedInputs = Object.fromEntries((ability.manualInputs ?? [])
+    .filter(input => (inputValues[input.id] ?? "").trim() !== "")
+    .map(input => [input.id, Number(inputValues[input.id])]))
+  const inputError = validateAbilityInputValues(ability, parsedInputs) ?? validateAbilityInputFormulaValues(character, ability, parsedInputs, optionId)
   const [manualRollValues, setManualRollValues] = useState<Record<string, string>>({})
 
   const selectedUsesPact = useMemo(() =>
@@ -142,15 +151,26 @@ export function AbilityResourceActivationModal({
     setActivationLevel(pactLevel)
   }, [ability.resourceUpcast?.enabled, baseLevel, maximumLevel, pactLevel, selectedUsesPact])
 
-  const selection = useMemo<AbilityResourceSelection | undefined>(() => {
-    if (!(ability.resourceCosts?.length) && !ability.resourceUpcast?.enabled && !effectiveDamageType && !selectedWeaponAttribute) return undefined
+  const selection: AbilityResourceSelection | undefined = (() => {
+    if (!(ability.resourceCosts?.length) && !ability.resourceUpcast?.enabled && !effectiveDamageType && !selectedWeaponAttribute && !ability.manualInputs?.length) return undefined
     return {
+      inputValues: ability.manualInputs?.length ? parsedInputs : undefined,
       activationLevel,
       damageType: effectiveDamageType ? effectiveDamageType as DamageType : undefined,
       weaponAttribute: needsAttribute && selectedWeaponAttribute ? selectedWeaponAttribute : undefined,
       alternatives: Object.keys(alternatives).length ? alternatives : undefined,
     }
-  }, [ability.resourceCosts?.length, ability.resourceUpcast?.enabled, activationLevel, alternatives, effectiveDamageType, needsAttribute, selectedWeaponAttribute])
+  })()
+
+  const effectPreviews = !inputError && ability.manualInputs?.length ? [
+    ...(ability.bonuses?.onUseHp ?? []),
+    ...(ability.activationOptions?.find(option => option.id === optionId)?.bonuses?.onUseHp ?? []),
+  ].filter(effect => !effect.bonus.roll).map(effect => ({
+    kind: effect.kind,
+    amount: effect.bonus.formula?.trim()
+      ? evaluateCharacterSheetFormula(effect.bonus.formula, character, parsedInputs)
+      : effect.bonus.value,
+  })) : []
 
   const payment = canPayAbilityResourceCosts(character, ability, selection)
   const optionRequired = (ability.activationOptions?.length ?? 0) > 0
@@ -163,7 +183,7 @@ export function AbilityResourceActivationModal({
       : isValidBonusRollValue(entry.dice, Number(raw))
   })
   const targetSelectionValid = targeting === "none" || targeting === "self" || (targetRefs.length > 0 && targetRefs.length <= maxTargets)
-  const canConfirm = targetSelectionValid && payment.ok && selfDamageRequirements.every(entry => entry.minimum > 0) && (!optionRequired || Boolean(optionId)) && manualRollsValid && (!damageTypeChoices.length || Boolean(effectiveDamageType)) && (!needsWeapon || Boolean(currentWeaponId)) && !isDuplicateInfusion && (!needsAttribute || Boolean(selectedWeaponAttribute))
+  const canConfirm = !inputError && targetSelectionValid && payment.ok && selfDamageRequirements.every(entry => entry.minimum > 0) && (!optionRequired || Boolean(optionId)) && manualRollsValid && (!damageTypeChoices.length || Boolean(effectiveDamageType)) && (!needsWeapon || Boolean(currentWeaponId)) && !isDuplicateInfusion && (!needsAttribute || Boolean(selectedWeaponAttribute))
 
   return (
     <Modal title={`Usar habilidade — ${ability.name}`} onClose={onClose} className="max-w-xl">
@@ -183,6 +203,18 @@ export function AbilityResourceActivationModal({
             ) : null}
           </label>
         ) : null}
+
+        {(ability.manualInputs?.length ?? 0) > 0 ? <section className="grid gap-3 rounded-lg border border-border bg-bg-subtle p-3">
+          <h3 className="text-xs font-semibold text-textH">Valores desta ativação</h3>
+          {ability.manualInputs!.map(input => <label key={input.id} className="grid gap-1 text-xs text-textMuted">
+            {input.label}<Input type="number" step="any" min={input.min ?? 0} max={input.max ?? 100000} value={inputValues[input.id] ?? ""}
+              onChange={event => setInputValues(current => ({ ...current, [input.id]: event.target.value }))} />
+          </label>)}
+          {inputError ? <p role="alert" className="text-xs text-danger">{inputError}</p> : null}
+          {effectPreviews.map((effect, index) => <p key={index} className="text-xs text-textH">
+            Prévia — {effect.kind === "heal" ? "Cura" : "Dano"}: {effect.amount === undefined ? "Fórmula inválida" : Math.max(0, Math.trunc(effect.amount))}
+          </p>)}
+        </section> : null}
 
         {needsWeapon ? <label className="grid gap-1 text-xs text-textMuted">
           <span className="font-semibold text-textH">Arma afetada</span>

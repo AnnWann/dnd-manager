@@ -1,3 +1,4 @@
+import { validateAbilityInputDefinitions, validateAbilityInputValues, validateAbilityInputReferences, validateAbilityInputFormulaValues } from "../../../../../web/src/models/abilities/abilityManualInputs";
 import type { Ability } from "../../../../../web/src/models/abilities/Ability";
 import { getAbilitySelfDamageRollRequirements } from "../../../../../web/src/models/abilities/abilitySelfDamage";
 import {
@@ -396,7 +397,7 @@ export class SessionActor extends BaseSessionActor {
         for (const effect of effects) {
           const amount = effect.bonus.rollResult?.total
             ?? (effect.bonus.formula?.trim()
-              ? evaluateCharacterSheetFormula(effect.bonus.formula, current)
+              ? evaluateCharacterSheetFormula(effect.bonus.formula, current, effect.bonus.activationInputs)
               : effect.bonus.value);
           if (amount === undefined || !Number.isFinite(amount)) {
             this.sendAbilityError(webSocket, "TARGET_EFFECT_INVALID", "Não foi possível calcular o valor do efeito.");
@@ -409,7 +410,7 @@ export class SessionActor extends BaseSessionActor {
         }
         for (const bonus of temporaryBonuses) {
           const amount = bonus.rollResult?.total
-            ?? (bonus.formula?.trim() ? evaluateCharacterSheetFormula(bonus.formula, current) : bonus.value);
+            ?? (bonus.formula?.trim() ? evaluateCharacterSheetFormula(bonus.formula, current, bonus.activationInputs) : bonus.value);
           if (amount === undefined || !Number.isFinite(amount)) {
             this.sendAbilityError(webSocket, "TARGET_EFFECT_INVALID", "Bônus de PV temporários inválido.");
             return;
@@ -649,6 +650,7 @@ function applyAbilityOperation(
     return removeCharacterCondition(character, condition.id);
   }
   if (operation.type === "character.ability.save") {
+    if (validateAbilityInputDefinitions((operation.ability as unknown as Ability).manualInputs) || validateAbilityInputReferences(operation.ability as unknown as Ability)) return null;
     return character.saveAbility(operation.ability as unknown as Ability);
   }
   if (operation.type === "character.ability.remove") {
@@ -669,6 +671,7 @@ function applyAbilityOperation(
   if (operation.type === "character.ability.use") {
     const ability = findAbilityForSource(character, source);
     if (!ability || !canActivateAbility(character, ability)) return null;
+    if (validateAbilityInputValues(ability, operation.resourceSelection?.inputValues) || validateAbilityInputFormulaValues(character, ability, operation.resourceSelection?.inputValues, operation.activationOptionId)) return null;
     if (ability.activationOptions?.length && !ability.activationOptions.some(option => option.id === operation.activationOptionId)) return null;
     if (ability.allowOptionSwitching && ability.benefitsActive && !operation.activationOptionId) return null;
     const types = getAbilityAttackRiderDamageChoices(ability, operation.activationOptionId);
@@ -696,7 +699,7 @@ function applyAbilityOperation(
   switch (source.type) {
     case "character":
       if (operation.type === "character.ability.use") {
-        return nextCharacter.useAbility(source.abilityId, operation.activationOptionId, operation.bonusRollValues, operation.selectedWeaponId, operation.resourceSelection?.damageType, operation.resourceSelection?.weaponAttribute);
+        return nextCharacter.useAbility(source.abilityId, operation.activationOptionId, operation.bonusRollValues, operation.selectedWeaponId, operation.resourceSelection?.damageType, operation.resourceSelection?.weaponAttribute, operation.resourceSelection?.inputValues);
       }
       if (operation.type === "character.ability.restore") {
         return character.restoreAbility(source.abilityId);
@@ -705,7 +708,7 @@ function applyAbilityOperation(
 
     case "equipment":
       if (operation.type === "character.ability.use") {
-        return nextCharacter.useEquipmentAbility(source.itemId, source.abilityId, operation.bonusRollValues, operation.activationOptionId, operation.selectedWeaponId, operation.resourceSelection?.damageType, operation.resourceSelection?.weaponAttribute);
+        return nextCharacter.useEquipmentAbility(source.itemId, source.abilityId, operation.bonusRollValues, operation.activationOptionId, operation.selectedWeaponId, operation.resourceSelection?.damageType, operation.resourceSelection?.weaponAttribute, operation.resourceSelection?.inputValues);
       }
       if (operation.type === "character.ability.restore") {
         return character.restoreEquipmentAbility(source.itemId, source.abilityId);
@@ -715,7 +718,7 @@ function applyAbilityOperation(
     case "condition": {
       const projectedId = `condition:${source.conditionId}:${source.abilityId}`;
       if (operation.type === "character.ability.use") {
-        return nextCharacter.useAbility(projectedId, operation.activationOptionId, operation.bonusRollValues, operation.selectedWeaponId, operation.resourceSelection?.damageType, operation.resourceSelection?.weaponAttribute);
+        return nextCharacter.useAbility(projectedId, operation.activationOptionId, operation.bonusRollValues, operation.selectedWeaponId, operation.resourceSelection?.damageType, operation.resourceSelection?.weaponAttribute, operation.resourceSelection?.inputValues);
       }
       if (operation.type === "character.ability.restore") {
         return character.restoreAbility(projectedId);
@@ -743,6 +746,7 @@ function applyAbilityOperation(
           : undefined,
         operation.type === "character.ability.use" ? operation.resourceSelection?.damageType : undefined,
         operation.type === "character.ability.use" ? operation.resourceSelection?.weaponAttribute : undefined,
+        operation.type === "character.ability.use" ? operation.resourceSelection?.inputValues : undefined,
       );
   }
 }
@@ -780,6 +784,7 @@ function updateRaceAbilityState(
   selectedWeaponId?: string,
   selectedDamageType?: import("../../../../../web/src/models/combat/Damage").DamageType,
   selectedWeaponAttribute?: import("../../../../../web/src/models/sheet/Attribute").Attribute,
+  inputValues?: Record<string, number>,
 ): CharacterTemplate {
   const race = character.get("sheet").race;
   const ability = (race.naturalAbilities ?? []).find(
@@ -797,6 +802,7 @@ function updateRaceAbilityState(
       selectedWeaponId,
       selectedDamageType,
       selectedWeaponAttribute,
+      inputValues,
     );
   }
   if (action === "deactivate") {

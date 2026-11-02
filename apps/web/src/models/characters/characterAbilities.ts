@@ -1,3 +1,4 @@
+import { validateAbilityInputValues, validateAbilityInputFormulaValues } from "../abilities/abilityManualInputs"
 // models/characters/characterAbilities.ts
 
 import type { Ability } from "../abilities/Ability"
@@ -185,11 +186,12 @@ export function useAbility(
   selectedWeaponId?: string,
   selectedDamageType?: import("../combat/Damage").DamageType,
   selectedWeaponAttribute?: import("../sheet/Attribute").Attribute,
+  inputValues?: Record<string, number>,
 ): CharacterTemplate {
   const directAbility = findStoredCharacterAbility(character, abilityId)
   const projected = directAbility ? undefined : findConditionAbility(character, abilityId)
   const ability = directAbility ?? projected?.ability
-  if (!ability) return character
+  if (!ability || validateAbilityInputValues(ability, inputValues) || validateAbilityInputFormulaValues(character, ability, inputValues, activationOptionId)) return character
 
   const source = projected
     ? {
@@ -211,6 +213,7 @@ export function useAbility(
       selectedWeaponId,
       selectedDamageType,
       selectedWeaponAttribute,
+      inputValues,
     )
     return spendChannelDivinity(activated)
   }
@@ -227,6 +230,7 @@ export function useAbility(
       selectedWeaponId,
       selectedDamageType,
       selectedWeaponAttribute,
+      inputValues,
     )
     return spendKi(activated)
   }
@@ -240,6 +244,7 @@ export function useAbility(
     selectedWeaponId,
     selectedDamageType,
     selectedWeaponAttribute,
+    inputValues,
   )
 }
 

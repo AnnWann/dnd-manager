@@ -1,3 +1,6 @@
+import { AbilityFormulaInputContext } from "./AbilityFormulaInputContext"
+import { AbilityManualInputsEditor } from "./AbilityManualInputsEditor"
+import { validateAbilityInputDefinitions, validateAbilityInputReferences } from "../../../models/abilities/abilityManualInputs"
 import { useEffect, useState } from "react"
 import { createPortal } from "react-dom"
 
@@ -151,6 +154,7 @@ export function AbilityDialog({
   const maximumFormulaError = maximumFormula
     ? validateCharacterSheetFormula(maximumFormula)
     : undefined
+  const manualInputError = validateAbilityInputDefinitions(draft.manualInputs) ?? validateAbilityInputReferences(draft)
   const rollError = validateAbilityRoll(draft.roll, character)
   const requiresActivation = abilityRequiresActivation(draft)
   const duration = draft.effectDuration ?? (draft.kind === "active" ? "instant" : "lasting")
@@ -195,12 +199,14 @@ export function AbilityDialog({
   }
 
   function save() {
+    if (manualInputError) { setTab("effects"); return }
     if (rollError) { setTab("roll"); return }
     const normalized = normalizeAbilityActivation(normalizeAbilityText(draft))
     onSave(withFixedCategory(normalized, fixedCategory))
   }
 
   return createPortal(
+    <AbilityFormulaInputContext.Provider value={draft.manualInputs ?? []}>
     <div className="fixed inset-0 z-[21000] flex h-screen w-screen items-center justify-center overflow-hidden bg-black/55 p-2 backdrop-blur-sm sm:p-4">
       <div
         role="dialog"
@@ -611,6 +617,7 @@ export function AbilityDialog({
                 title="Efeitos"
                 description="Tudo que acontece ao usar ou manter a habilidade: bônus, condições e opções de ativação."
               />
+              <AbilityManualInputsEditor ability={draft} onChange={setDraft} />
               <div className={draft.usage ? "[&>div>section:first-child]:hidden" : ""}>
                 <AbilityAdvancedEffectsEditor ability={draft} character={character} onChange={setDraft} />
               </div>
@@ -662,7 +669,7 @@ export function AbilityDialog({
             <Button variant="secondary" onClick={onClose}>Cancelar</Button>
             <Button
               variant="primary"
-              disabled={!draft.name.trim() || Boolean(maximumFormulaError) || Boolean(rollError)}
+              disabled={!draft.name.trim() || Boolean(maximumFormulaError) || Boolean(rollError) || Boolean(manualInputError)}
               onClick={save}
             >
               Salvar
@@ -670,7 +677,8 @@ export function AbilityDialog({
           </div>
         </footer>
       </div>
-    </div>,
+    </div>
+    </AbilityFormulaInputContext.Provider>,
     document.body,
   )
 }

@@ -97,7 +97,11 @@ export interface AbilityResourceCostGroup {
   costs: AbilityResourceCostDefinition[]
 }
 
+export type AbilityManualInput = { id: string; label: string; min?: number; max?: number; defaultValue?: number }
+
 export interface AbilityResourceSelection {
+  /** External numeric values entered for this activation; no resource is consumed. */
+  inputValues?: Record<string, number>
   /** Selected type for riders with configured damageTypeChoices. */
   damageType?: DamageType
   /** Atributo escolhido ao ativar uma alteração temporária de ataques de arma. */
@@ -112,6 +116,7 @@ export interface Ability {
   id: string
   name: string
   description?: string
+  manualInputs?: AbilityManualInput[]
   usage?: Usage
   /** Custos externos consumidos atomicamente ao ativar a habilidade. */
   resourceCosts?: AbilityResourceCostGroup[]

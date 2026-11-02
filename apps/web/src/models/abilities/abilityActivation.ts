@@ -1,3 +1,4 @@
+import { bindAbilityInputValues, validateAbilityInputValues, validateAbilityInputFormulaValues } from "./abilityManualInputs"
 import { resolveDamage, type DamageType } from "../combat/Damage"
 import { applyAbilitySelfDamage, resolveAbilitySelfDamage } from "./abilitySelfDamage"
 import type { Attribute } from "../sheet/Attribute"
@@ -35,7 +36,7 @@ export function getAbilityEffectDuration(ability: Ability): AbilityEffectDuratio
 }
 
 export function abilityRequiresActivation(ability: Ability): boolean {
-  if ((ability.kind ?? "active") === "active") return true
+  if (ability.manualInputs?.length || (ability.kind ?? "active") === "active") return true
   const trigger = (ability.trigger ?? "always").trim().toLocaleLowerCase("pt-BR")
   return trigger !== "" && trigger !== "always" && trigger !== "sempre"
 }
@@ -153,7 +154,10 @@ export function useAbilityEffect(
   selectedWeaponId?: string,
   selectedDamageType?: DamageType,
   selectedWeaponAttribute?: Attribute,
+  inputValues?: Record<string, number>,
 ): CharacterTemplate {
+  if (validateAbilityInputValues(ability, inputValues) || validateAbilityInputFormulaValues(character, ability, inputValues, activationOptionId)) return character
+  if (ability.manualInputs?.length) ability = bindAbilityInputValues(ability, inputValues)
   if (!abilityRequiresActivation(ability) || !canActivateAbility(character, ability)) return character
   const infusions = getAbilityWeaponInfusions(character, ability.id)
   const switchingOption = Boolean(ability.allowOptionSwitching && isAbilityBenefitsActive(ability) && (activationOptionId || selectedDamageType))
@@ -621,7 +625,7 @@ function resolveBonuses(character: CharacterTemplate, bonuses: Bonus[]): Bonus[]
   return bonuses.map((bonus) => {
     const formula = bonus.formula?.trim()
     if (!formula) return bonus
-    const evaluated = evaluateCharacterSheetFormula(formula, character)
+    const evaluated = evaluateCharacterSheetFormula(formula, character, bonus.activationInputs)
     return evaluated === undefined ? bonus : { ...bonus, value: evaluated }
   })
 }

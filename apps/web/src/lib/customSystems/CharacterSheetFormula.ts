@@ -19,6 +19,7 @@ let evaluatingCharacterFormula = false
 export function evaluateCharacterSheetFormula(
   formula: string,
   character: CharacterTemplate,
+  inputValues: Record<string, number> = {},
 ): number | undefined {
   if (!formula.trim() || evaluatingCharacterFormula) return undefined
 
@@ -29,7 +30,7 @@ export function evaluateCharacterSheetFormula(
       .filter((path) => containsIdentifier(formula, path))
     const result = evaluateWithValues(
       formula,
-      getCharacterFormulaValues(character, referencedPaths),
+      { ...getCharacterFormulaValues(character, referencedPaths), ...inputFormulaValues(inputValues) },
     )
     return result.ok && typeof result.value === 'number' ? result.value : undefined
   } finally {
@@ -40,6 +41,7 @@ export function evaluateCharacterSheetFormula(
 export function validateCharacterSheetFormula(
   formula: string,
   character?: CharacterTemplate,
+  inputValues: Record<string, number> = {},
 ): string | undefined {
   if (!formula.trim()) return 'Informe uma fórmula.'
 
@@ -49,7 +51,7 @@ export function validateCharacterSheetFormula(
       variable.valueType === 'boolean' ? false : variable.valueType === 'text' ? '' : 0,
     ]),
   )
-  const result = evaluateWithValues(formula, emptyValues)
+  const result = evaluateWithValues(formula, { ...emptyValues, ...inputFormulaValues(inputValues) })
   if (!result.ok) return result.error
   if (typeof result.value !== 'number') return 'A fórmula precisa resultar em um número.'
   return undefined
@@ -133,4 +135,10 @@ function containsIdentifier(
   return new RegExp(
     "(^|[^A-Za-z0-9_.-])" + escaped + "(?=$|[^A-Za-z0-9_.-])",
   ).test(expression)
+}
+
+function inputFormulaValues(values: Record<string, number>): CharacterFormulaValues {
+  return Object.fromEntries(Object.entries(values)
+    .filter(([key, value]) => /^[A-Za-z][A-Za-z0-9_]{0,39}$/.test(key) && typeof value === "number" && Number.isFinite(value))
+    .map(([key, value]) => [`input.${key}`, value]))
 }
