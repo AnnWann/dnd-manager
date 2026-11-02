@@ -1,3 +1,5 @@
+import { abilityNeedsActivationDialog } from "../../../models/abilities/abilityActivationDialog"
+import { bindAbilityInputValues, validateAbilityInputValues } from "../../../models/abilities/abilityManualInputs"
 import { ManualActionRollFields } from "../../../../../../packages/game-ui/src/ManualActionRollFields"
 import { AbilityActivationLevelField } from "../../../../../../packages/game-ui/src/CastActivationFields"
 import { ActionRollFeedback } from "../../../../../../packages/game-ui/src/ActionRollFeedback"
@@ -10,7 +12,7 @@ import { useNavigate } from "react-router-dom"
 import { Button } from "../../../components/ui/Button"
 import { Input } from "../../../components/ui/Input"
 import { Select } from "../../../components/ui/Select"
-import { abilityRequiresWeaponAttributeSelection, getAbilityAttackRiderDamageChoices, optionRequiresWeaponSelection } from "../../../models/combat/AttackRider"
+import { optionRequiresWeaponSelection } from "../../../models/combat/AttackRider"
 import { getCharacterConditions } from "../../../models/characters/characterConditionStorage"
 import { shouldRequestSeparateAbilityActionRoll } from "../../../models/abilities/shouldRollAbilityAction"
 import { Modal } from "../../../components/ui/Modal"
@@ -54,7 +56,6 @@ import {
   hasAbilityResourceCosts,
   spendAbilityResourceCosts,
 } from "../../../models/abilities/abilityResourceCosts"
-import { abilityHasSelfDamage } from "../../../models/abilities/abilitySelfDamage"
 import { useAbility as useCharacterAbility } from "../../../models/characters/characterAbilities"
 import { getChannelDivinityPool } from "../../../models/characters/characterChannelDivinity"
 import { getKiPool } from "../../../models/characters/characterKi"
@@ -63,7 +64,7 @@ import {
   setSorceryPointCurrent,
 } from "../../../models/characters/characterSorceryPoints"
 import type { CharacterTemplate } from "../../../models/characters/CharacterTemplate"
-import { hasManualBonusRolls, listBonusRollRequirements, resolveBonusCollectionRolls } from "../../../models/bonuses/BonusRoll"
+import { listBonusRollRequirements, resolveBonusCollectionRolls } from "../../../models/bonuses/BonusRoll"
 import type { CustomAbilityRollDefinition } from "../../../models/customSystems/CustomAbilityDefinition"
 import type {
   CharacterCustomSystemState,
@@ -306,9 +307,15 @@ export function MinimalCharacterActions({
     resourceSelection?: AbilityResourceSelection,
     bonusRollValues?: Record<string, number>,
     weaponIdFromModal?: string,
+    targetRefs?: string[],
+    pointLabel?: string,
   ) {
     const source = entry.abilitySource
     if (!source) return
+    if (action === "use" && entry.ability) {
+      const invalid = validateAbilityInputValues(entry.ability, resourceSelection?.inputValues)
+      if (invalid) { setError(invalid); setAbilityResourceEntry(entry); return }
+    }
     const boundWeaponId = getCharacterConditions(character)
       .filter(condition => condition.sourceAbilityId === entry.ability?.id && condition.sourceAbilityOptionId?.endsWith(":abilities"))
       .flatMap(condition => condition.grantedAbilities ?? [])
@@ -350,7 +357,7 @@ export function MinimalCharacterActions({
       // a different number in the character dialog and the Dice panel.
       if (!sessionRuntime) {
         try {
-          const resolved = resolveBonusCollectionRolls(character, entry.ability.bonuses, bonusRollValues)
+          const resolved = resolveBonusCollectionRolls(character, bindAbilityInputValues(entry.ability, resourceSelection?.inputValues).bonuses, bonusRollValues)
           if (resolved.results.length > 0) {
             resolvedBonusRollValues = {
               ...(bonusRollValues ?? {}),
@@ -377,6 +384,10 @@ export function MinimalCharacterActions({
         characterId: character.get("id"),
         source,
         abilityName: entry.ability?.name,
+        ...(action === "use" ? {
+          targetRefs: entry.ability?.targeting?.mode === "self" ? [`character:${character.get("id")}`] : targetRefs,
+          pointLabel,
+        } : {}),
         ...(action === "use" && optionId
           ? { activationOptionId: optionId }
           : {}),
@@ -412,7 +423,7 @@ export function MinimalCharacterActions({
 
       if (source.type === "equipment") {
         return action === "use"
-          ? paidCurrent.useEquipmentAbility(source.itemId, source.abilityId, resolvedBonusRollValues, optionId, activationWeaponId, resourceSelection?.damageType, resourceSelection?.weaponAttribute)
+          ? paidCurrent.useEquipmentAbility(source.itemId, source.abilityId, resolvedBonusRollValues, optionId, activationWeaponId, resourceSelection?.damageType, resourceSelection?.weaponAttribute, resourceSelection?.inputValues)
           : current.deactivateEquipmentAbility(source.itemId, source.abilityId)
       }
       if (source.type === "race") {
@@ -421,11 +432,11 @@ export function MinimalCharacterActions({
         )
         if (!ability) return current
         return action === "use"
-          ? useAbilityEffect(paidCurrent, ability, { type: "race", sourceLabel: "Raça" }, optionId, resolvedBonusRollValues, activationWeaponId, resourceSelection?.damageType, resourceSelection?.weaponAttribute)
+          ? useAbilityEffect(paidCurrent, ability, { type: "race", sourceLabel: "Raça" }, optionId, resolvedBonusRollValues, activationWeaponId, resourceSelection?.damageType, resourceSelection?.weaponAttribute, resourceSelection?.inputValues)
           : endAbilityEffect(current, ability, { type: "race", sourceLabel: "Raça" })
       }
       return action === "use"
-        ? useCharacterAbility(paidCurrent, source.abilityId, optionId, resolvedBonusRollValues, activationWeaponId, resourceSelection?.damageType, resourceSelection?.weaponAttribute)
+        ? useCharacterAbility(paidCurrent, source.abilityId, optionId, resolvedBonusRollValues, activationWeaponId, resourceSelection?.damageType, resourceSelection?.weaponAttribute, resourceSelection?.inputValues)
         : current.deactivateAbility(source.abilityId)
     })
     setAbilityResourceEntry(null)
@@ -914,50 +925,12 @@ export function MinimalCharacterActions({
                   <div className="flex justify-end">
                     <Button variant="ghost" onClick={() => changeAbilityState(selected, "deactivate")}>Encerrar efeito</Button>
                   </div>
-                ) : optionRequiresWeaponSelection(selected.ability)
-                    || (selected.ability.activationOptions ?? []).some(option => optionRequiresWeaponSelection(selected.ability!, option.id))
-                    || abilityRequiresWeaponAttributeSelection(selected.ability)
-                    || (selected.ability.activationOptions ?? []).some(option => abilityRequiresWeaponAttributeSelection(selected.ability!, option.id))
-                    || getAbilityAttackRiderDamageChoices(selected.ability).length > 0
-                    || (selected.ability.activationOptions ?? []).some(option => getAbilityAttackRiderDamageChoices(selected.ability!, option.id).length > 0)
-                    || hasAbilityResourceCosts(selected.ability)
-                    || abilityHasSelfDamage(selected.ability)
-                    || selected.ability.resourceUpcast?.enabled
-                    || hasManualBonusRolls(selected.ability.bonuses)
-                    || (
-                      physicalDiceMode
-                      && listBonusRollRequirements(selected.ability.bonuses).length > 0
-                    ) ? (
+                ) : abilityNeedsActivationDialog(selected.ability, physicalDiceMode) ? (
                   <div className="flex justify-end">
                     <Button variant="primary" onClick={() => setAbilityResourceEntry(selected)}>
                       Configurar e usar
                     </Button>
                   </div>
-                ) : (selected.ability.activationOptions?.length ?? 0) > 0 ? (
-                  <>
-                    <div className="text-xs font-semibold text-textH">Escolha o efeito</div>
-                    {isAbilityBenefitsActive(selected.ability) ? (
-                      <div className="flex justify-end">
-                        <Button variant="ghost" onClick={() => changeAbilityState(selected, "deactivate")}>Encerrar efeito</Button>
-                      </div>
-                    ) : null}
-                    {(selected.ability.activationOptions ?? []).map((option) => (
-                      <button
-                        key={option.id}
-                        type="button"
-                        onClick={() => changeAbilityState(selected, "use", option.id)}
-                        className="rounded-xl border border-border bg-bg-subtle p-3 text-left transition-colors hover:border-accentBorder hover:bg-accentBg"
-                      >
-                        <div className="text-sm font-semibold text-textH">{option.name}</div>
-                        {option.description ? (
-                          <div className="mt-1 whitespace-pre-wrap text-xs leading-5 text-textMuted">{option.description}</div>
-                        ) : null}
-                        {option.condition?.name ? (
-                          <div className="mt-2 text-[10px] font-semibold uppercase tracking-wide text-accent">Aplica: {option.condition.name}</div>
-                        ) : null}
-                      </button>
-                    ))}
-                  </>
                 ) : (
                   <div className="flex justify-end">
                     <Button variant="primary" onClick={() => changeAbilityState(selected, "use")}>
@@ -978,8 +951,8 @@ export function MinimalCharacterActions({
           character={character}
           forceManualRolls={physicalDiceMode}
           onClose={() => setAbilityResourceEntry(null)}
-          onConfirm={(optionId, resourceSelection, bonusRollValues, weaponId) =>
-            changeAbilityState(abilityResourceEntry, "use", optionId, resourceSelection, bonusRollValues, weaponId)
+          onConfirm={(optionId, resourceSelection, bonusRollValues, weaponId, targetRefs, pointLabel) =>
+            changeAbilityState(abilityResourceEntry, "use", optionId, resourceSelection, bonusRollValues, weaponId, targetRefs, pointLabel)
           }
         />
       ) : null}
