@@ -37,7 +37,7 @@ import { useOptionalSessionRuntime } from "../../session-runtime/useSessionRunti
 import type { SessionSpellCastPayment } from "../../session-runtime/magicSessionProtocol"
 
 type ActionFilter = "action" | "bonusAction" | "reaction" | "other"
-type CastingResource = "slot" | "ability" | SpellResourceType
+type CastingResource = "slot" | "linked" | "ability" | SpellResourceType
 type Props = { character: CharacterTemplate; updateCharacter: (characterId: string, updater: (character: CharacterTemplate) => CharacterTemplate) => void; scrollOnlyItemId?: string }
 type MinimalSpellEntry = { key: string; spell: Spell; source: SpellSource; sourceCastingMode: "slots" | "source"; sourceUsageRemaining?: number; sourceUsageMaximum?: number; sourceUsageLabel?: string; sourceUsageSource?: CharacterGrantedSpellUsageSource; sourceEquipmentSpellUsageSource?: CharacterGrantedEquipmentSpellUsageSource; additionalResourceCost?: AdditionalSpellResourceCost; sourceResourceCost?: SpellResourceCost; scrollItemId?: string }
 type SlotChoice = { level: MagicCircleLevel; pool: "normal" | "pact" }
@@ -95,6 +95,7 @@ export function MinimalMagicActions({ character, updateCharacter, scrollOnlyItem
     if (entry.sourceCastingMode === "slots" && globalPayment(entry).useSlots && (entry.spell.slotLevel === 0 || choices.length)) {
       setCastLevel(choices[0]?.level ?? entry.spell.slotLevel); return setCastingResource("slot")
     }
+    if (entry.additionalResourceCost?.mode === "oneOf") { setCastingResource("linked"); return }
     const cost = globalPayment(entry).resources.find((candidate) => canPaySpellResourceCost(character, candidate)) ?? globalPayment(entry).resources[0]
     setCastingResource(cost?.resource ?? "slot")
   }
@@ -258,6 +259,11 @@ export function MinimalMagicActions({ character, updateCharacter, scrollOnlyItem
     if (!selected) return null
     const spell = selected.spell
 
+    if (castingResource === "linked") {
+      if (selected.additionalResourceCost?.mode === "oneOf") return { castLevel: spell.slotLevel, payment: { type: "linked-resource" } }
+      setError("Esta origem não permite pagar apenas com o recurso vinculado.")
+      return null
+    }
     if (castingResource === "ability") {
       if (selected.scrollItemId) {
         return { castLevel: spell.slotLevel, payment: { type: "scroll", itemId: selected.scrollItemId } }
@@ -328,7 +334,12 @@ export function MinimalMagicActions({ character, updateCharacter, scrollOnlyItem
     }
   }
 
-  const useDisabled = Boolean(selected && additionalSpellResourceError(character, selected.additionalResourceCost)) || (selected ? castingResource === "ability" ? (selected.scrollItemId ? false : (selected.sourceUsageSource || selected.sourceEquipmentSpellUsageSource) ? (selected.sourceUsageRemaining ?? 0) <= 0 : !(selected.sourceCastingMode === "source" && !selected.sourceResourceCost)) : castingResource === "slot" ? selected.sourceCastingMode !== "slots" || !globalOptions.useSlots || (selected.spell.slotLevel > 0 && slotChoices.length === 0) : !selectedCost || !canPaySpellResourceCost(character, selectedCost) : true)
+  const linkedResourceError = selected ? additionalSpellResourceError(character, selected.additionalResourceCost) : undefined
+  const useDisabled = selected?.additionalResourceCost
+    ? castingResource === "linked"
+      ? selected.additionalResourceCost.mode !== "oneOf" || Boolean(linkedResourceError)
+      : castingResource !== "slot" || (selected.spell.slotLevel > 0 && !slotChoices.length) || (selected.additionalResourceCost.mode !== "oneOf" && Boolean(linkedResourceError))
+    : (selected ? castingResource === "ability" ? (selected.scrollItemId ? false : (selected.sourceUsageSource || selected.sourceEquipmentSpellUsageSource) ? (selected.sourceUsageRemaining ?? 0) <= 0 : !(selected.sourceCastingMode === "source" && !selected.sourceResourceCost)) : castingResource === "slot" ? selected.sourceCastingMode !== "slots" || !globalOptions.useSlots || (selected.spell.slotLevel > 0 && slotChoices.length === 0) : !selectedCost || !canPaySpellResourceCost(character, selectedCost) : true)
 
   return <section className={scrollOnlyItemId ? "mt-2" : "rounded-xl border border-border bg-bg p-3 shadow-theme-sm"}>
     {allSpells.length && scrollOnlyItemId ? <Button size="sm" variant="secondary" onClick={() => openSpell(allSpells[0])}>Conjurar pergaminho</Button> : null}
@@ -339,7 +350,7 @@ export function MinimalMagicActions({ character, updateCharacter, scrollOnlyItem
           name: spellName(entry.spell),
           level: entry.spell.slotLevel,
           source: sourceLabel(entry.source),
-          cost: entry.additionalResourceCost ? `${entry.spell.slotLevel > 0 ? "Espaço + " : ""}${entry.additionalResourceCost.amount} recurso (${entry.additionalResourceCost.resourceId})` : entry.sourceResourceCost
+          cost: entry.additionalResourceCost ? `${entry.additionalResourceCost.mode === "oneOf" ? (entry.spell.slotLevel > 0 ? "Espaço OU " : "Truque OU ") : entry.spell.slotLevel > 0 ? "Espaço + " : ""}${entry.additionalResourceCost.amount} recurso (${entry.additionalResourceCost.resourceId})` : entry.sourceResourceCost
             ? `${entry.sourceResourceCost.amount} ${spellResourceLabel(entry.sourceResourceCost.resource)}`
             : undefined,
           original: entry,
@@ -387,8 +398,8 @@ export function MinimalMagicActions({ character, updateCharacter, scrollOnlyItem
   </SharedSelect>
 </label> : null}
 {selected.additionalResourceCost ? <div className="rounded-lg border border-border bg-bg-subtle p-3 text-xs text-textH">
-  Custo adicional obrigatório: {selected.additionalResourceCost.amount} do recurso “{selected.additionalResourceCost.resourceId}”.
-  {additionalSpellResourceError(character, selected.additionalResourceCost) ? <p role="alert" className="mt-1 text-danger">{additionalSpellResourceError(character, selected.additionalResourceCost)}</p> : null}
+  {selected.additionalResourceCost.mode === "oneOf" ? "Alternativa ao espaço:" : "Custo adicional obrigatório:"} {selected.additionalResourceCost.amount} do recurso “{selected.additionalResourceCost.resourceId}”.
+  {linkedResourceError && (selected.additionalResourceCost.mode !== "oneOf" || castingResource === "linked") ? <p role="alert" className="mt-1 text-danger">{linkedResourceError}</p> : null}
 </div> : null}
 {(error || sessionRuntime?.hiddenSpellError) ? <div role="alert" className="rounded-lg border border-danger bg-dangerBg px-3 py-2 text-xs text-danger">{error || sessionRuntime?.hiddenSpellError}</div> : null}
 {pendingHiddenId && !sessionRuntime?.hiddenSpellError ? <p className="text-xs text-textMuted">Aguardando confirmação da conjuração oculta pelo servidor…</p> : null}{confirmConcentrationReplacement ? <div className="rounded-lg border border-warning bg-bg-subtle p-3 text-xs text-text"><p>O personagem já está concentrando. Usar esta magia encerra a concentração atual.</p><div className="mt-2 flex justify-end gap-2"><Button variant="secondary" onClick={() => setConfirmConcentrationReplacement(false)}>Cancelar</Button><Button variant="primary" onClick={() => executeSelectedCast(pendingRollMode)}>Substituir e usar</Button></div></div> : <div className="flex justify-end gap-2 border-t border-border pt-3">
@@ -413,7 +424,10 @@ export function MinimalMagicActions({ character, updateCharacter, scrollOnlyItem
 }
 
 function getUpcastResourceCost(spell: Spell, baseCost: SpellResourceCost, castLevel: number | null): SpellResourceCost { const level = Math.max(spell.slotLevel, Math.min(9, Math.trunc(castLevel ?? spell.slotLevel))); return { ...baseCost, amount: baseCost.amount + Math.max(0, level - spell.slotLevel) } }
-function getResourceChoices(character: CharacterTemplate, entry: MinimalSpellEntry, slotChoices: SlotChoice[]) { if (entry.additionalResourceCost) return [{ value: "slot" as CastingResource, label: `${entry.spell.slotLevel > 0 ? "Espaço de magia" : "Truque (sem espaço)"} + ${entry.additionalResourceCost.amount} recurso (${entry.additionalResourceCost.resourceId})`, disabled: Boolean(additionalSpellResourceError(character, entry.additionalResourceCost)) || (entry.spell.slotLevel > 0 && !slotChoices.length) }]; if (entry.scrollItemId) return [{ value: "ability" as CastingResource, label: "Consumir pergaminho (1 uso)", disabled: false }]; if (entry.sourceResourceCost) return [{ value: entry.sourceResourceCost.resource as CastingResource, label: `${entry.sourceResourceCost.amount} ${spellResourceLabel(entry.sourceResourceCost.resource)}`, disabled: !canPaySpellResourceCost(character, entry.sourceResourceCost) }]; if (entry.sourceCastingMode === "source") { const hasUsage = Boolean(entry.sourceUsageSource || entry.sourceEquipmentSpellUsageSource || entry.scrollItemId); return [{ value: "ability" as CastingResource, label: hasUsage ? `${entry.sourceUsageLabel || sourceLabel(entry.source)} — ${entry.sourceUsageRemaining ?? 0}/${entry.sourceUsageMaximum ?? 0} usos` : `${sourceLabel(entry.source)} — sem custo`, disabled: hasUsage ? (entry.sourceUsageRemaining ?? 0) <= 0 : false }] }; const list: Array<{ value: CastingResource; label: string; disabled: boolean }> = []; const payment = getEffectiveSpellResourceOptions(character, entry.spell); if (payment.useSlots) list.push({ value: "slot", label: "Espaço de magia", disabled: entry.spell.slotLevel > 0 && !slotChoices.length }); for (const cost of payment.resources) list.push({ value: cost.resource, label: `${cost.amount} ${spellResourceLabel(cost.resource)}`, disabled: !canPaySpellResourceCost(character, cost) }); return list }
+function getResourceChoices(character: CharacterTemplate, entry: MinimalSpellEntry, slotChoices: SlotChoice[]) { if (entry.additionalResourceCost?.mode === "oneOf") return [
+  { value: "slot" as CastingResource, label: entry.spell.slotLevel > 0 ? "Espaço de magia" : "Truque (sem espaço)", disabled: entry.spell.slotLevel > 0 && !slotChoices.length },
+  { value: "linked" as CastingResource, label: `${entry.additionalResourceCost.amount} recurso (${entry.additionalResourceCost.resourceId}) — nível original`, disabled: Boolean(additionalSpellResourceError(character, entry.additionalResourceCost)) },
+]; if (entry.additionalResourceCost) return [{ value: "slot" as CastingResource, label: `${entry.spell.slotLevel > 0 ? "Espaço de magia" : "Truque (sem espaço)"} + ${entry.additionalResourceCost.amount} recurso (${entry.additionalResourceCost.resourceId})`, disabled: Boolean(additionalSpellResourceError(character, entry.additionalResourceCost)) || (entry.spell.slotLevel > 0 && !slotChoices.length) }]; if (entry.scrollItemId) return [{ value: "ability" as CastingResource, label: "Consumir pergaminho (1 uso)", disabled: false }]; if (entry.sourceResourceCost) return [{ value: entry.sourceResourceCost.resource as CastingResource, label: `${entry.sourceResourceCost.amount} ${spellResourceLabel(entry.sourceResourceCost.resource)}`, disabled: !canPaySpellResourceCost(character, entry.sourceResourceCost) }]; if (entry.sourceCastingMode === "source") { const hasUsage = Boolean(entry.sourceUsageSource || entry.sourceEquipmentSpellUsageSource || entry.scrollItemId); return [{ value: "ability" as CastingResource, label: hasUsage ? `${entry.sourceUsageLabel || sourceLabel(entry.source)} — ${entry.sourceUsageRemaining ?? 0}/${entry.sourceUsageMaximum ?? 0} usos` : `${sourceLabel(entry.source)} — sem custo`, disabled: hasUsage ? (entry.sourceUsageRemaining ?? 0) <= 0 : false }] }; const list: Array<{ value: CastingResource; label: string; disabled: boolean }> = []; const payment = getEffectiveSpellResourceOptions(character, entry.spell); if (payment.useSlots) list.push({ value: "slot", label: "Espaço de magia", disabled: entry.spell.slotLevel > 0 && !slotChoices.length }); for (const cost of payment.resources) list.push({ value: cost.resource, label: `${cost.amount} ${spellResourceLabel(cost.resource)}`, disabled: !canPaySpellResourceCost(character, cost) }); return list }
 function buildAvailableSpells(character: CharacterTemplate, getSpellByIndex: (index: string) => Spell | undefined): MinimalSpellEntry[] { const classes = character.get("sheet").classes ?? [], entries: MinimalSpellEntry[] = []; const grants = getCharacterGrantedSpells(character); for (const known of character.get("magic")?.spells.knownSpells ?? []) { const spell = getSpellByIndex(known.spells.id); if (!spell) continue; const alwaysAvailable = isAlwaysAvailableSpell(spell, known.source, classes); if (!alwaysAvailable && !known.spells.prepared) continue; entries.push({ key: `known:${known.source.type}:${known.source.sourceId}:${spell.index}`, spell, source: known.source, sourceCastingMode: "slots", additionalResourceCost: grants.find(grant => grant.index === spell.index && grant.source.sourceId === known.source.sourceId)?.additionalResourceCost }) } for (const grant of grants) { if (grant.additionalResourceCost && entries.some(entry => entry.spell.index === grant.index && entry.source.sourceId === grant.source.sourceId)) continue; const spell = getSpellByIndex(grant.index); if (!spell) continue; const maximum = grant.usage ? getAbilityUsageMax(character, grant.usage) : undefined, remaining = grant.usage && maximum !== undefined ? Math.max(0, maximum - grant.usage.used) : undefined; entries.push({ key: grant.key, spell, source: grant.source, sourceCastingMode: grant.resourceCost ? "source" : grant.castingMode === "known" ? "slots" : "source", sourceUsageRemaining: remaining, sourceUsageMaximum: maximum, sourceUsageLabel: grant.usageSource || grant.equipmentSpellUsageSource ? grant.source.name || "Carga da fonte" : undefined, sourceUsageSource: grant.usageSource, sourceEquipmentSpellUsageSource: grant.equipmentSpellUsageSource, sourceResourceCost: grant.resourceCost, additionalResourceCost: grant.additionalResourceCost, scrollItemId: grant.scrollItemId }) } return entries }
 function getCastLevels(spell: Spell, resource: CastingResource, slots: SlotChoice[]): number[] { if (resource === "slot") return Array.from(new Set(slots.map((choice) => choice.level))); return Array.from({ length: Math.max(1, 10 - spell.slotLevel) }, (_, index) => spell.slotLevel + index).filter((level) => level >= 1 && level <= 9) }
 function isAlwaysAvailableSpell(spell: Spell, source: SpellSource, classes: CharacterClassInterface[]): boolean { if (spell.slotLevel === 0 || source.type !== "class") return true; const data = classes.find((entry) => entry.className === source.name); return !data?.knownSpells || data.knownSpells.mode === "limited" }

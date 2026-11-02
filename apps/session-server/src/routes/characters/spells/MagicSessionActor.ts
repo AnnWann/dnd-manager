@@ -518,6 +518,7 @@ function applySpellCastPayment(
   payment: SessionSpellCastPayment,
 ): CastPaymentResult {
   if (grant?.additionalResourceCost) return paySpellSlotAndAdditionalResource(character, spell, grant.additionalResourceCost, castLevel, payment);
+  if (payment.type === "linked-resource") return { ok: false, code: "SPELL_RESOURCE_PAYMENT_INVALID", message: "Esta origem não permite pagar com o recurso vinculado." };
   if (grant?.scrollItemId) {
     if (payment.type !== "scroll" || payment.itemId !== grant.scrollItemId) {
       return { ok: false, code: "SCROLL_PAYMENT_REQUIRED", message: "This spell can only be cast by consuming its scroll." };

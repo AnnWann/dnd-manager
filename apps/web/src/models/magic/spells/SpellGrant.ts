@@ -4,10 +4,10 @@ import type { SpellResourceCost } from "./Spell"
 
 export type SpellGrantCastingMode = "source" | "known"
 
-export type AdditionalSpellResourceCost = { resourceId: string; amount: number }
+export type AdditionalSpellResourceCost = { resourceId: string; amount: number; mode?: "all" | "oneOf" }
 
 export type SpellGrant = {
-  /** Cumulative cost: keep normal spell slots and also spend this counter. */
+  /** Counter payment: cumulative by default; oneOf allows slots OR this counter. */
   additionalResourceCost?: AdditionalSpellResourceCost
   index: string
   castingMode?: SpellGrantCastingMode

@@ -186,16 +186,17 @@ export function GrantedSpellsEditor({
                   <label className="grid gap-1">
                     <span className="text-[11px] font-medium text-textMuted">Forma de acesso</span>
                     <Select
-                      value={grant.additionalResourceCost ? "known-resource" : castingMode}
+                      value={grant.additionalResourceCost ? grant.additionalResourceCost.mode === "oneOf" ? "known-resource-or" : "known-resource" : castingMode}
                       onChange={(event) => updateGrant(index, {
-                        castingMode: event.target.value === "known-resource" ? "known" : event.target.value as SpellGrantCastingMode,
+                        castingMode: event.target.value.startsWith("known-resource") ? "known" : event.target.value as SpellGrantCastingMode,
                         resourceCost: event.target.value !== "source" ? undefined : grant.resourceCost,
-                        additionalResourceCost: event.target.value === "known-resource" ? (grant.additionalResourceCost ?? { resourceId: "", amount: 1 }) : undefined,
+                        additionalResourceCost: event.target.value.startsWith("known-resource") ? { ...(grant.additionalResourceCost ?? { resourceId: "", amount: 1 }), mode: event.target.value === "known-resource-or" ? "oneOf" : "all" } : undefined,
                       })}
                     >
                       <option value="source">Apenas pela origem</option>
                       <option value="known">Aprende e usa espaços normais</option>
-                      <option value="known-resource">Aprende e usa espaços + recurso</option>
+                      <option value="known-resource">Aprende e usa espaços E recurso</option>
+                      <option value="known-resource-or">Aprende e usa espaços OU recurso</option>
                     </Select>
                   </label>
 
@@ -216,7 +217,7 @@ export function GrantedSpellsEditor({
                     <Input type="number" min={1} max={1000} value={grant.additionalResourceCost.amount}
                       onChange={event => updateGrant(index, { additionalResourceCost: { ...grant.additionalResourceCost!, amount: Math.max(1, Math.trunc(Number(event.target.value) || 1)) } })} />
                   </label>
-                  <p className="text-[11px] text-textMuted">Os dois custos são obrigatórios. Use o ID compartilhado configurado no recurso da habilidade, ou o ID da habilidade que possui o contador. Truques gastam apenas o recurso adicional.</p>
+                  <p className="text-[11px] text-textMuted">{grant.additionalResourceCost.mode === "oneOf" ? "Escolha ao conjurar: espaço OU recurso. O recurso conjura no nível original; espaços permitem níveis superiores." : "Os dois custos são obrigatórios. Truques gastam apenas o recurso adicional."} Use o ID compartilhado configurado no recurso da habilidade, ou o ID da habilidade que possui o contador.</p>
                   <div className="rounded-lg border border-border bg-bg p-3 text-xs text-textMuted">
                     <p className="font-medium text-textH">Recuperação do recurso</p>
                     <p>{character ? getAdditionalSpellResourceRecovery(character, grant.additionalResourceCost) : "Segue a recuperação do contador vinculado pelo ID."}</p>
@@ -307,7 +308,7 @@ export function GrantedSpellsEditor({
 
                 {castingMode === "known" ? (
                   <div className="rounded-lg bg-accentBg px-3 py-2 text-[11px] text-textH">
-                    Esta magia aparecerá na lista de magias do personagem e poderá usar espaços normais de magia.{grant.additionalResourceCost ? " O recurso adicional também será consumido a cada conjuração." : ""}
+                    Esta magia aparecerá na lista de magias do personagem e poderá usar espaços normais de magia.{grant.additionalResourceCost ? grant.additionalResourceCost.mode === "oneOf" ? " Você pode usar o recurso vinculado no lugar do espaço." : " O recurso adicional também será consumido a cada conjuração." : ""}
                   </div>
                 ) : null}
               </div>

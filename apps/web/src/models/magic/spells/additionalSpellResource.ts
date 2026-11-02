@@ -10,6 +10,7 @@ type ResourceEntry = { ability: Ability; update: (character: CharacterTemplate, 
 export function validateAdditionalSpellResource(cost: AdditionalSpellResourceCost): string | undefined {
   if (!cost || typeof cost.resourceId !== "string" || !cost.resourceId.trim() || cost.resourceId.length > 200) return "Informe o ID do recurso adicional."
   if (!Number.isSafeInteger(cost.amount) || cost.amount < 1 || cost.amount > 1000) return "O custo adicional deve ser um inteiro entre 1 e 1000."
+  if (cost.mode !== undefined && cost.mode !== "all" && cost.mode !== "oneOf") return "Escolha espaço e recurso, ou espaço ou recurso."
   return undefined
 }
 
@@ -85,14 +86,24 @@ export function paySpellSlotAndAdditionalResource(
   castLevel: number,
   payment: { type: string; pool?: string; level?: number },
 ): { ok: true; character: CharacterTemplate } | { ok: false; code: string; message: string } {
-  const resource = resolveResource(character, cost)
-  if (resource.error || !resource.matches) return { ok: false, code: "SPELL_ADDITIONAL_RESOURCE_UNAVAILABLE", message: resource.error! }
+  const invalid = validateAdditionalSpellResource(cost)
+  if (invalid) return { ok: false, code: "SPELL_ADDITIONAL_RESOURCE_UNAVAILABLE", message: invalid }
   if (!Number.isInteger(castLevel) || castLevel < spell.slotLevel || castLevel > 9) return { ok: false, code: "SPELL_SLOT_PAYMENT_INVALID", message: "Nível de conjuração inválido." }
+  const alternative = cost.mode === "oneOf"
+  const useResourceOnly = alternative && payment.type === "linked-resource"
+  if (useResourceOnly && castLevel !== spell.slotLevel) return { ok: false, code: "SPELL_RESOURCE_PAYMENT_INVALID", message: "O recurso substitui o espaço apenas no nível original da magia." }
+  const resource = !alternative || useResourceOnly ? resolveResource(character, cost) : undefined
+  if (resource && (resource.error || !resource.matches)) return { ok: false, code: "SPELL_ADDITIONAL_RESOURCE_UNAVAILABLE", message: resource.error! }
+  if (useResourceOnly) {
+    let next = character
+    for (const entry of resource!.matches!) next = entry.update(next, resource!.used! + cost.amount)
+    return { ok: true, character: next }
+  }
   let next = character
   if (spell.slotLevel === 0) {
     if (payment.type !== "none" || castLevel !== 0) return { ok: false, code: "SPELL_SLOT_PAYMENT_INVALID", message: "Truques não consomem espaços, mas exigem o recurso adicional." }
   } else {
-    if (payment.type !== "slot" || payment.level !== castLevel) return { ok: false, code: "SPELL_SLOT_PAYMENT_REQUIRED", message: "Esta magia exige espaço de magia e o recurso adicional." }
+    if (payment.type !== "slot" || payment.level !== castLevel) return { ok: false, code: "SPELL_SLOT_PAYMENT_REQUIRED", message: alternative ? "Escolha espaço de magia ou o recurso vinculado." : "Esta magia exige espaço de magia e o recurso adicional." }
     if (payment.pool === "pact") {
       const pact = character.getPactSlots()
       if (!pact || pact.level !== castLevel || pact.current < 1) return { ok: false, code: "PACT_SLOT_UNAVAILABLE", message: "Espaço de pacto indisponível." }
@@ -102,6 +113,6 @@ export function paySpellSlotAndAdditionalResource(
       next = character.spendSpellSlot(castLevel as MagicCircleLevel)
     }
   }
-  for (const entry of resource.matches) next = entry.update(next, resource.used! + cost.amount)
+  for (const entry of resource?.matches ?? []) next = entry.update(next, resource!.used! + cost.amount)
   return { ok: true, character: next }
 }

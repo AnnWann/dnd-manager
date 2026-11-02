@@ -180,7 +180,7 @@ export function KnownSpellsList({ character, updateCharacter }: Props) {
     const remaining = entry.usage
       ? Math.max(0, entry.usage.max - entry.usage.used)
       : undefined
-    const originAccessLabel = entry.additionalResourceCost ? `${spell.slotLevel === 0 ? "Truque" : "Espaços normais"} + ${entry.additionalResourceCost.amount} recurso (${entry.additionalResourceCost.resourceId})` :
+    const originAccessLabel = entry.additionalResourceCost ? `${spell.slotLevel === 0 ? "Truque" : "Espaços normais"} ${entry.additionalResourceCost.mode === "oneOf" ? "OU" : "+"} ${entry.additionalResourceCost.amount} recurso (${entry.additionalResourceCost.resourceId})` :
       entry.castingMode === "known"
         ? "Usa espaços normais"
         : entry.usage
