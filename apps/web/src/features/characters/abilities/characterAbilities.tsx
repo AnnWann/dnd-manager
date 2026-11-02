@@ -1,4 +1,4 @@
-import { abilityRequiresWeaponAttributeSelection, getAbilityAttackRiderDamageChoices, optionRequiresWeaponSelection } from "../../../models/combat/AttackRider"
+import { abilityNeedsActivationDialog } from "../../../models/abilities/abilityActivationDialog"
 import { getInitiativeRollSelection } from "../../initiative/initiativeRollSelection"
 import { useEffect, useMemo, useState } from "react"
 
@@ -21,10 +21,8 @@ import { CharacterTemplate } from "../../../models/characters/CharacterTemplate"
 import { AbilityCard } from "./abilityCard"
 import { AbilityDialog } from "./abilityDialog"
 import { AbilityResourceActivationModal } from "./abilityResourceActivationModal"
-import { hasAbilityResourceCosts, spendAbilityResourceCosts } from "../../../models/abilities/abilityResourceCosts"
-import { abilityHasSelfDamage } from "../../../models/abilities/abilitySelfDamage"
+import { spendAbilityResourceCosts } from "../../../models/abilities/abilityResourceCosts"
 import { shouldRequestSeparateAbilityActionRoll } from "../../../models/abilities/shouldRollAbilityAction"
-import { hasManualBonusRolls, listBonusRollRequirements } from "../../../models/bonuses/BonusRoll"
 import { CompactAbilityCard } from "./compactAbilityCard"
 
 type Props = {
@@ -188,11 +186,7 @@ export function CharacterAbilitiesTab({ character, updateCharacter }: Props) {
   }
 
   function requestUseAbility(ability: Ability) {
-    const requiresPhysicalRollInput =
-      Boolean(sessionRuntime)
-      && !digitalDiceEnabled
-      && listBonusRollRequirements(ability.bonuses).length > 0
-    if (ability.manualInputs?.length || optionRequiresWeaponSelection(ability) || abilityRequiresWeaponAttributeSelection(ability) || getAbilityAttackRiderDamageChoices(ability).length > 0 || (ability.activationOptions ?? []).some(option => getAbilityAttackRiderDamageChoices(ability, option.id).length > 0) || (ability.activationOptions?.length ?? 0) > 0 || hasAbilityResourceCosts(ability) || abilityHasSelfDamage(ability) || ability.resourceUpcast?.enabled || hasManualBonusRolls(ability.bonuses) || requiresPhysicalRollInput || (ability.targeting?.mode === "targets" || ability.targeting?.mode === "point")) {
+    if (abilityNeedsActivationDialog(ability, Boolean(sessionRuntime) && !digitalDiceEnabled)) {
       setActivationChoice(ability)
       return
     }
