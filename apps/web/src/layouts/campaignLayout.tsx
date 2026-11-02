@@ -453,6 +453,11 @@ export function CampaignLayout() {
       active: location.pathname === toSession("initiative"),
       onClick: () => navigate(toSession("initiative")),
     },
+    {
+      label: "Acompanhantes", icon: <IconCompendium />,
+      active: location.pathname === toSession("companions"),
+      onClick: () => navigate(toSession("companions")),
+    },
     ...(effectiveUserRole !== "master"
       ? [{
           label: "Minhas criaturas",

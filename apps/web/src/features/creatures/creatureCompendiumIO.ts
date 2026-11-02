@@ -61,6 +61,10 @@ export function getCreatureJsonTemplate(): string {
       initiativeBonus: 0,
       armorClass: 15,
       maxHp: 75,
+      hitDice: "10d8+30",
+      controlKind: "companion",
+      showInCompanions: false,
+      ownerUserId: "",
       speed: "9 m",
       passivePerception: 12,
 
@@ -328,6 +332,7 @@ export async function downloadCreaturePackZip(
       "Traços, ações, ações bônus, reações e ações lendárias são listas de objetos com name, description e mechanics opcional.",
       "Mecânicas das características: kind attack, save, check, contest ou damage. Os componentes damage[] aceitam formula, damageType (incluindo healing), label e optional.",
       "Para ações limitadas, use usage: { max: 3, reset: \"longRest\" }, ou shortRest/manual.",
+      "hitDice usa uma fórmula como 10d8+30. showInCompanions exibe apenas nome e imagem na galeria do grupo; ownerUserId concede controle e acesso à ficha.",
       "Afinidades estruturadas usam damageAffinities[] e drops usam guaranteed[] + rollGroups[] + conditional[] (cada entrada condicional contém item e dmHint).",
       "Conjuração de criatura usa spellcasting: casterLevel, ability, saveDc/attackBonus opcionais, slots e spells[] com uso atWill, perDay ou slots.",
       "IDs e timestamps podem ser omitidos em JSONs manuais; o aplicativo os gera automaticamente.",

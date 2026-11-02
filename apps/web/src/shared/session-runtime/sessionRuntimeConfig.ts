@@ -1,3 +1,5 @@
+import { projectCompanionPortraits, type CompanionPortrait } from "./companionPortraits"
+import { inferCreatureHitDice, normalizeCreatureHitDice } from "../../models/creatures/CreatureHitDice"
 import type { CriticalDamageSettings } from "./criticalDamage"
 import type {
   CreationCharacterCustomSystemConfiguration,
@@ -33,7 +35,9 @@ export type SessionRuntimeConfig = {
   characters: SessionRuntimeCharacterConfig[]
   spells: Spell[]
   customSystems: CustomSystemDefinition[]
-  /** MASTER-only rules data used to adjudicate compendium combatants. */
+  /** Public name/portrait gallery, without creature rules or private metadata. */
+  companionPortraits?: CompanionPortrait[]
+  /** MASTER-only rules data, also shared with an explicitly assigned owner. */
   creatureCompendium: CompendiumCreature[]
 }
 
@@ -81,7 +85,8 @@ export function toSessionRuntimeConfig(
     })),
     spells: creation.spells,
     customSystems: creation.customSystems,
-    creatureCompendium: creation.creatureCompendium,
+    creatureCompendium: creation.creatureCompendium.map(creature => ({ ...creature, hitDice: normalizeCreatureHitDice(creature.hitDice) ?? inferCreatureHitDice(creature) })),
+    companionPortraits: projectCompanionPortraits(creation.creatureCompendium),
   }
 }
 

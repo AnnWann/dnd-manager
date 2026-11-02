@@ -1,3 +1,4 @@
+import { projectCompanionPortraits } from "../../../../web/src/shared/session-runtime/companionPortraits";
 import type {
   SessionRuntimeCharacterConfig,
   SessionRuntimeConfigSnapshot,
@@ -90,6 +91,7 @@ export function visibleRuntimeConfigSnapshot(
     creationRevision: snapshot.creationRevision,
     config: {
       ...snapshot.config,
+      companionPortraits: projectCompanionPortraits(snapshot.config.creatureCompendium),
       characters: snapshot.config.characters.filter((character) =>
         canViewRuntimeCharacter(connection, character),
       ),

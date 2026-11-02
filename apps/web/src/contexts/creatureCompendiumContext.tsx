@@ -15,6 +15,7 @@ import {
 } from "../lib/creatureCompendiumRepository"
 import {
   duplicateCompendiumCreature,
+  normalizeCompendiumCreature,
   type CompendiumCreature,
   type CreatureCompendiumState,
 } from "../models/creatures/CompendiumCreature"
@@ -232,7 +233,7 @@ export function useCreatureCompendium(): CreatureCompendiumContextValue {
     }
 
     return {
-      creatures: editor.draft.creatureCompendium,
+      creatures: editor.draft.creatureCompendium.map(normalizeCompendiumCreature),
       folders: editor.draft.creatureFolders ?? [],
       setFolders: (folders: string[]) => editor.updateDraft(draft => ({ ...draft, creatureFolders: folders })),
       hydrated: creationMigrationReady,

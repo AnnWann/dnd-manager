@@ -1,3 +1,4 @@
+import { inferCreatureHitDice } from "../../models/creatures/CreatureHitDice"
 import { FileImage, Shield, Swords } from "lucide-react"
 import { useEffect, useState, type MouseEvent as ReactMouseEvent } from "react"
 
@@ -53,6 +54,7 @@ export type CombatQuickSheetData = {
   initiativeBonus?: number
   armorClass?: number
   currentHp?: number
+  hitDice?: string
   maxHp?: number
   temporaryHp?: number
   speed?: string
@@ -194,7 +196,7 @@ function QuickSheetSummary({ data, compact = false, onRestoreSpellSlot }: Pick<C
               : `${data.currentHp ?? "—"}/${data.maxHp ?? "—"}`
           }
           detail={
-            data.temporaryHp ? `+${data.temporaryHp} temporários` : undefined
+            [data.hitDice && `DV: ${data.hitDice}`, data.temporaryHp ? `+${data.temporaryHp} temporários` : undefined].filter(Boolean).join(" · ") || undefined
           }
         />
         <StatCard label="Deslocamento" value={data.speed || "—"} />
@@ -1053,6 +1055,7 @@ export function quickSheetFromCompendiumCreature(
     armorClass: getCreatureEffectiveArmorClass(creature, conditions, entry),
     currentHp: entry?.currentHp ?? creature.maxHp,
     maxHp: entry?.maxHp ?? creature.maxHp,
+    hitDice: creature.hitDice ?? inferCreatureHitDice(creature),
     temporaryHp: entry?.temporaryHp,
     speed: creature.speed,
     passivePerception: creature.passivePerception,

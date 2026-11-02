@@ -44,5 +44,10 @@ for (const [label, conditional] of [
   }
 }
 test('JSON template documents native conditional drops', () => {
-  assert.equal(JSON.parse(getCreatureJsonTemplate()).drops.conditional.length, 1)
+  const template = JSON.parse(getCreatureJsonTemplate())
+  assert.equal(template.drops.conditional.length, 1)
+  assert.equal(template.hitDice, '10d8+30')
+  assert.equal(template.controlKind, 'companion')
+  assert.equal(template.showInCompanions, false)
+  assert.equal(template.ownerUserId, '')
 })

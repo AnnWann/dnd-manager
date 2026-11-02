@@ -1,3 +1,4 @@
+import { inferCreatureHitDice, normalizeCreatureHitDice } from "./CreatureHitDice"
 import type { Attribute } from "../sheet/Attribute"
 import type { Skill } from "../sheet/Skills"
 import { inferDamageAffinitiesFromLegacy, normalizeDamageAffinities, type DamageAffinity, type DamageType } from "../combat/Damage"
@@ -97,6 +98,9 @@ export type CompendiumCreature = {
 
   initiativeBonus: number
   armorClass?: number
+  hitDice?: string
+  /** Opt-in portrait/name shown in the session companion gallery. */
+  showInCompanions?: boolean
   maxHp?: number
   speed: string
   passivePerception?: number
@@ -192,6 +196,8 @@ export function createCompendiumCreature(
     initiativeBonus: finiteNumber(patch.initiativeBonus),
     armorClass: optionalFiniteNumber(patch.armorClass),
     maxHp: optionalFiniteNumber(patch.maxHp),
+    hitDice: normalizeCreatureHitDice(patch.hitDice) ?? inferCreatureHitDice(patch),
+    showInCompanions: patch.showInCompanions === true,
     speed: patch.speed ?? "9 m",
     passivePerception: optionalFiniteNumber(patch.passivePerception),
     abilityScores: normalizeAbilityScores(patch.abilityScores),
@@ -209,7 +215,7 @@ export function createCompendiumCreature(
     senses: patch.senses ?? "",
     languages: patch.languages ?? "",
     ownerUserId: optionalStringValue(patch.ownerUserId),
-    controlKind: patch.controlKind ?? "familiar",
+    controlKind: patch.controlKind ?? "companion",
     spellcasting: normalizeCreatureSpellcasting(patch.spellcasting),
     traits: normalizeCreatureFeatures(patch.traits, "Traço"),
     actions: normalizeCreatureFeatures(patch.actions, "Ação"),
@@ -256,6 +262,12 @@ export function normalizeCompendiumCreature(raw: unknown): CompendiumCreature {
     initiativeBonus: finiteNumber(value.initiativeBonus),
     armorClass: optionalFiniteNumber(value.armorClass),
     maxHp: optionalFiniteNumber(value.maxHp),
+    hitDice: normalizeCreatureHitDice(value.hitDice) ?? inferCreatureHitDice({
+      maxHp: optionalFiniteNumber(value.maxHp), size: stringValue(value.size, "Médio"),
+      challengeRating: stringValue(value.challengeRating),
+      abilityScores: { con: finiteNumber(abilityScores?.con, 10) },
+    }),
+    showInCompanions: value.showInCompanions === true,
     speed: stringValue(value.speed, "9 m"),
     passivePerception: optionalFiniteNumber(value.passivePerception),
     abilityScores: {
@@ -285,7 +297,7 @@ export function normalizeCompendiumCreature(raw: unknown): CompendiumCreature {
     senses: stringValue(value.senses),
     languages: stringValue(value.languages),
     ownerUserId: optionalStringValue(value.ownerUserId),
-    controlKind: value.controlKind === "companion" || value.controlKind === "mount" ? value.controlKind : "familiar",
+    controlKind: value.controlKind === "familiar" || value.controlKind === "mount" ? value.controlKind : "companion",
     spellcasting: normalizeCreatureSpellcasting(value.spellcasting),
     traits: normalizeCreatureFeatures(
       value.traits ?? featureGroups?.traits,

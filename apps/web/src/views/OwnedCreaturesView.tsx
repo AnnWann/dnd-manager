@@ -98,7 +98,7 @@ export function OwnedCreaturesView() {
       {creatures.length ? (
         <div className="grid gap-6">
           {(["familiar", "companion", "mount"] as const).map(kind => {
-            const group = creatures.filter(creature => (creature.controlKind ?? "familiar") === kind)
+            const group = creatures.filter(creature => (creature.controlKind ?? "companion") === kind)
             return group.length ? (
               <section key={kind} className="grid gap-3">
                 <h2 className="text-sm font-semibold text-textH">{kind === "companion" ? "Acompanhantes" : kind === "mount" ? "Montarias" : "Familiares"}</h2>
