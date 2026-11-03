@@ -62,6 +62,7 @@ import {
   removeInitiativeEntry,
   rewindInitiativeTurn,
   rollInitiative,
+  synchronizeSharedCombatantState,
   sortInitiativeEntries,
   startInitiativeCombat,
   tradeConsecutiveAllies,
@@ -90,6 +91,7 @@ export function InitiativeView() {
   const [selectedCharacterId, setSelectedCharacterId] = useState("")
   const [selectedCharacterSide, setSelectedCharacterSide] =
     useState<InitiativeSide>("ally")
+  const [selectedCharacterHidden, setSelectedCharacterHidden] = useState(false)
   const [creaturePickerOpen, setCreaturePickerOpen] = useState(false)
   const [sharedCreatureInitiative, setSharedCreatureInitiative] =
     useState(false)
@@ -215,12 +217,10 @@ export function InitiativeView() {
   }, [session.entries])
 
   function patchEntry(entryId: string, patch: Partial<InitiativeEntry>) {
-    updateSession((current) =>
-      updateInitiativeEntry(current, entryId, (entry) => ({
-        ...entry,
-        ...patch,
-      })),
-    )
+    updateSession((current) => {
+      const next = updateInitiativeEntry(current, entryId, (entry) => ({ ...entry, ...patch }))
+      return patch.hidden === undefined ? next : synchronizeSharedCombatantState(next, entryId)
+    })
   }
 
   function openRename(entryId: string) {
@@ -309,6 +309,7 @@ export function InitiativeView() {
           initiativeBonus,
           dexterity: selectedCharacter.getEffectiveAttribute("dex"),
           side: selectedCharacterSide,
+          hidden: sheet.type !== "pc" && selectedCharacterHidden,
           armorClass: getEffectiveArmorClassWithShield(selectedCharacter),
           currentHp: sheet.HP.current,
           maxHp: selectedCharacter.getEffectiveMaxHp(),
@@ -318,7 +319,7 @@ export function InitiativeView() {
     )
   }
 
-  function addSelectedCreatures(selections: CreatureInitiativeSelection[]) {
+  function addSelectedCreatures(selections: CreatureInitiativeSelection[], hidden: boolean) {
     if (!selections.length) return
     // One batch operation also works in authoritative initiative sessions.
     updateSession(current => {
@@ -327,7 +328,7 @@ export function InitiativeView() {
         entries.push(...createCreatureInitiativeEntries(
           creature,
           [...current.entries, ...entries],
-          { quantity: requestedQuantity, sharedInitiative: sharedCreatureInitiative, digitalDiceEnabled },
+          { quantity: requestedQuantity, hidden, sharedInitiative: sharedCreatureInitiative, digitalDiceEnabled },
         ))
       }
       return entries.length ? addInitiativeEntries(current, entries) : current
@@ -345,6 +346,7 @@ export function InitiativeView() {
 
     const entries = Array.from({ length: draft.quantity }, (_, index) => ({
       sourceType: draft.sourceType,
+      hidden: draft.hidden,
       name:
         draft.quantity === 1 && existingCopies === 0
           ? draft.name
@@ -614,6 +616,12 @@ export function InitiativeView() {
               <option value="enemy">Inimigo</option>
               <option value="neutral">Neutro</option>
             </SharedSelect>
+            {selectedCharacter && selectedCharacter.get("sheet").type !== "pc" ? (
+              <label className="flex items-center gap-2 text-xs text-textMuted">
+                <input type="checkbox" checked={selectedCharacterHidden} onChange={event => setSelectedCharacterHidden(event.target.checked)} />
+                Entrar oculto para os jogadores
+              </label>
+            ) : null}
             <Button
               variant="primary"
               onClick={addSelectedCharacter}

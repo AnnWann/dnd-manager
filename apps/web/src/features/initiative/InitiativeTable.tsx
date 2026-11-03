@@ -8,6 +8,7 @@ import {
   ConditionChips,
   DeathSaveCounter,
   EntryIdentity,
+  InitiativeVisibilityButton,
   HitPointEditor,
   InitiativeEditor,
   TradeControls,
@@ -162,6 +163,7 @@ function TableEntryRows({
         </td>
         <td className="px-3 py-3">
           {!readOnly ? <div className="flex justify-end gap-1">
+            {entry.sourceType !== "character" ? <InitiativeVisibilityButton entry={entry} onChange={hidden => patchEntry(entry.id, { hidden })} /> : null}
             {onRename ? (
               <Button size="icon" variant="ghost" title="Nome no combate" onClick={() => onRename(entry.id)}>
                 <Pencil className="h-4 w-4" />

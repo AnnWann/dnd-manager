@@ -28,6 +28,7 @@ export type CustomInitiativeEntryDraft = {
   initiativeBonus: number
   armorClass?: number
   maxHp?: number
+  hidden: boolean
   sharedInitiative: boolean
 }
 
@@ -53,6 +54,7 @@ const initialCustomDraft: CustomInitiativeEntryDraft = {
   side: "enemy",
   quantity: 1,
   initiativeBonus: 0,
+  hidden: false,
   sharedInitiative: false,
 }
 
@@ -191,6 +193,10 @@ export function CustomEntryDialog({
             }
           />
           Usar a mesma rolagem para todas as cópias
+        </label>
+        <label className="flex items-center gap-3 rounded-lg border border-border bg-bg-subtle p-3 text-sm text-textH sm:col-span-2">
+          <input type="checkbox" checked={draft.hidden} onChange={event => setDraft(current => ({ ...current, hidden: event.target.checked }))} />
+          Entrar oculto para os jogadores
         </label>
       </div>
 

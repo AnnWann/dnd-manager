@@ -7,6 +7,7 @@ import {
   ConditionChips,
   DeathSaveCounter,
   EntryIdentity,
+  InitiativeVisibilityButton,
   TradeControls,
   formatHp,
 } from "./InitiativeEntryParts"
@@ -215,6 +216,7 @@ export function InitiativeCards({
                       canTrade={props.canTrade}
                     />
                     <div className="flex gap-1">
+                      {entry.sourceType !== "character" ? <InitiativeVisibilityButton entry={entry} onChange={hidden => props.patchEntry(entry.id, { hidden })} /> : null}
                       {props.onRename ? (
                         <Button size="icon" variant="ghost" title="Nome no combate" onClick={() => props.onRename?.(entry.id)}>
                           <Pencil className="h-4 w-4" />

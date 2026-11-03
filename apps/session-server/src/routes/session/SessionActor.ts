@@ -1025,9 +1025,10 @@ export class SessionActor extends DurableObject<Env> {
     // registration. Use the authoritative total; do not roll again on clients.
     if (request.source.type === "initiative" && resolved.result.kind === "initiative") {
       try {
-        await this.registerRolledCharacterInitiative(
+        const hidden = await this.registerRolledCharacterInitiative(
           request, resolved.result, character, abilities, hpState, conditionsState,
         );
+        if (hidden) resolved.result.visibility = "roller-master";
       } catch (error) {
         this.sendError(
           webSocket,
@@ -1048,9 +1049,9 @@ export class SessionActor extends DurableObject<Env> {
     abilities: Record<string, SessionAbilityState>,
     hp: Record<string, SessionHpState>,
     conditions: Record<string, SessionConditionsState>,
-  ): Promise<void> {
+  ): Promise<boolean> {
     const characterId = request.characterId;
-    if (!characterId || result.kind !== "initiative") return;
+    if (!characterId || result.kind !== "initiative") return false;
 
     const transaction = await this.ctx.storage.transaction(async (storage) => {
       const previous = await storage.get<SessionInitiativeState>("initiative-state");
@@ -1106,12 +1107,13 @@ export class SessionActor extends DurableObject<Env> {
         session: projected,
       };
       await storage.put("initiative-state", state);
-      return { state, initialized };
+      return { state, initialized, hidden: existing?.hidden === true || request.visibility === "roller-master" };
     });
-    this.broadcastSessionRaw({
+    broadcastVisibilityFiltered(this.ctx.getWebSockets(), {
       type: transaction.initialized ? "session.initiative.updated" : "session.initiative.snapshot",
       state: transaction.state,
     });
+    return transaction.hidden;
   }
 
   private async resolveManualRollAttribution(
