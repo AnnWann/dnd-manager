@@ -242,6 +242,7 @@ export class SessionActor extends ComposedSessionActor {
       const sockets = this.ctx.getWebSockets();
       refreshAllConnectionVisibility(sockets, snapshot);
       broadcastRuntimeConfig(sockets, snapshot);
+      await Promise.all(sockets.map(socket => this.sendCompanionsSnapshot(socket)));
       await broadcastAllVisibleCharacterSnapshots(this.ctx.storage, sockets);
       await this.reconcileInitiativeProjection();
       return;

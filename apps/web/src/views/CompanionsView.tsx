@@ -1,3 +1,5 @@
+import { CreaturePortraitCard } from "../features/creatures/CreaturePortraitCard"
+import { CreatureStateDialog } from "./CreatureStateDialog"
 import { useState } from "react"
 import { Button } from "../components/ui/Button"
 import { Input } from "../components/ui/Input"
@@ -9,6 +11,7 @@ import { projectCompanionPortraits } from "../shared/session-runtime/companionPo
 
 export function CompanionsView() {
   const runtime = useOptionalSessionRuntime()
+  const [viewingId, setViewingId] = useState<string>()
   const [adding, setAdding] = useState(false)
   const [query, setQuery] = useState("")
   const [saving, setSaving] = useState(false)
@@ -74,16 +77,10 @@ export function CompanionsView() {
       {companions.length ? (
         <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
           {companions.map(companion => (
-            <article key={companion.id} className="overflow-hidden rounded-xl border border-border bg-bg shadow-theme-sm">
-              <div className="aspect-[16/9] overflow-hidden bg-bg-subtle">
-                {companion.imageUrl ? <img src={companion.imageUrl} alt={companion.name} className="h-full w-full object-contain object-center" />
-                  : <div className="flex h-full items-center justify-center"><FileImage className="h-10 w-10 text-textMuted" /></div>}
-              </div>
-              <div className="flex items-center justify-between gap-2 p-4">
-                <h2 className="font-heading text-base font-semibold text-textH">{companion.name}</h2>
-                {isMaster ? <Button variant="ghost" size="sm" aria-label={`Remover ${companion.name} dos acompanhantes`} disabled={!canEdit || saving} onClick={() => void setVisible(companion.id, false)}><X className="h-4 w-4" /></Button> : null}
-              </div>
-            </article>
+            <CreaturePortraitCard key={companion.id} name={companion.name} imageUrl={companion.imageUrl}
+              onOpen={isMaster ? () => setViewingId(companion.id) : undefined}
+              actions={isMaster ? <Button variant="ghost" size="sm" aria-label={`Remover ${companion.name} dos acompanhantes`} disabled={!canEdit || saving} onClick={() => void setVisible(companion.id, false)}><X className="h-4 w-4" /></Button> : undefined}
+            />
           ))}
         </div>
       ) : (
@@ -91,6 +88,7 @@ export function CompanionsView() {
           Nenhum acompanhante apresentado.{isMaster ? " Use Adicionar acompanhante para escolher uma criatura." : " O mestre pode adicionar acompanhantes ao grupo."}
         </section>
       )}
+      {isMaster && viewingId && config?.creatureCompendium.find(creature => creature.id === viewingId) ? <CreatureStateDialog creature={config.creatureCompendium.find(creature => creature.id === viewingId)!} onClose={() => setViewingId(undefined)} /> : null}
       {adding && isMaster ? <Modal title="Adicionar acompanhante" onClose={() => { if (!saving) setAdding(false) }}>
         <div className="grid gap-3">
           <p className="text-sm text-textMuted">Escolha uma criatura do compêndio da campanha. Os jogadores verão apenas seu nome e imagem.</p>

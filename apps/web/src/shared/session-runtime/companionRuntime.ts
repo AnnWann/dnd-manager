@@ -48,3 +48,12 @@ export function allCreatureFeatures(creature: CompendiumCreature): CreatureFeatu
     ...creature.reactions, ...creature.legendaryActions,
   ]
 }
+
+/** Public NPC portraits never confer sheet or state access to a player. */
+export function canControlCompanion(creature: Pick<CompendiumCreature, "ownerUserId" | "showInCompanions">, role: string, userId: string): boolean {
+  return role === "MASTER" || (creature.showInCompanions !== true && Boolean(creature.ownerUserId) && creature.ownerUserId === userId)
+}
+
+export function hasPersistentCompanionState(creature: Pick<CompendiumCreature, "ownerUserId" | "showInCompanions">): boolean {
+  return Boolean(creature.ownerUserId) || creature.showInCompanions === true
+}
