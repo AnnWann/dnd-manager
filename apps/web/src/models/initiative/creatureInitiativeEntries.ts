@@ -10,6 +10,7 @@ import {
 type EntrySource = Pick<InitiativeEntry, "sourceId">
 
 export type CreatureInitiativeOptions = {
+  hidden?: boolean
   quantity?: number
   sharedInitiative?: boolean
   digitalDiceEnabled?: boolean
@@ -52,6 +53,7 @@ export function createCreatureInitiativeEntries(
       sourceId,
       sourceType: creatureSourceType(creature),
       combatantId,
+      hidden: options.hidden,
       name,
       realName: name,
       basicName,

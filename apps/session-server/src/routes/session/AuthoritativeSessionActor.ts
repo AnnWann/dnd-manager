@@ -29,6 +29,7 @@ import {
 import {
   broadcastAllVisibleCharacterSnapshots,
   broadcastVisibilityFiltered,
+  sendVisibilityFiltered,
   refreshAllConnectionVisibility,
 } from "./visibilityDelivery";
 import {
@@ -95,7 +96,7 @@ export class SessionActor extends ComposedSessionActor {
         readRuntimeConfig(this.ctx.storage),
       ]);
       send(socket, { type: "session.missions.snapshot", state: missions });
-      send(socket, { type: "session.initiative.snapshot", state: initiative });
+      sendVisibilityFiltered(socket, { type: "session.initiative.snapshot", state: initiative });
       send(socket, {
         type: "session.config.snapshot",
         snapshot: connection

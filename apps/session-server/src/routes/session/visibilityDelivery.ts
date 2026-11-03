@@ -251,6 +251,16 @@ function filterMessageForSocket(socket: WebSocket, message: unknown): unknown | 
     }
   }
 
+  if (
+    connection.role !== "MASTER" &&
+    (type === "session.initiative.snapshot" || type === "session.initiative.updated") &&
+    record.state &&
+    typeof record.state === "object" &&
+    !Array.isArray(record.state)
+  ) {
+    return filterInitiativeMessageForPlayer(connection, record);
+  }
+
   if (canReadEveryCharacter(connection)) return message;
 
   if (CHARACTER_SNAPSHOT_TYPES.has(type) && Array.isArray(record.characters)) {
@@ -268,15 +278,6 @@ function filterMessageForSocket(socket: WebSocket, message: unknown): unknown | 
     return characterId && canReceiveCharacter(connection, characterId)
       ? message
       : null;
-  }
-
-  if (
-    (type === "session.initiative.snapshot" || type === "session.initiative.updated") &&
-    record.state &&
-    typeof record.state === "object" &&
-    !Array.isArray(record.state)
-  ) {
-    return filterInitiativeMessageForPlayer(connection, record);
   }
 
   if (type === "session.character.removed") {
@@ -314,9 +315,10 @@ function filterInitiativeMessageForPlayer(
   if (!Array.isArray(session.entries)) return message;
 
   const visibility = session.deathSaveVisibility;
-  const entries = session.entries.map((rawEntry) => {
+  const entries = session.entries.filter((entry) => readRecord(entry)?.hidden !== true).map((rawEntry, order) => {
     if (!rawEntry || typeof rawEntry !== "object" || Array.isArray(rawEntry)) return rawEntry;
     const entry = rawEntry as Record<string, unknown>;
+    if (canReadEveryCharacter(connection)) return { ...entry, order };
     const realName = typeof entry.realName === "string" ? entry.realName.trim() : "";
     const basicName = typeof entry.basicName === "string" ? entry.basicName.trim() : "";
     const canonicalName = typeof entry.name === "string" ? entry.name.trim() : "";
@@ -330,6 +332,7 @@ function filterInitiativeMessageForPlayer(
     const filtered: Record<string, unknown> = {
       ...entry,
       name: publicName,
+      order,
     };
     if (!revealRealName) delete filtered.realName;
     if (!maySeeDeathSaves) delete filtered.deathSaves;
@@ -343,6 +346,8 @@ function filterInitiativeMessageForPlayer(
       session: {
         ...session,
         entries,
+        activeEntryId: entries.some(entry => readRecord(entry)?.id === session.activeEntryId) ? session.activeEntryId : undefined,
+        roundAnchorEntryId: entries.some(entry => readRecord(entry)?.id === session.roundAnchorEntryId) ? session.roundAnchorEntryId : undefined,
       },
     },
   };

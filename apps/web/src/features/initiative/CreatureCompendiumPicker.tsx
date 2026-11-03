@@ -21,7 +21,7 @@ type Props = {
   existingCreatureIds: string[]
   sharedInitiative: boolean
   onSharedInitiativeChange: (value: boolean) => void
-  onConfirm: (creatures: CreatureInitiativeSelection[]) => void
+  onConfirm: (creatures: CreatureInitiativeSelection[], hidden: boolean) => void
   onClose: () => void
 }
 
@@ -39,6 +39,7 @@ export function CreatureCompendiumPicker({
   onClose,
 }: Props) {
   const [activeFolder, setActiveFolder] = useState("")
+  const [hidden, setHidden] = useState(false)
   const [query, setQuery] = useState("")
   const [quantities, setQuantities] = useState<Record<string, number>>({})
   const alreadyAdded = useMemo(() => new Set(existingCreatureIds), [existingCreatureIds])
@@ -171,10 +172,14 @@ export function CreatureCompendiumPicker({
               <input type="checkbox" checked={sharedInitiative} onChange={event => onSharedInitiativeChange(event.target.checked)} />
               Iniciativa conjunta entre cópias da mesma criatura
             </label>
+            <label className="flex items-center gap-2 text-xs text-textMuted">
+              <input type="checkbox" checked={hidden} onChange={event => setHidden(event.target.checked)} />
+              Entrar ocultas para os jogadores
+            </label>
           </div>
           <div className="flex gap-2">
             <Button variant="secondary" onClick={onClose}>Cancelar</Button>
-            <Button variant="primary" disabled={selected.length === 0} onClick={() => { onConfirm(selected); onClose() }}>
+            <Button variant="primary" disabled={selected.length === 0} onClick={() => { onConfirm(selected, hidden); onClose() }}>
               Adicionar {totalInitiatives} à iniciativa
             </Button>
           </div>

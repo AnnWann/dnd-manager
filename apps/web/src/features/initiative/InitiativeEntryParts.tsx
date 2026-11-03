@@ -1,5 +1,7 @@
 import {
   ChevronDown,
+  Eye,
+  EyeOff,
   CirclePlus,
   Swords,
   X,
@@ -337,4 +339,18 @@ function conditionDescription(duration: InitiativeConditionDuration): string {
   if (duration.type === "rounds") return `${duration.remaining} rodada(s) restante(s)`
   if (duration.type === "untilTurnStart") return "Até o início do turno indicado"
   return "Até o fim do turno indicado"
+}
+
+export function InitiativeVisibilityButton({ entry, onChange }: {
+  entry: InitiativeEntry
+  onChange: (hidden: boolean) => void
+}) {
+  const label = entry.hidden ? "Revelar aos jogadores" : "Ocultar dos jogadores"
+  const Icon = entry.hidden ? EyeOff : Eye
+  return (
+    <Button type="button" size="icon" variant={entry.hidden ? "secondary" : "ghost"}
+      aria-label={label} title={label} onClick={() => onChange(!entry.hidden)}>
+      <Icon className="h-4 w-4" />
+    </Button>
+  )
 }

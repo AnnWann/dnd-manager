@@ -11,7 +11,7 @@ import {
 import { readRuntimeConfig } from "../session/runtimeConfigAccess";
 import type { CompanionState } from "../../../../web/src/shared/session-runtime/companionRuntime";
 import { synchronizeCompanionInitiative } from "./companionInitiativeSync";
-import { broadcastVisibilityFiltered } from "../session/visibilityDelivery";
+import { broadcastVisibilityFiltered, sendVisibilityFiltered } from "../session/visibilityDelivery";
 import { runCustomSystemAutomations } from "../../../../web/src/lib/customSystems/CustomAutomationRuntime";
 import type { CustomSystemEventType } from "../../../../web/src/models/customSystems/CustomAutomationDefinition";
 import type { CustomSystemDefinition } from "../../../../web/src/models/customSystems/CustomSystemDefinition";
@@ -103,7 +103,7 @@ export class SessionActor {
     if (parsed.type === "session.initiative.initialize") {
       const current = await readInitiativeState(this.ctx.storage);
       if (current.initialized) {
-        send(webSocket, { type: "session.initiative.snapshot", state: current });
+        sendVisibilityFiltered(webSocket, { type: "session.initiative.snapshot", state: current });
         return;
       }
       const normalized = normalizeInitiativeSession(parsed.session as Partial<InitiativeSession>);
@@ -113,7 +113,7 @@ export class SessionActor {
         session: normalized as unknown as Record<string, unknown>,
       };
       await this.ctx.storage.put(INITIATIVE_STATE_KEY, state);
-      broadcast(this.ctx.getWebSockets(), { type: "session.initiative.snapshot", state });
+      broadcastVisibilityFiltered(this.ctx.getWebSockets(), { type: "session.initiative.snapshot", state });
       return;
     }
 
@@ -1230,10 +1230,4 @@ function send(webSocket: WebSocket, value: unknown): void {
 }
 function sendError(webSocket: WebSocket, code: string, message: string): void {
   send(webSocket, { type: "session.error", code, message });
-}
-function broadcast(sockets: WebSocket[], value: unknown): void {
-  const payload = JSON.stringify(value);
-  for (const socket of sockets) {
-    try { socket.send(payload); } catch {}
-  }
 }

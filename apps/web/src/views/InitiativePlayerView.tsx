@@ -53,6 +53,9 @@ export function InitiativePlayerView() {
     () => session.entries.filter((entry) => !entry.hidden),
     [session.entries],
   )
+  const combatStarted = runtime?.initiativeState?.initialized
+    ? runtime.initiativeState.session.started === true
+    : session.started
   const active = entries.find((entry) => entry.id === session.activeEntryId)
   const viewingCreatureEntry = viewingCreatureEntryId
     ? entries.find((entry) => entry.id === viewingCreatureEntryId)
@@ -154,7 +157,7 @@ export function InitiativePlayerView() {
             <span className="rounded-full border border-accentBorder bg-accentBg px-3 py-1.5 font-medium text-textH">
               {active
                 ? `Turno: ${initiativeEntryDisplayName(active, "player")}`
-                : session.started
+                : combatStarted
                   ? "Combate em andamento"
                   : "Aguardando início"}
             </span>
@@ -173,7 +176,7 @@ export function InitiativePlayerView() {
             activeEntryId={session.activeEntryId}
             roundAnchorEntryId={session.roundAnchorEntryId}
             round={session.round}
-            started={session.started}
+            started={combatStarted}
             cardRefs={cardRefs}
             readOnly
             canViewPrivateStats={canViewPrivateStats}
@@ -189,7 +192,7 @@ export function InitiativePlayerView() {
         </section>
       ) : (
         <section className="min-w-0 overflow-hidden rounded-xl border border-border bg-bg shadow-theme-sm">
-          <InitiativeTable entries={entries} activeEntryId={session.activeEntryId} roundAnchorEntryId={session.roundAnchorEntryId} round={session.round} started={session.started} readOnly canViewPrivateStats={canViewPrivateStats} canOpenEntry={canOpenCreature} canViewDeathSaves={canViewDeathSaves} canEditDeathSaves={canEditDeathSaves} onDeathSaves={(entry, deathSaves) => setDeathSaves(entry, deathSaves)} patchEntry={noop} onOpen={(entryId) => setViewingCreatureEntryId(entryId)} onCondition={noop} onRemove={noop} onTrade={noop} canTrade={() => false} onRemoveCondition={noop} />
+          <InitiativeTable entries={entries} activeEntryId={session.activeEntryId} roundAnchorEntryId={session.roundAnchorEntryId} round={session.round} started={combatStarted} readOnly canViewPrivateStats={canViewPrivateStats} canOpenEntry={canOpenCreature} canViewDeathSaves={canViewDeathSaves} canEditDeathSaves={canEditDeathSaves} onDeathSaves={(entry, deathSaves) => setDeathSaves(entry, deathSaves)} patchEntry={noop} onOpen={(entryId) => setViewingCreatureEntryId(entryId)} onCondition={noop} onRemove={noop} onTrade={noop} canTrade={() => false} onRemoveCondition={noop} />
         </section>
       )}
 
