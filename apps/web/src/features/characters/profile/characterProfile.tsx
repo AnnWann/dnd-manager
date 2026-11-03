@@ -1,3 +1,4 @@
+import { useRef } from "react"
 import { ImagePlus, Trash2, UserRound } from "lucide-react"
 
 import { Button } from "../../../components/ui/Button"
@@ -42,6 +43,7 @@ export function CharacterProfileTab({
   character,
   updateCharacter,
 }: Props) {
+  const imageInput = useRef<HTMLInputElement>(null)
   const profile = character.get("profile")
 
   function updateProfile<K extends keyof typeof profile>(
@@ -143,21 +145,21 @@ export function CharacterProfileTab({
               )}
             </div>
 
-            <label className="cursor-pointer">
-              <input
-                type="file"
-                accept="image/*"
-                className="sr-only"
-                onChange={(event) =>
-                  uploadImage(event.target.files?.[0])
-                }
-              />
-
-              <span className="inline-flex h-10 w-full items-center justify-center gap-2 rounded-lg border border-border bg-bg text-sm font-medium text-textH shadow-theme-sm transition-colors hover:border-borderStrong hover:bg-bg-subtle">
-                <ImagePlus className="h-4 w-4" />
-                Importar imagem
-              </span>
-            </label>
+            <input
+              ref={imageInput}
+              type="file"
+              accept="image/*"
+              hidden
+              onChange={(event) => {
+                const file = event.currentTarget.files?.[0]
+                event.currentTarget.value = ""
+                void uploadImage(file)
+              }}
+            />
+            <Button variant="secondary" type="button" onClick={() => imageInput.current?.click()}>
+              <ImagePlus className="h-4 w-4" />
+              Importar imagem
+            </Button>
 
             {profile.imageUrl ? (
               <Button
