@@ -592,7 +592,7 @@ export function CampaignLayout() {
                   setAppState={setAppState}
                 >
                   <SessionPauseGate>
-                  <div className="fixed inset-0 flex w-full max-w-full flex-col overflow-hidden bg-[color:var(--surface-app)] text-text">
+                  <div className="fixed inset-0 flex w-full max-w-full flex-col overflow-clip bg-[color:var(--surface-app)] text-text">
                     <AppHeader
                       rightContent={
                         sessionId ? (
@@ -601,7 +601,7 @@ export function CampaignLayout() {
                       }
                     />
 
-                    <div className="flex min-h-0 min-w-0 max-w-full flex-1 overflow-hidden">
+                    <div className="flex min-h-0 min-w-0 max-w-full flex-1 overflow-clip">
                       <AppSidebar items={sidebarItems} topContent={modeSwitcher} />
                       <main className="min-w-0 max-w-full flex-1 overflow-x-hidden overflow-y-auto has-[[aria-modal=true]]:overflow-y-hidden">
                         <div
