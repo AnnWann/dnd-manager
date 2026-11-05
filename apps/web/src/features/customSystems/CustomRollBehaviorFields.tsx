@@ -8,6 +8,7 @@ import {
 } from "../../lib/customSystems"
 import {
   validateCustomAbilityDiceSource,
+  validateCustomAbilityDamageSource,
 } from "../../lib/customSystems/CustomAbilityRoll"
 import type {
   CustomAbilityDamageRollDefinition,
@@ -680,6 +681,7 @@ function DamageEditor({
   const components = roll.damage ?? []
   const variables = listCustomFormulaVariables(definition, abilityType)
   const diceVariables = variables.filter((entry) => entry.valueType === "dice")
+  const damageVariables = variables.filter((entry) => entry.valueType === "dice" || entry.valueType === "number")
 
   return (
     <section className="rounded-xl border border-border bg-bg-subtle p-3">
@@ -708,7 +710,7 @@ function DamageEditor({
       {components.length ? (
         <div className="mt-3 grid gap-3">
           {components.map((component, index) => {
-            const diceError = validateCustomAbilityDiceSource(
+            const diceError = validateCustomAbilityDamageSource(
               component.dice,
               definition,
               abilityType,
@@ -761,11 +763,11 @@ function DamageEditor({
                       }
                     />
                   </Field>
-                  <Field label="Dados">
+                  <Field label="Dados ou fórmula">
                     <input
                       className="input-base font-mono"
                       value={component.dice}
-                      placeholder="2d6"
+                      placeholder="2d6 ou 1 + floor(character.attributeModifier.str / 2)"
                       onChange={(event) =>
                         patchComponent({ dice: event.target.value })
                       }
@@ -810,11 +812,11 @@ function DamageEditor({
                   </div>
                 </div>
 
-                {diceVariables.length ? (
+                {damageVariables.length ? (
                   <div className="mt-2">
                     <FormulaVariablePicker
-                      variables={diceVariables}
-                      buttonLabel="Usar variável como dado"
+                      variables={damageVariables}
+                      buttonLabel="Usar variável no dano"
                       onSelect={(path) =>
                         patchComponent({ dice: path })
                       }

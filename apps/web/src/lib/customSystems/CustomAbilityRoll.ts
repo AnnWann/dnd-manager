@@ -17,6 +17,7 @@ import { activateCustomAbility } from "./CustomAbilityActivation"
 import {
   evaluateCustomFormula,
   listCustomFormulaVariables,
+  validateCustomFormula,
 } from "./CustomFormulaEngineWithCharacter"
 import {
   activateCustomSystemAction,
@@ -354,6 +355,23 @@ export function validateCustomAbilityDiceSource(
   if (variable?.valueType === "dice") return undefined
 
   return "Use uma notação como 1d6 ou selecione uma variável cujo tipo seja Dado."
+}
+
+export function validateCustomAbilityDamageSource(
+  expression: string,
+  definition: CustomSystemDefinition,
+  abilityType?: CustomAbilityTypeDefinition,
+): string | undefined {
+  const value = expression.trim()
+  if (!value) return "Informe um valor, uma fórmula numérica ou uma expressão com dados."
+  if (!validateCustomAbilityDiceExpression(value)) return undefined
+  const variable = listCustomFormulaVariables(definition, abilityType).find(entry => entry.path === value)
+  if (variable) {
+    return variable.valueType === "number" || variable.valueType === "dice"
+      ? undefined
+      : "Selecione uma variável numérica ou do tipo Dado."
+  }
+  return validateCustomFormula(value, definition, abilityType)
 }
 
 export function resolveCustomRollDiceExpression(
@@ -854,14 +872,27 @@ function resolveDamageRolls(
   primaryValue: number,
 ): CustomAbilityDamageRollResolution[] {
   return (roll.damage ?? []).map((component, index) => {
-    const baseDice = resolveCustomRollDiceExpression(
-      component.dice,
-      definition,
-      state,
-      character,
-      abilityType,
-      abilityValues,
-    )
+    const expression = component.dice.trim()
+    let base: string | number = expression
+    if (validateCustomAbilityDiceExpression(expression)) {
+      const result = evaluateCustomFormula(
+        replaceRollToken(expression, primaryValue) ?? expression,
+        definition,
+        state,
+        character,
+        abilityType ? { type: abilityType, values: abilityValues } : undefined,
+        activationContext,
+      )
+      if (!result.ok) throw new Error(result.error)
+      if (typeof result.value === "number" && Number.isFinite(result.value)) {
+        base = result.value
+      } else if (typeof result.value === "string" && !validateCustomAbilityDiceExpression(result.value)) {
+        base = result.value.trim()
+      } else {
+        throw new Error("O dano precisa resultar em um número ou em uma expressão com dados.")
+      }
+    }
+    const baseDice = String(base)
     const upcastDicePerLevel = component.upcastDicePerLevel?.trim()
       ? resolveCustomRollDiceExpression(
           component.upcastDicePerLevel,
@@ -884,6 +915,7 @@ function resolveDamageRolls(
     )
     const isCritical =
       attackCritical && component.critical !== false
+      && (typeof base === "string" || Boolean(upcastDicePerLevel && upcastLevels > 0))
     let value: number
 
     const supplied = suppliedDamageValues?.[index]
@@ -897,13 +929,16 @@ function resolveDamageRolls(
       )
     } else {
       const diceMultiplier = isCritical ? 2 : 1
-      const baseRoll = rollCustomAbilityDiceDetailed(
-        baseDice,
-        diceMultiplier,
-      )
-      value = baseRoll.total
-      groups = [...baseRoll.groups]
-      diceModifier += baseRoll.modifier
+      if (typeof base === "number") {
+        value = base
+        groups = []
+        diceModifier = base
+      } else {
+        const baseRoll = rollCustomAbilityDiceDetailed(base, diceMultiplier)
+        value = baseRoll.total
+        groups = [...baseRoll.groups]
+        diceModifier = baseRoll.modifier
+      }
 
       if (upcastDicePerLevel && upcastLevels > 0) {
         for (let level = 0; level < upcastLevels; level += 1) {
