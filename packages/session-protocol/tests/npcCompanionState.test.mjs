@@ -13,7 +13,7 @@ function setup(extra = {}) {
   npc.spellcasting = { slots: { 1: 2 }, spells: [] }
   const snapshot = { creationRevision: 1, config: { characters: [], spells: [], customSystems: [], creatureCompendium: [npc] } }
   const data = new Map([['runtime-config-state', snapshot]])
-  const sockets = ['MASTER', 'PLAYER'].map(role => ({ messages: [], deserializeAttachment: () => ({ role, userId: role === 'MASTER' ? 'dm' : 'owner', visibleCharacterIds: [] }), send(raw) { this.messages.push(JSON.parse(raw)) } }))
+  const sockets = ['MASTER', 'PLAYER'].map(role => ({ messages: [], deserializeAttachment: () => ({ role, userId: role === 'MASTER' ? 'dm' : 'owner', visibleCharacterIds: [], lastHeartbeatAt: Date.now() }), send(raw) { this.messages.push(JSON.parse(raw)) } }))
   const ctx = { storage: { get: async key => structuredClone(data.get(key)), put: async (key, value) => { if (typeof key === 'string') data.set(key, structuredClone(value)); else for (const [k, v] of Object.entries(key)) data.set(k, structuredClone(v)) } }, getWebSockets: () => sockets }
   return { npc, snapshot, data, sockets, actor: new SessionActor(ctx) }
 }
@@ -59,4 +59,32 @@ test('unassigned NPC state survives entering and leaving initiative', () => {
   assert.equal(changed.companions.npc.currentHp, 9)
   const removed = synchronizeCompanionInitiative(changed.session, { entries: [] }, snapshot, changed.companions)
   assert.equal(removed.companions.npc.currentHp, 9)
+})
+
+test('master can roll monster damage while only the master receives the description', async () => {
+  const { actor, npc, sockets } = setup()
+  npc.actions = [{
+    id: 'feature', name: 'Comando', description: 'Segredo do mestre',
+    mechanics: { kind: 'damage', damage: [{ formula: '1d6', damageType: 'fire' }] },
+  }]
+  const [master, player] = sockets
+  const request = {
+    requestId: 'private-description', creatureId: npc.id, mode: 'normal',
+    source: { type: 'feature', featureId: 'feature', intent: 'resolve' },
+  }
+  await actor.handleCreatureRoll(master, master.deserializeAttachment(), { ...request, hideDescription: true })
+  const privateResult = master.messages.at(-1).result
+  const publicResult = player.messages.at(-1).result
+  assert.equal(privateResult.description, 'Segredo do mestre')
+  assert.equal(publicResult.description, undefined)
+  assert.equal(publicResult.title, 'Comando')
+  assert.equal(publicResult.damages.length, 1)
+  assert.deepEqual(publicResult.damages, privateResult.damages)
+
+  await actor.handleCreatureRoll(master, master.deserializeAttachment(), {
+    ...request, hideDescription: true, source: { ...request.source, intent: 'announce' },
+  })
+  const revealed = player.messages.at(-1).result
+  assert.equal(revealed.description, 'Segredo do mestre')
+  assert.equal(revealed.damages, undefined)
 })

@@ -146,6 +146,7 @@ export function requestCreatureRoll(input: {
   creatureId: string
   initiativeEntryId?: string
   source: SessionCreatureRollSource
+  hideDescription?: boolean
   mode?: SessionDiceRollMode
 }): void {
   if (typeof window === "undefined") return
@@ -156,6 +157,7 @@ export function requestCreatureRoll(input: {
     mode: input.mode ?? "normal",
     visibility: getRollVisibility(),
     source: input.source,
+    hideDescription: input.hideDescription,
   }
   window.dispatchEvent(
     new CustomEvent<SessionCreatureRollRequest>(CREATURE_ROLL_REQUEST_EVENT, {

@@ -237,6 +237,7 @@ export function encodeServerSessionMessage(message: ServerSessionMessage): strin
 
 function isCreatureRollRequest(value: unknown): value is SessionCreatureRollRequest {
   if (!isRecord(value)) return false;
+  if (value.hideDescription !== undefined && typeof value.hideDescription !== "boolean") return false;
   if (!nonEmpty(value.requestId) || value.requestId.length > 120) return false;
   if (!nonEmpty(value.creatureId) || value.creatureId.length > 200) return false;
   if (
