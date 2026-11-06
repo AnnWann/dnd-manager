@@ -755,7 +755,8 @@ export class SessionActor extends DurableObject<Env> {
     }
 
     if (resolution.resultType === "action" && connection.role === "MASTER"
-      && request.source.type === "feature" && request.hideDescription) {
+      && request.source.type === "feature" && request.source.intent !== "announce"
+      && request.hideDescription) {
       resolution.result.descriptionVisibility = "master";
     }
 

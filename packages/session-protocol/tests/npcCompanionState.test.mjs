@@ -81,6 +81,10 @@ test('master can roll monster damage while only the master receives the descript
   assert.equal(publicResult.damages.length, 1)
   assert.deepEqual(publicResult.damages, privateResult.damages)
 
-  await actor.handleCreatureRoll(master, master.deserializeAttachment(), request)
-  assert.equal(player.messages.at(-1).result.description, 'Segredo do mestre')
+  await actor.handleCreatureRoll(master, master.deserializeAttachment(), {
+    ...request, hideDescription: true, source: { ...request.source, intent: 'announce' },
+  })
+  const revealed = player.messages.at(-1).result
+  assert.equal(revealed.description, 'Segredo do mestre')
+  assert.equal(revealed.damages, undefined)
 })
