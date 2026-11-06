@@ -82,6 +82,7 @@ export type InitiativeEntry = {
   defeated: boolean
   downed?: boolean
   defeatReason?: InitiativeDefeatReason
+  defeatXpAwarded?: boolean
   deathSaves?: InitiativeDeathSaves
   /** Mutable monster-spell resources for compendium combatants. */
   creatureSpellResources?: InitiativeCreatureSpellResources

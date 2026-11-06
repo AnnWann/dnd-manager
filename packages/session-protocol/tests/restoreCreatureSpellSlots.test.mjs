@@ -68,3 +68,54 @@ test("stored display maxima cannot restore more than the configured limit",()=>{
   assert.equal(result.ok,true)
   assert.deepEqual(result.session.entries[0].creatureSpellResources.slots[2],{current:2,max:2})
 })
+
+test("confirming a defeat grants XP once across shared turns and snapshots XP for undo", async () => {
+  const session = before()
+  session.entries[0] = { ...session.entries[0], defeated: true, defeatReason: "zeroHp", currentHp: 0 }
+  for (const id of ["pc1", "pc2", "npc", "pc1"]) {
+    session.entries.push({ ...entry(`turn-${session.entries.length}`, id), sourceType: "character", sourceId: id, side: "ally" })
+  }
+  const character = id => ({ characterId: id, statsInitialized: true, stats: { experience: 100 }, currentHp: 20, maxHp: 20, temporaryHp: 0, revision: 1 })
+  const data = {
+    "initiative-state": { initialized: true, revision: 1, session },
+    "runtime-config-state": { config: {
+      creatureCompendium: [{ id: "eldren", name: "Eldren", speed: "", challengeRating: "5" }],
+      characters: ["pc1", "pc2", "npc"].map(id => ({ characterId: id, type: id === "npc" ? "npc" : "pc", customSystems: [] })),
+      progression: { mode: "xp" },
+    } },
+    "hp-state": Object.fromEntries(["pc1", "pc2", "npc"].map(id => [id, character(id)])),
+  }
+  const actor = new SessionActor()
+  actor.ctx = {
+    storage: {
+      get: async key => structuredClone(data[key]),
+      put: async updates => Object.assign(data, structuredClone(updates)),
+    },
+    getWebSockets: () => [],
+  }
+  const socket = {
+    deserializeAttachment: () => ({ userId: "master", role: "MASTER" }),
+    serializeAttachment: () => {},
+    send: raw => assert.fail(raw),
+  }
+  const update = (entryId, patch) => actor.webSocketMessage(socket, message({
+    type: "initiative.entry.update", characterId: "session", entryId, patch,
+  }))
+  const defeat = { defeated: true, downed: false, defeatReason: "manual" }
+  await update("a", defeat)
+  assert.equal(data["hp-state"].pc1.stats.experience, 1000)
+  assert.equal(data["hp-state"].pc2.stats.experience, 1000)
+  assert.equal(data["hp-state"].npc.stats.experience, 100)
+  const [record] = data["hp-log"]
+  assert.deepEqual(record.operation.experienceAward, { perCharacter: 900, recipientCount: 2 })
+  assert.equal(record.reverseOperation.hp.pc1.stats.experience, 100)
+  assert.equal(record.reverseOperation.snapshot.session.entries[0].defeatReason, "zeroHp")
+
+  await update("b", { defeated: false, defeatReason: null })
+  await update("b", defeat)
+  assert.equal(data["hp-state"].pc1.stats.experience, 1000)
+
+  data["runtime-config-state"].config.progression.mode = "milestone"
+  await update("other", defeat)
+  assert.equal(data["hp-state"].pc1.stats.experience, 1000)
+})

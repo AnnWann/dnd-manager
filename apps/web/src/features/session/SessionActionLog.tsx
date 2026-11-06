@@ -1247,7 +1247,10 @@ function describeSessionOperation(
     case "mission.status.set": return `Moveu uma missão para ${missionStatusLabel(operation.status)}.`
     case "mission.objective.toggle": return `Alterou o estado de um objetivo de missão.`
     case "initiative.entries.add": return operation.entries.length === 1 ? `Adicionou um participante à iniciativa.` : `Adicionou ${operation.entries.length} participantes à iniciativa.`
-    case "initiative.entry.update": return `Atualizou um participante da iniciativa.`
+    case "initiative.entry.update":
+      return operation.experienceAward
+        ? `Confirmou a derrota e concedeu ${operation.experienceAward.perCharacter} XP para cada um dos ${operation.experienceAward.recipientCount} personagens jogadores na iniciativa.`
+        : "Atualizou um participante da iniciativa."
     case "initiative.entry.remove": return `Removeu um participante da iniciativa.`
     case "initiative.sort": return `Ordenou a iniciativa.`
     case "initiative.combat.start": return `Iniciou o combate.`
