@@ -1,4 +1,6 @@
 import { parseManualDiceExpression } from "../../shared/session-runtime/manualDiceExpression"
+import { evaluateSpellDamageDiceQuantity, evaluateSpellScaledNumber, getEffectiveSpellResolution } from "../magic/spells/spellResolution"
+import type { Spell } from "../magic/spells/Spell"
 import type { CompendiumCreature, CreatureFeature } from "./CompendiumCreature"
 
 const ratings = ["0", "1/8", "1/4", "1/2", ...Array.from({ length: 30 }, (_, i) => String(i + 1))]
@@ -19,6 +21,37 @@ export type CreatureChallengeEstimate = {
   hpMultiplier: number
   offenseSource?: "sheet"
   routine?: Record<string, number>
+  spells?: ChallengeSpell[]
+}
+
+export type ChallengeSpell = {
+  spellIndex: string
+  name: string
+  castLevel: number
+  damage: number
+  roll: "attack" | "save" | "none"
+}
+
+export function resolveChallengeSpells(creature: CompendiumCreature, getSpell: (index: string) => Spell | undefined): ChallengeSpell[] {
+  const casting = creature.spellcasting
+  if (!casting) return []
+  const castingModifier = Math.floor((creature.abilityScores[casting.ability] - 10) / 2)
+  return casting.spells.flatMap(reference => {
+    const spell = getSpell(reference.spellIndex)
+    if (!spell) return creature.challengeEstimate?.spells?.filter(option => option.spellIndex === reference.spellIndex) ?? []
+    const levels = reference.usage.type === "slots"
+      ? Object.entries(casting.slots).filter(([level, uses]) => uses > 0 && Number(level) >= spell.slotLevel).map(([level]) => Number(level))
+      : [Math.max(spell.slotLevel, reference.castLevel ?? spell.slotLevel)]
+    const resolution = getEffectiveSpellResolution(spell)
+    return levels.flatMap(castLevel => {
+      const context = { castLevel, characterLevel: casting.casterLevel }
+      const average = resolution.damage?.filter(part => part.appliesOn !== "successful-save").reduce((sum, part) =>
+        sum + Math.max(0, evaluateSpellDamageDiceQuantity(part, context) * (Number(String(part.dice?.sides ?? 0).replace(/^d/, "")) + 1) / 2
+          + (part.flat ?? 0) + (part.addCastingModifier ? castingModifier : 0)), 0) ?? 0
+      const damage = average * evaluateSpellScaledNumber(resolution.instances, context)
+      return damage > 0 ? [{ spellIndex: spell.index, name: spell.name, castLevel, damage, roll: resolution.roll.type }] : []
+    })
+  })
 }
 
 const hpLimits = [6, 35, 49, 70, ...Array.from({ length: 19 }, (_, i) => 85 + i * 15), ...Array.from({ length: 11 }, (_, i) => 400 + i * 45)]
@@ -37,7 +70,7 @@ function adjusted(index: number, difference: number): number {
 }
 
 type ChallengeSheet = Partial<Pick<CompendiumCreature,
-  "maxHp" | "armorClass" | "challengeEstimate" | "actions" | "bonusActions" | "reactions" | "legendaryActions"
+  "maxHp" | "armorClass" | "challengeEstimate" | "actions" | "bonusActions" | "reactions" | "legendaryActions" | "spellcasting" | "abilityScores"
 >>
 
 function featureOffense(feature: CreatureFeature) {
@@ -55,7 +88,8 @@ function featureOffense(feature: CreatureFeature) {
   }
   if (damage <= 0) return undefined
   return {
-    feature,
+    id: feature.id,
+    name: feature.name,
     damage,
     attackBonus: mechanics.kind === "attack" ? mechanics.attackBonus : undefined,
     saveDc: mechanics.kind === "save" || mechanics.kind === "check" ? mechanics.dc : undefined,
@@ -67,17 +101,43 @@ export function creatureChallengeActions(creature: ChallengeSheet) {
     ...(creature.actions ?? []), ...(creature.bonusActions ?? []),
     ...(creature.reactions ?? []), ...(creature.legendaryActions ?? []),
   ].map(featureOffense).filter(option => option !== undefined)
+  const casting = creature.spellcasting
+  const ability = casting && creature.abilityScores ? Math.floor((creature.abilityScores[casting.ability] - 10) / 2) : 0
+  const spellOptions = (creature.challengeEstimate?.spells ?? []).flatMap(spell => {
+    const reference = casting?.spells.find(entry => entry.spellIndex === spell.spellIndex)
+    if (!casting || !reference) return []
+    const slot = reference.usage.type === "slots" ? spell.castLevel : undefined
+    const max = reference.usage.type === "perDay" ? reference.usage.uses
+      : slot !== undefined ? casting.slots[slot as keyof typeof casting.slots] ?? 0 : 100
+    if (max < 1) return []
+    return [{
+      id: `spell:${spell.spellIndex}:${spell.castLevel}`,
+      name: `${spell.name} (${spell.castLevel === 0 ? "truque" : `círculo ${spell.castLevel}`})`,
+      damage: spell.damage,
+      attackBonus: spell.roll === "attack" ? casting.attackBonus : undefined,
+      saveDc: spell.roll === "save" ? casting.saveDc : undefined,
+      spellRoll: spell.roll,
+      ability,
+      repeatable: reference.usage.type === "atWill",
+      slot,
+      max,
+    }]
+  })
+  const all = [...options.map(option => ({ ...option, max: 100, slot: undefined, spellRoll: undefined, ability: 0 })), ...spellOptions]
   const routine = creature.challengeEstimate?.routine
-  const selected = routine
-    ? options.flatMap(option => {
-        const count = routine[option.feature.id]
-        return count > 0 ? [{ ...option, damage: option.damage * count }] : []
-      })
-    : []
+  const remainingSlots = { ...casting?.slots }
+  const selected = routine ? all.flatMap(option => {
+    const slot = option.slot as keyof typeof remainingSlots | undefined
+    const max = slot === undefined ? option.max : remainingSlots[slot] ?? 0
+    const count = Math.min(max, routine[option.id] ?? 0)
+    if (slot !== undefined) remainingSlots[slot] = max - count
+    return count > 0 ? [{ ...option, damage: option.damage * count }] : []
+  }) : []
   const repeatable = new Set(creature.actions?.filter(feature => !feature.usage).map(feature => feature.id))
-  const strongest = options.filter(option => repeatable.has(option.feature.id))
-    .reduce<(typeof options)[number] | undefined>((best, option) => !best || option.damage > best.damage ? option : best, undefined)
-  return { options, selected: routine ? selected : strongest ? [strongest] : [] }
+  for (const spell of spellOptions) if (spell.repeatable) repeatable.add(spell.id)
+  const strongest = all.filter(option => repeatable.has(option.id))
+    .reduce<(typeof all)[number] | undefined>((best, option) => !best || option.damage > best.damage ? option : best, undefined)
+  return { options: all, selected: routine ? selected : strongest ? [strongest] : [] }
 }
 
 export function estimateCreatureChallenge(creature: ChallengeSheet) {
@@ -93,8 +153,12 @@ export function estimateCreatureChallenge(creature: ChallengeSheet) {
   const reference = inputs.accuracyKind === "save" ? save : attack
   const accuracyDifference = selected
     ? selected.reduce((sum, action) => {
-        const difference = action.attackBonus !== undefined ? action.attackBonus - attack[damageIndex]
-          : action.saveDc !== undefined ? action.saveDc - save[damageIndex] : 0
+        // Use the damage band for implicit spell proficiency, so the estimate does not depend on its own output.
+        const proficiency = Math.max(2, 2 + Math.floor((damageIndex - 4) / 4))
+        const attackBonus = action.attackBonus ?? (action.spellRoll === "attack" ? proficiency + action.ability : undefined)
+        const saveDc = action.saveDc ?? (action.spellRoll === "save" ? 8 + proficiency + action.ability : undefined)
+        const difference = attackBonus !== undefined ? attackBonus - attack[damageIndex]
+          : saveDc !== undefined ? saveDc - save[damageIndex] : 0
         return sum + difference * action.damage
       }, 0) / damage
     : inputs.accuracy - reference[damageIndex]
