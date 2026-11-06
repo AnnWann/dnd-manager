@@ -740,6 +740,7 @@ function FeatureSection({
     })
   }
   // Toggle state is independent for each combatant and feature.
+  const [privateDescriptions, setPrivateDescriptions] = useState<Record<string, boolean>>({})
   const [enabledOptionalByFeature, setEnabledOptionalByFeature] = useState<Record<string, number[]>>({})
   const selectionKey = (featureId: string) =>
     `dnd-manager:creature-optional-damage:${rollContext?.creatureId ?? "preview"}:${rollContext?.initiativeEntryId ?? "compendium"}:${featureId}`
@@ -782,6 +783,7 @@ function FeatureSection({
                   onClick={() =>
                     requestCreatureRoll({
                       ...rollContext,
+                      hideDescription: runtime?.role === "MASTER" && privateDescriptions[selectionKey(entry.id)],
                       source: {
                         type: "feature",
                         featureId: entry.id,
@@ -798,12 +800,26 @@ function FeatureSection({
                   disabled={(featureResources?.[entry.id]?.used ?? 0) >= entry.usage.max}
                   onClick={() => requestCreatureRoll({
                     ...rollContext,
+                    hideDescription: runtime?.role === "MASTER" && privateDescriptions[selectionKey(entry.id)],
                     source: { type: "feature", featureId: entry.id, intent: "resolve" },
                   })}>
                   Usar
                 </Button>
               ) : null}
             </div>
+            {runtime?.role === "MASTER" && rollContext && entry.description.trim() ? (
+              <label className="mt-2 flex items-center gap-2 text-xs text-textMuted">
+                <input
+                  type="checkbox"
+                  checked={privateDescriptions[selectionKey(entry.id)] ?? false}
+                  onChange={event => {
+                    const checked = event.target.checked
+                    setPrivateDescriptions(current => ({ ...current, [selectionKey(entry.id)]: checked }))
+                  }}
+                />
+                Descrição só para o mestre
+              </label>
+            ) : null}
             {entry.usage ? (() => {
               const max = Math.max(1, entry.usage.max)
               const remaining = Math.max(0, max - Math.min(max, featureResources?.[entry.id]?.used ?? 0))
@@ -844,6 +860,7 @@ function FeatureSection({
                       disabled={Boolean(entry.usage && (!(rollContext?.initiativeEntryId || rollContext?.canSpendOutsideInitiative) || (featureResources?.[entry.id]?.used ?? 0) >= entry.usage.max))}
                       onClick={event => requestCreatureRoll({
                         ...rollContext,
+                        hideDescription: runtime?.role === "MASTER" && privateDescriptions[selectionKey(entry.id)],
                         source: { type: "feature", featureId: entry.id, intent: "resolve", enabledOptionalDamageIndices: enabledFor(entry.id) },
                         mode: rollModeFromEvent(event.nativeEvent),
                       })}

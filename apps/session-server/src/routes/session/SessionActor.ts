@@ -754,6 +754,11 @@ export class SessionActor extends DurableObject<Env> {
       await this.persistCompanionResources(creature, updated);
     }
 
+    if (resolution.resultType === "action" && connection.role === "MASTER"
+      && request.source.type === "feature" && request.hideDescription) {
+      resolution.result.descriptionVisibility = "master";
+    }
+
     this.broadcast(
       resolution.resultType === "action"
         ? { type: "session.action.result", result: resolution.result }

@@ -147,6 +147,7 @@ export type SessionActionRollResult = {
   title: string
   subtitle?: string
   description?: string
+  descriptionVisibility?: "master"
   details?: string[]
   attack?: SessionResolvedD20Roll
   /** Generic/check/save roll used by custom systems and similar actions. */
@@ -204,5 +205,6 @@ export type SessionCreatureRollRequest = {
   initiativeEntryId?: string
   mode: SessionDiceRollMode
   visibility?: SessionRollVisibility
+  hideDescription?: boolean
   source: SessionCreatureRollSource
 }

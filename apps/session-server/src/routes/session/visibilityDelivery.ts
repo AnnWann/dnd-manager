@@ -251,6 +251,16 @@ function filterMessageForSocket(socket: WebSocket, message: unknown): unknown | 
     }
   }
 
+  if (type === "session.action.result" && connection.role !== "MASTER") {
+    const result = readRecord(record.result);
+    if (result?.descriptionVisibility === "master") {
+      const publicResult = { ...result };
+      delete publicResult.description;
+      delete publicResult.descriptionVisibility;
+      message = { ...record, result: publicResult };
+    }
+  }
+
   if (
     connection.role !== "MASTER" &&
     (type === "session.initiative.snapshot" || type === "session.initiative.updated") &&
