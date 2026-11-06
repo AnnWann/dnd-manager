@@ -248,6 +248,24 @@ export function normalizeCompendiumCreature(raw: unknown): CompendiumCreature {
   const now = Date.now()
   const abilityScores = asRecord(value.abilityScores)
   const featureGroups = asRecord(value.features)
+  const offensiveFeatures = {
+    actions: normalizeCreatureFeatures(
+      value.actions ?? featureGroups?.actions,
+      "Ação",
+    ),
+    bonusActions: normalizeCreatureFeatures(
+      value.bonusActions ?? featureGroups?.bonusActions,
+      "Ação bônus",
+    ),
+    reactions: normalizeCreatureFeatures(
+      value.reactions ?? featureGroups?.reactions,
+      "Reação",
+    ),
+    legendaryActions: normalizeCreatureFeatures(
+      value.legendaryActions ?? featureGroups?.legendaryActions,
+      "Ação lendária",
+    ),
+  }
   const estimate = asRecord(value.challengeEstimate)
   const damagePerRound = optionalFiniteNumber(estimate?.damagePerRound)
   const accuracy = optionalFiniteNumber(estimate?.accuracy)
@@ -257,11 +275,23 @@ export function normalizeCompendiumCreature(raw: unknown): CompendiumCreature {
       && hpMultiplier !== undefined && hpMultiplier > 0
       ? { damagePerRound, accuracy, hpMultiplier, accuracyKind: estimate?.accuracyKind === "save" ? "save" : "attack" }
       : undefined
+  if (challengeEstimate && estimate?.offenseSource === "sheet") {
+    challengeEstimate.offenseSource = "sheet"
+    const routine = asRecord(estimate.routine)
+    if (routine) {
+      const actions = Object.values(offensiveFeatures).flat()
+      challengeEstimate.routine = Object.fromEntries(actions.flatMap(action => {
+        const count = optionalFiniteNumber(routine[action.id])
+        return count !== undefined && count >= 1 ? [[action.id, Math.min(100, Math.trunc(count))]] : []
+      }))
+    }
+  }
   const defeatXp = optionalFiniteNumber(value.defeatXp)
   const challengeRating = estimateCreatureChallenge({
     maxHp: optionalFiniteNumber(value.maxHp),
     armorClass: optionalFiniteNumber(value.armorClass),
     challengeEstimate,
+    ...offensiveFeatures,
   })?.rating ?? stringValue(value.challengeRating)
 
 
@@ -326,22 +356,7 @@ export function normalizeCompendiumCreature(raw: unknown): CompendiumCreature {
       value.traits ?? featureGroups?.traits,
       "Traço",
     ),
-    actions: normalizeCreatureFeatures(
-      value.actions ?? featureGroups?.actions,
-      "Ação",
-    ),
-    bonusActions: normalizeCreatureFeatures(
-      value.bonusActions ?? featureGroups?.bonusActions,
-      "Ação bônus",
-    ),
-    reactions: normalizeCreatureFeatures(
-      value.reactions ?? featureGroups?.reactions,
-      "Reação",
-    ),
-    legendaryActions: normalizeCreatureFeatures(
-      value.legendaryActions ?? featureGroups?.legendaryActions,
-      "Ação lendária",
-    ),
+    ...offensiveFeatures,
     combatNotes: stringValue(value.combatNotes),
     drops: normalizeCreatureDrops(value.drops ?? value.loot ?? value.dropTable),
     sheetImageUrl:
@@ -388,15 +403,29 @@ export function normalizeCreatureCompendiumState(
 export function duplicateCompendiumCreature(
   creature: CompendiumCreature,
 ): CompendiumCreature {
+  const actions = duplicateFeatures(creature.actions)
+  const bonusActions = duplicateFeatures(creature.bonusActions)
+  const reactions = duplicateFeatures(creature.reactions)
+  const legendaryActions = duplicateFeatures(creature.legendaryActions)
+  const estimate = creature.challengeEstimate
+  const routine = estimate?.routine
+  const originalActions = [...creature.actions, ...creature.bonusActions, ...creature.reactions, ...creature.legendaryActions]
+  const copiedActions = [...actions, ...bonusActions, ...reactions, ...legendaryActions]
   return createCompendiumCreature({
     ...creature,
+    challengeEstimate: estimate && routine
+      ? { ...estimate, routine: Object.fromEntries(copiedActions.flatMap((action, index) => {
+          const count = routine[originalActions[index].id]
+          return count > 0 ? [[action.id, count]] : []
+        })) }
+      : estimate,
     id: crypto.randomUUID(),
     name: `${creature.name} (cópia)`,
     traits: duplicateFeatures(creature.traits),
-    actions: duplicateFeatures(creature.actions),
-    bonusActions: duplicateFeatures(creature.bonusActions),
-    reactions: duplicateFeatures(creature.reactions),
-    legendaryActions: duplicateFeatures(creature.legendaryActions),
+    actions,
+    bonusActions,
+    reactions,
+    legendaryActions,
     drops: structuredClone(creature.drops),
     createdAt: Date.now(),
     updatedAt: Date.now(),
