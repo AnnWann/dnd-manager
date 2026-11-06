@@ -95,3 +95,30 @@ test('automatic challenge drives proficiency and XP while manual values remain a
     ...creature, challengeEstimate: undefined, challengeRating: '0,25',
   })), 50)
 })
+
+test('challenge uses sheet damage, allows multiple actions, and follows changes to the sheet', async () => {
+  const { estimateCreatureChallenge } = await load('../../../apps/web/src/models/creatures/CreatureChallenge.ts')
+  const { duplicateCompendiumCreature } = await load('../../../apps/web/src/models/creatures/CompendiumCreature.ts')
+  const attack = (id, formula, usage) => ({
+    id, name: id, usage, mechanics: { kind: 'attack', attackBonus: 6, damage: [
+      { formula, damageType: 'piercing' },
+      { formula: '10d6', damageType: 'fire', optional: true },
+    ] },
+  })
+  const creature = normalizeCompendiumCreature({
+    name: 'Teste', maxHp: 100, armorClass: 15,
+    actions: [attack('mordida', '2d8+4'), attack('garra', '1d6+2'), attack('limitado', '12d6', { max: 1 })],
+    challengeEstimate: { damagePerRound: 0, accuracy: 3, accuracyKind: 'attack', hpMultiplier: 1, offenseSource: 'sheet' },
+  })
+  assert.equal(estimateCreatureChallenge(creature).damage, 13)
+  assert.equal(estimateCreatureChallenge(creature).effectiveHp, 100)
+
+  const custom = normalizeCompendiumCreature({
+    ...creature,
+    challengeEstimate: { ...creature.challengeEstimate, routine: { mordida: 1, garra: 2 }, hpMultiplier: 1.5 },
+  })
+  assert.equal(estimateCreatureChallenge(custom).damage, 24)
+  assert.equal(estimateCreatureChallenge(custom).effectiveHp, 150)
+  assert.equal(estimateCreatureChallenge(duplicateCompendiumCreature(custom)).damage, 24)
+  assert.equal(estimateCreatureChallenge({ ...custom, actions: [attack('mordida', '3d8+4'), custom.actions[1]] }).damage, 28.5)
+})

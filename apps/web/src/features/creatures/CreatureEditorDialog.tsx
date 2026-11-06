@@ -1,4 +1,4 @@
-import { creatureDefeatXp, estimateCreatureChallenge } from "../../models/creatures/CreatureChallenge"
+import { creatureChallengeActions, creatureDefeatXp, estimateCreatureChallenge } from "../../models/creatures/CreatureChallenge"
 import { inferCreatureHitDice, normalizeCreatureHitDice } from "../../models/creatures/CreatureHitDice"
 import { CREATURE_ATTRIBUTE_LABELS, CREATURE_SKILL_OPTIONS } from "../../models/creatures/CreatureRolls"
 import type { Attribute } from "../../models/sheet/Attribute"
@@ -21,7 +21,7 @@ import { uploadImage } from "../../lib/uploadImage"
 import { DamageAffinityEditor } from "../combat/DamageAffinityEditor"
 import { CreatureSpellcastingEditor } from "./CreatureSpellcastingEditor"
 import { getCreatureJsonTemplate } from "./creatureCompendiumIO"
-import { HP_EFFECT_TYPE_OPTIONS, type HpEffectType } from "../../models/combat/Damage"
+import { damageTypeLabel, HP_EFFECT_TYPE_OPTIONS, type HpEffectType } from "../../models/combat/Damage"
 import {
   createCreatureFeature,
   getCreatureProficiencyBonusFromChallengeRating,
@@ -79,7 +79,15 @@ export function CreatureEditorDialog({
     setJsonError(undefined)
   }, [creature])
 
+  const estimate = draft.challengeEstimate
+  const fromSheet = estimate?.offenseSource === "sheet"
+  const offense = fromSheet ? creatureChallengeActions(draft) : undefined
   const challenge = estimateCreatureChallenge(draft)
+  const affinityLabels = draft.damageAffinities.map(affinity => {
+    const kind = { immunity: "Imunidade", resistance: "Resistência", vulnerability: "Vulnerabilidade" }[affinity.kind]
+    const qualifier = affinity.qualifier === "nonmagical" ? " não mágico" : affinity.qualifier === "magical" ? " mágico" : ""
+    return `${kind} a ${damageTypeLabel(affinity.damageType)}${qualifier}`
+  })
   const adoptedRating = challenge?.rating ?? draft.challengeRating
   const xp = creatureDefeatXp({ ...draft, challengeRating: adoptedRating })
 
@@ -376,35 +384,79 @@ export function CreatureEditorDialog({
                     onChange={event => patch({
                       challengeRating: adoptedRating,
                       challengeEstimate: event.target.checked
-                        ? { damagePerRound: 0, accuracy: 3, accuracyKind: "attack", hpMultiplier: 1 }
+                        ? { damagePerRound: 0, accuracy: 3, accuracyKind: "attack", hpMultiplier: 1, offenseSource: "sheet" }
                         : undefined,
                     })}
                   />
                   Calcular nível de desafio
                 </label>
-                {draft.challengeEstimate ? (
+                {estimate ? (
                   <div className="grid gap-2">
-                    <Field label="Dano médio por rodada inteira">
-                      <Input type="number" min={0} step="any" value={draft.challengeEstimate.damagePerRound}
-                        onChange={event => patch({ challengeEstimate: { ...draft.challengeEstimate!, damagePerRound: Math.max(0, Number(event.target.value)) } })} />
-                    </Field>
-                    <Field label="Referência ofensiva">
-                      <SharedSelect value={draft.challengeEstimate.accuracyKind}
-                        onChange={event => patch({ challengeEstimate: { ...draft.challengeEstimate!, accuracyKind: event.target.value === "save" ? "save" : "attack" } })}>
-                        <option value="attack">Bônus de ataque</option>
-                        <option value="save">CD de resistência</option>
+                    <Field label="Dados ofensivos">
+                      <SharedSelect value={fromSheet ? "sheet" : "manual"}
+                        onChange={event => patch({ challengeEstimate: { ...estimate, offenseSource: event.target.value === "sheet" ? "sheet" : undefined } })}>
+                        <option value="sheet">Usar ações da ficha</option>
+                        <option value="manual">Informar manualmente</option>
                       </SharedSelect>
                     </Field>
-                    <Input aria-label="Valor do bônus de ataque ou da CD" type="number" value={draft.challengeEstimate.accuracy}
-                      onChange={event => patch({ challengeEstimate: { ...draft.challengeEstimate!, accuracy: Number(event.target.value) } })} />
+                    {fromSheet && offense ? (
+                      <>
+                        <p className="text-xs text-textMuted">
+                          {offense.selected.length
+                            ? `Rotina: ${offense.selected.map(action => action.feature.name).join(", ")} · ${offense.selected.reduce((sum, action) => sum + action.damage, 0).toLocaleString("pt-BR")} de dano médio por rodada.`
+                            : "Configure uma ação com dano na ficha, selecione uma rotina ou informe o dano manualmente."}
+                        </p>
+                        {offense.options.length > 0 ? (
+                          <label className="flex items-center gap-2 text-sm text-textH">
+                            <input type="checkbox" checked={estimate.routine !== undefined}
+                              onChange={event => patch({ challengeEstimate: { ...estimate, routine: event.target.checked
+                                ? Object.fromEntries(offense.selected.map(action => [action.feature.id, 1]))
+                                : undefined } })} />
+                            Escolher ações da rodada
+                          </label>
+                        ) : null}
+                        {estimate.routine && offense.options.map(({ feature }) => (
+                          <Field key={feature.id} label={`${feature.name} · usos por rodada`}>
+                            <Input type="number" min={0} max={100} step={1} value={estimate.routine?.[feature.id] ?? 0}
+                              onChange={event => patch({ challengeEstimate: { ...estimate, routine: {
+                                ...estimate.routine,
+                                [feature.id]: Math.max(0, Math.min(100, Math.trunc(Number(event.target.value)))),
+                              } } })} />
+                          </Field>
+                        ))}
+                      </>
+                    ) : (
+                      <>
+                        <Field label="Dano médio por rodada inteira">
+                          <Input type="number" min={0} step="any" value={estimate.damagePerRound}
+                            onChange={event => patch({ challengeEstimate: { ...estimate, damagePerRound: Math.max(0, Number(event.target.value)) } })} />
+                        </Field>
+                        <Field label="Referência ofensiva">
+                          <SharedSelect value={estimate.accuracyKind}
+                            onChange={event => patch({ challengeEstimate: { ...estimate, accuracyKind: event.target.value === "save" ? "save" : "attack" } })}>
+                            <option value="attack">Bônus de ataque</option>
+                            <option value="save">CD de resistência</option>
+                          </SharedSelect>
+                        </Field>
+                        <Input aria-label="Valor do bônus de ataque ou da CD" type="number" value={estimate.accuracy}
+                          onChange={event => patch({ challengeEstimate: { ...estimate, accuracy: Number(event.target.value) } })} />
+                      </>
+                    )}
                     <Field label="Multiplicador de PV efetivos">
-                      <Input type="number" min={0.1} step="any" value={draft.challengeEstimate.hpMultiplier}
-                        onChange={event => patch({ challengeEstimate: { ...draft.challengeEstimate!, hpMultiplier: Math.max(0.1, Number(event.target.value)) } })} />
+                      <Input type="number" min={0.1} step="any" value={estimate.hpMultiplier}
+                        onChange={event => patch({ challengeEstimate: { ...estimate, hpMultiplier: Math.max(0.1, Number(event.target.value)) } })} />
                     </Field>
-                    <p className="text-xs text-textMuted">Ajuste os PV efetivos para refletir resistências ou imunidades relevantes.</p>
+                    {draft.maxHp !== undefined ? (
+                      <p className="text-xs text-textMuted">{draft.maxHp} PV na ficha · {(draft.maxHp * estimate.hpMultiplier).toLocaleString("pt-BR")} PV efetivos para o ND.</p>
+                    ) : null}
+                    {affinityLabels.length ? (
+                      <p className="text-xs text-textMuted">{affinityLabels.join(" · ")}. Ajuste o multiplicador conforme o dano que o grupo costuma causar.</p>
+                    ) : null}
                     <p className="text-sm text-textH">{challenge
                       ? `ND estimado ${challenge.rating} · Defesa ${challenge.defense} · Ofensa ${challenge.offense}`
-                      : "Preencha PV máximos e CA para estimar o ND."}</p>
+                      : draft.maxHp === undefined || draft.armorClass === undefined
+                        ? "Preencha PV máximos e CA para estimar o ND."
+                        : "ND estimado indisponível sem uma ação válida na rotina."}</p>
                   </div>
                 ) : (
                   <TextInput label="Nível de desafio" value={draft.challengeRating} placeholder="Ex.: 5"
