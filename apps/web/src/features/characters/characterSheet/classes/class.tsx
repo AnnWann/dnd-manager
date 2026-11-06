@@ -1,3 +1,5 @@
+import { useState } from "react"
+import { useOptionalSessionRuntime } from "../../../session-runtime/useSessionRuntime"
 import { Select } from "../../../../components/ui/Select"
 import { CLASS_OPTIONS } from "../../../../contexts/consts"
 import type { CharacterTemplate } from "../../../../models/characters/CharacterTemplate"
@@ -27,13 +29,34 @@ export function Classes({
   character,
   updateCharacter
 }: Props) {
+  const sessionRuntime = useOptionalSessionRuntime()
+  const [error, setError] = useState("")
+  const canEdit = !sessionRuntime || (sessionRuntime.role === "MASTER" && sessionRuntime.status === "connected")
+
+  const applyClassChange: Props["updateCharacter"] = (characterId, updater) => {
+    if (!sessionRuntime) {
+      updateCharacter(characterId, updater)
+      return
+    }
+    if (!canEdit) return
+
+    const next = updater(character)
+    if (next === character) return
+    const sent = sessionRuntime.dispatchCharacterLifecycleOperation({
+      type: "character.session.resync",
+      characterId,
+      character: next.toJSON(),
+    })
+    setError(sent ? "" : "Não foi possível salvar as classes na sessão.")
+  }
+
   const sheet = character.get("sheet")
   const classes = sheet.classes ?? []
   const totalLevel = classes.reduce(
     (total, classData) => total + (classData.level ?? 0),
     0,
   )
-  const canAddClass = totalLevel < MAX_TOTAL_LEVEL
+  const canAddClass = canEdit && totalLevel < MAX_TOTAL_LEVEL
 
   return (
     <div className="flex flex-col gap-4 px-4 pb-4">
@@ -50,7 +73,9 @@ export function Classes({
           defaultValue=""
           disabled={!canAddClass}
           title={
-            canAddClass
+            !canEdit
+              ? "A edição de classes na sessão exige o mestre conectado"
+              : canAddClass
               ? "Adicionar classe"
               : "O nível total máximo é 20"
           }
@@ -63,7 +88,7 @@ export function Classes({
               return
             }
 
-            updateCharacter(character.get("id"), (c) => {
+            applyClassChange(character.get("id"), (c) => {
               const currentClasses = c.get("sheet").classes ?? []
               const currentTotal = currentClasses.reduce(
                 (total, classData) => total + (classData.level ?? 0),
@@ -87,7 +112,7 @@ export function Classes({
           }}
         >
           <option value="">
-            {canAddClass ? "+ Adicionar classe…" : "Nível máximo atingido"}
+            {totalLevel >= MAX_TOTAL_LEVEL ? "Nível máximo atingido" : "+ Adicionar classe…"}
           </option>
 
           {CLASS_OPTIONS.map((option) => (
@@ -98,6 +123,12 @@ export function Classes({
           <option value={CUSTOM_CLASS_RUNTIME_ID}>Classe personalizada…</option>
         </Select>
       </div>
+
+      {!canEdit || error ? (
+        <p role="status" className="text-xs text-textMuted">
+          {error || "A edição de classes na sessão exige o mestre conectado."}
+        </p>
+      ) : null}
 
       {totalLevel > MAX_TOTAL_LEVEL ? (
         <div className="rounded-lg border border-danger bg-dangerBg px-3 py-2 text-xs leading-5 text-danger">
@@ -126,7 +157,8 @@ export function Classes({
                 classData={classData}
                 classIndex={index}
                 maxLevel={maxLevelForClass}
-                updateCharacter={updateCharacter}
+                disabled={!canEdit}
+                updateCharacter={applyClassChange}
               />
             )
           })}

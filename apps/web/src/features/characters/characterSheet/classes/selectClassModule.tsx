@@ -1,3 +1,4 @@
+import { useState } from "react"
 import { Button } from "../../../../components/ui/Button"
 import { Input } from "../../../../components/ui/Input"
 import { Select } from "../../../../components/ui/Select"
@@ -43,6 +44,7 @@ type Props = {
   classData: CharacterClassInterface
   classIndex: number
   maxLevel: number
+  disabled: boolean
   updateCharacter: (
     characterId: string,
     updater: (c: CharacterTemplate) => CharacterTemplate,
@@ -69,8 +71,10 @@ export function SelectClassModule({
   classData,
   classIndex,
   maxLevel,
+  disabled,
   updateCharacter,
 }: Props) {
+  const [levelDraft, setLevelDraft] = useState<string>()
   const customClass = isCustomClassEntry(classData)
   const canEditCasting =
     !customClass &&
@@ -116,6 +120,15 @@ export function SelectClassModule({
 
   const safeMaxLevel = Math.max(1, Math.min(20, Math.trunc(maxLevel) || 1))
 
+  function commitLevel() {
+    setLevelDraft(undefined)
+    if (disabled || !levelDraft?.trim()) return
+    const value = Number(levelDraft)
+    if (!Number.isInteger(value)) return
+    const level = clampLevel(value, safeMaxLevel)
+    if (level !== classData.level) updateClass({ ...classData, level })
+  }
+
   return (
     <div className="grid grid-cols-1 gap-2 rounded-md border border-border p-2 md:grid-cols-[1fr_100px_220px_220px_44px]">
       <div className="min-w-0">
@@ -137,14 +150,18 @@ export function SelectClassModule({
           className="mt-1 h-9 px-2"
           min={1}
           max={safeMaxLevel}
-          value={classData.level}
+          value={levelDraft ?? classData.level}
+          aria-label={`Nível de ${getClassLabel(classData)}`}
+          disabled={disabled}
           title={`Máximo para esta classe: ${safeMaxLevel}`}
-          onChange={(event) =>
-            updateClass({
-              ...classData,
-              level: clampLevel(Number(event.target.value), safeMaxLevel),
-            })
-          }
+          onChange={event => setLevelDraft(event.target.value)}
+          onBlur={commitLevel}
+          onKeyDown={event => {
+            if (event.key === "Enter") {
+              event.preventDefault()
+              event.currentTarget.blur()
+            }
+          }}
         />
       </div>
 
@@ -158,6 +175,7 @@ export function SelectClassModule({
         ) : (
           <Select
             className="mt-1 h-9 px-2 py-1"
+            disabled={disabled}
             value={classData.spellcastingProgression ?? "none"}
             onChange={(event) => {
               const value = event.target.value
@@ -190,7 +208,7 @@ export function SelectClassModule({
           <Select
             className="mt-1 h-9 px-2 py-1"
             value={classData.castingAttribute ?? ""}
-            disabled={!classData.spellcastingProgression && !canEditCasting}
+            disabled={disabled || (!classData.spellcastingProgression && !canEditCasting)}
             onChange={(event) =>
               updateClass({
                 ...classData,
@@ -213,6 +231,7 @@ export function SelectClassModule({
           className="w-full"
           size="sm"
           variant="secondary"
+          disabled={disabled}
           onClick={removeClass}
           title="Remover classe"
         >
