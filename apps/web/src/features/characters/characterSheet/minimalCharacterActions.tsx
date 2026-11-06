@@ -7,7 +7,6 @@ import { CharacterActionTabs } from "../../../../../../packages/game-ui/src/Char
 import { ActionGroup } from "../../../../../../packages/game-ui/src/ActionGroup"
 import { getInitiativeRollSelection } from "../../initiative/initiativeRollSelection"
 import { useMemo, useState } from "react"
-import { useNavigate } from "react-router-dom"
 
 import { Button } from "../../../components/ui/Button"
 import { Input } from "../../../components/ui/Input"
@@ -107,7 +106,6 @@ type ActionEntry = {
   name: string
   description: string
   filter: ActionFilter
-  magic?: boolean
   source?: string
   ability?: Ability
   abilitySource?: AbilitySource
@@ -132,7 +130,7 @@ const FILTER_OPTIONS: Array<{ value: ActionFilter; label: string }> = [
 const STANDARD_ACTIONS: ActionEntry[] = [
   { id: "attack", name: "Atacar", filter: "action", description: "Realize um ataque corpo a corpo ou à distância. Recursos como Ataque Extra podem permitir mais de um ataque dentro desta mesma ação." },
   { id: "grapple-shove", name: "Agarrar ou empurrar", filter: "action", description: "Faça um ataque especial corpo a corpo para agarrar uma criatura ou empurrá-la. Quando possuir múltiplos ataques, normalmente substitui um deles." },
-  { id: "cast-action", name: "Conjurar magia", filter: "action", magic: true, description: "Conjure uma magia cujo tempo de conjuração seja uma ação, respeitando componentes, alcance, espaços de magia e demais requisitos." },
+  { id: "cast-action", name: "Conjurar magia", filter: "action", description: "Conjure uma magia cujo tempo de conjuração seja uma ação, respeitando componentes, alcance, espaços de magia e demais requisitos." },
   { id: "dash", name: "Correr", filter: "action", description: "Ganhe movimento adicional igual ao seu deslocamento atual durante este turno." },
   { id: "disengage", name: "Desengajar", filter: "action", description: "Seu movimento não provoca ataques de oportunidade durante o restante do turno." },
   { id: "dodge", name: "Esquivar", filter: "action", description: "Até o início do seu próximo turno, ataques visíveis contra você têm desvantagem e você tem vantagem em testes de resistência de Destreza, desde que possa agir e se mover." },
@@ -142,10 +140,10 @@ const STANDARD_ACTIONS: ActionEntry[] = [
   { id: "search", name: "Procurar", filter: "action", description: "Procure algo usando um teste apropriado, normalmente Percepção ou Investigação, conforme o que está sendo analisado." },
   { id: "use-object", name: "Usar objeto", filter: "action", description: "Use ou manipule um objeto que exija uma ação além da interação gratuita normalmente disponível no turno." },
   { id: "light-weapon", name: "Ataque com arma leve", filter: "bonusAction", description: "Quando as regras de combate com duas armas forem atendidas, realize o ataque adicional permitido com uma arma leve empunhada." },
-  { id: "cast-bonus", name: "Conjurar magia de ação bônus", filter: "bonusAction", magic: true, description: "Conjure uma magia cujo tempo de conjuração seja uma ação bônus, observando as limitações de conjuração no mesmo turno." },
+  { id: "cast-bonus", name: "Conjurar magia de ação bônus", filter: "bonusAction", description: "Conjure uma magia cujo tempo de conjuração seja uma ação bônus, observando as limitações de conjuração no mesmo turno." },
   { id: "opportunity-attack", name: "Ataque de oportunidade", filter: "reaction", description: "Quando uma criatura visível deixa voluntariamente o seu alcance, use sua reação para realizar um ataque corpo a corpo contra ela." },
   { id: "readied-reaction", name: "Executar ação preparada", filter: "reaction", description: "Quando o gatilho definido pela ação Preparar ocorrer, use sua reação para executar a resposta escolhida ou ignore o gatilho." },
-  { id: "cast-reaction", name: "Conjurar magia de reação", filter: "reaction", magic: true, description: "Conjure uma magia de reação quando o gatilho específico descrito nela acontecer." },
+  { id: "cast-reaction", name: "Conjurar magia de reação", filter: "reaction", description: "Conjure uma magia de reação quando o gatilho específico descrito nela acontecer." },
   { id: "interact-object", name: "Interagir com objeto", filter: "free", description: "Realize uma interação simples durante seu turno, como abrir uma porta destrancada, sacar uma arma ou pegar um objeto acessível. Interações adicionais podem exigir a ação Usar objeto." },
   { id: "speak", name: "Falar brevemente", filter: "free", description: "Comunique uma frase curta ou sinais simples durante seu turno, desde que a situação permita." },
   { id: "drop-item", name: "Soltar item", filter: "free", description: "Solte voluntariamente um item que esteja segurando. O item passa para o Inventário do chão quando esse fluxo for usado na ficha." },
@@ -162,7 +160,6 @@ export function MinimalCharacterActions({
     updater: (character: CharacterTemplate) => CharacterTemplate,
   ) => void
 }) {
-  const navigate = useNavigate()
   const registeredDefinitions = useCustomSystemDefinitions()
   const sessionRuntime = useOptionalSessionRuntime()
   // A connected session must render actions from its authoritative Creation
@@ -286,10 +283,6 @@ export function MinimalCharacterActions({
   }
 
   function open(entry: ActionEntry) {
-    if (entry.magic) {
-      navigate(`/character/${encodeURIComponent(character.get("id"))}/spellsList`)
-      return
-    }
     setError("")
     setManualRollValue("")
     setManualDamageValues([])
