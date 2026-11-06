@@ -122,3 +122,33 @@ test('challenge uses sheet damage, allows multiple actions, and follows changes 
   assert.equal(estimateCreatureChallenge(duplicateCompendiumCreature(custom)).damage, 24)
   assert.equal(estimateCreatureChallenge({ ...custom, actions: [attack('mordida', '3d8+4'), custom.actions[1]] }).damage, 28.5)
 })
+
+test('challenge includes spell scaling and shares slots between spells of the same circle', async () => {
+  const { estimateCreatureChallenge, resolveChallengeSpells } = await load('../../../apps/web/src/models/creatures/CreatureChallenge.ts')
+  const spell = (index, slotLevel, quantity) => ({
+    index, name: index, slotLevel, resolution: {
+      roll: { type: 'attack' },
+      damage: [{ dice: { quantity, sides: 'd6' }, appliesOn: 'hit',
+        ...(slotLevel === 0 ? { diceScaling: { source: 'character-level', type: 'thresholds', thresholds: [{ level: 5, amount: 1 }] } } : {}),
+      }],
+    },
+  })
+  const spells = [spell('truque', 0, 1), spell('raio', 1, 3), spell('orbe', 1, 4)]
+  const creature = normalizeCompendiumCreature({
+    name: 'Conjurador', maxHp: 100, armorClass: 15,
+    spellcasting: { casterLevel: 5, ability: 'int', slots: { 1: 1 }, spells: [
+      { spellIndex: 'truque', usage: { type: 'atWill' } },
+      { spellIndex: 'raio', usage: { type: 'slots' } },
+      { spellIndex: 'orbe', usage: { type: 'slots' } },
+    ] },
+    challengeEstimate: { damagePerRound: 0, accuracy: 3, accuracyKind: 'attack', hpMultiplier: 1, offenseSource: 'sheet' },
+  })
+  const snapshot = resolveChallengeSpells(creature, index => spells.find(entry => entry.index === index))
+  const estimate = { ...creature.challengeEstimate, spells: snapshot }
+  assert.equal(estimateCreatureChallenge({ ...creature, challengeEstimate: estimate }).damage, 7)
+  const saved = normalizeCompendiumCreature({ ...creature, challengeEstimate: {
+    ...estimate, routine: { 'spell:raio:1': 1, 'spell:orbe:1': 1 },
+  } })
+  assert.equal(estimateCreatureChallenge(saved).damage, 10.5)
+  assert.deepEqual(normalizeCompendiumCreature(saved), saved)
+})

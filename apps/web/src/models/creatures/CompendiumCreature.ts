@@ -266,6 +266,8 @@ export function normalizeCompendiumCreature(raw: unknown): CompendiumCreature {
       "Ação lendária",
     ),
   }
+  const spellcasting = normalizeCreatureSpellcasting(value.spellcasting)
+  const normalizedAbilityScores = normalizeAbilityScores(abilityScores)
   const estimate = asRecord(value.challengeEstimate)
   const damagePerRound = optionalFiniteNumber(estimate?.damagePerRound)
   const accuracy = optionalFiniteNumber(estimate?.accuracy)
@@ -277,12 +279,28 @@ export function normalizeCompendiumCreature(raw: unknown): CompendiumCreature {
       : undefined
   if (challengeEstimate && estimate?.offenseSource === "sheet") {
     challengeEstimate.offenseSource = "sheet"
+    if (Array.isArray(estimate.spells)) {
+      challengeEstimate.spells = estimate.spells.flatMap(rawSpell => {
+        const spell = asRecord(rawSpell)
+        const spellIndex = stringValue(spell?.spellIndex)
+        const castLevel = optionalFiniteNumber(spell?.castLevel)
+        const damage = optionalFiniteNumber(spell?.damage)
+        const roll = spell?.roll
+        if (!spellcasting?.spells.some(reference => reference.spellIndex === spellIndex)
+          || castLevel === undefined || !Number.isInteger(castLevel) || castLevel < 0 || castLevel > 9
+          || damage === undefined || damage <= 0 || (roll !== "attack" && roll !== "save" && roll !== "none")) return []
+        return [{ spellIndex, castLevel, damage, roll, name: stringValue(spell?.name, spellIndex) }]
+      })
+    }
     const routine = asRecord(estimate.routine)
     if (routine) {
-      const actions = Object.values(offensiveFeatures).flat()
-      challengeEstimate.routine = Object.fromEntries(actions.flatMap(action => {
-        const count = optionalFiniteNumber(routine[action.id])
-        return count !== undefined && count >= 1 ? [[action.id, Math.min(100, Math.trunc(count))]] : []
+      const ids = [
+        ...Object.values(offensiveFeatures).flat().map(action => action.id),
+        ...(challengeEstimate.spells ?? []).map(spell => `spell:${spell.spellIndex}:${spell.castLevel}`),
+      ]
+      challengeEstimate.routine = Object.fromEntries(ids.flatMap(id => {
+        const count = optionalFiniteNumber(routine[id])
+        return count !== undefined && count >= 1 ? [[id, Math.min(100, Math.trunc(count))]] : []
       }))
     }
   }
@@ -292,6 +310,8 @@ export function normalizeCompendiumCreature(raw: unknown): CompendiumCreature {
     armorClass: optionalFiniteNumber(value.armorClass),
     challengeEstimate,
     ...offensiveFeatures,
+    spellcasting,
+    abilityScores: normalizedAbilityScores,
   })?.rating ?? stringValue(value.challengeRating)
 
 
@@ -351,7 +371,7 @@ export function normalizeCompendiumCreature(raw: unknown): CompendiumCreature {
     languages: stringValue(value.languages),
     ownerUserId: optionalStringValue(value.ownerUserId),
     controlKind: value.controlKind === "familiar" || value.controlKind === "mount" ? value.controlKind : "companion",
-    spellcasting: normalizeCreatureSpellcasting(value.spellcasting),
+    spellcasting,
     traits: normalizeCreatureFeatures(
       value.traits ?? featureGroups?.traits,
       "Traço",
@@ -414,10 +434,10 @@ export function duplicateCompendiumCreature(
   return createCompendiumCreature({
     ...creature,
     challengeEstimate: estimate && routine
-      ? { ...estimate, routine: Object.fromEntries(copiedActions.flatMap((action, index) => {
+      ? { ...estimate, routine: Object.fromEntries([...Object.entries(routine).filter(([id]) => id.startsWith("spell:")), ...copiedActions.flatMap((action, index) => {
           const count = routine[originalActions[index].id]
           return count > 0 ? [[action.id, count]] : []
-        })) }
+        })]) }
       : estimate,
     id: crypto.randomUUID(),
     name: `${creature.name} (cópia)`,

@@ -1,4 +1,4 @@
-import { creatureChallengeActions, creatureDefeatXp, estimateCreatureChallenge } from "../../models/creatures/CreatureChallenge"
+import { creatureChallengeActions, creatureDefeatXp, estimateCreatureChallenge, resolveChallengeSpells } from "../../models/creatures/CreatureChallenge"
 import { inferCreatureHitDice, normalizeCreatureHitDice } from "../../models/creatures/CreatureHitDice"
 import { CREATURE_ATTRIBUTE_LABELS, CREATURE_SKILL_OPTIONS } from "../../models/creatures/CreatureRolls"
 import type { Attribute } from "../../models/sheet/Attribute"
@@ -19,6 +19,7 @@ import { Modal } from "../../components/ui/Modal"
 import { Textarea } from "../../components/ui/Textarea"
 import { uploadImage } from "../../lib/uploadImage"
 import { DamageAffinityEditor } from "../combat/DamageAffinityEditor"
+import { useMagicContext } from "../../contexts/magicContext"
 import { CreatureSpellcastingEditor } from "./CreatureSpellcastingEditor"
 import { getCreatureJsonTemplate } from "./creatureCompendiumIO"
 import { damageTypeLabel, HP_EFFECT_TYPE_OPTIONS, type HpEffectType } from "../../models/combat/Damage"
@@ -79,10 +80,14 @@ export function CreatureEditorDialog({
     setJsonError(undefined)
   }, [creature])
 
-  const estimate = draft.challengeEstimate
+  const { getSpellByIndex } = useMagicContext()
+  const estimate = draft.challengeEstimate?.offenseSource === "sheet"
+    ? { ...draft.challengeEstimate, spells: resolveChallengeSpells(draft, getSpellByIndex) }
+    : draft.challengeEstimate
+  const challengeSheet = { ...draft, challengeEstimate: estimate }
   const fromSheet = estimate?.offenseSource === "sheet"
-  const offense = fromSheet ? creatureChallengeActions(draft) : undefined
-  const challenge = estimateCreatureChallenge(draft)
+  const offense = fromSheet ? creatureChallengeActions(challengeSheet) : undefined
+  const challenge = estimateCreatureChallenge(challengeSheet)
   const affinityLabels = draft.damageAffinities.map(affinity => {
     const kind = { immunity: "Imunidade", resistance: "Resistência", vulnerability: "Vulnerabilidade" }[affinity.kind]
     const qualifier = affinity.qualifier === "nonmagical" ? " não mágico" : affinity.qualifier === "magical" ? " mágico" : ""
@@ -175,7 +180,7 @@ export function CreatureEditorDialog({
 
     onSave(
       normalizeCompendiumCreature({
-        ...draft,
+        ...challengeSheet,
         name,
         updatedAt: Date.now(),
       }),
@@ -403,24 +408,30 @@ export function CreatureEditorDialog({
                       <>
                         <p className="text-xs text-textMuted">
                           {offense.selected.length
-                            ? `Rotina: ${offense.selected.map(action => action.feature.name).join(", ")} · ${offense.selected.reduce((sum, action) => sum + action.damage, 0).toLocaleString("pt-BR")} de dano médio por rodada.`
+                            ? `Rotina: ${offense.selected.map(action => action.name).join(", ")} · ${offense.selected.reduce((sum, action) => sum + action.damage, 0).toLocaleString("pt-BR")} de dano médio por rodada.`
                             : "Configure uma ação com dano na ficha, selecione uma rotina ou informe o dano manualmente."}
                         </p>
                         {offense.options.length > 0 ? (
                           <label className="flex items-center gap-2 text-sm text-textH">
                             <input type="checkbox" checked={estimate.routine !== undefined}
                               onChange={event => patch({ challengeEstimate: { ...estimate, routine: event.target.checked
-                                ? Object.fromEntries(offense.selected.map(action => [action.feature.id, 1]))
+                                ? Object.fromEntries(offense.selected.map(action => [action.id, 1]))
                                 : undefined } })} />
-                            Escolher ações da rodada
+                            Escolher ações e magias da rodada
                           </label>
                         ) : null}
-                        {estimate.routine && offense.options.map(({ feature }) => (
-                          <Field key={feature.id} label={`${feature.name} · usos por rodada`}>
-                            <Input type="number" min={0} max={100} step={1} value={estimate.routine?.[feature.id] ?? 0}
+                        {offense.options.some(option => option.spellRoll !== undefined) ? (
+                          <p className="text-xs text-textMuted">O dano de magia em área considera um alvo. Ajuste a estimativa manualmente para uma rotina que costuma atingir vários.</p>
+                        ) : null}
+                        {estimate.routine && offense.options.some(option => option.slot !== undefined) ? (
+                          <p className="text-xs text-textMuted">Magias do mesmo círculo dividem os espaços disponíveis. O total mostrado considera esse limite.</p>
+                        ) : null}
+                        {estimate.routine && offense.options.map(({ id, name, max }) => (
+                          <Field key={id} label={`${name} · usos por rodada`}>
+                            <Input type="number" min={0} max={max} step={1} value={estimate.routine?.[id] ?? 0}
                               onChange={event => patch({ challengeEstimate: { ...estimate, routine: {
                                 ...estimate.routine,
-                                [feature.id]: Math.max(0, Math.min(100, Math.trunc(Number(event.target.value)))),
+                                [id]: Math.max(0, Math.min(max, Math.trunc(Number(event.target.value)))),
                               } } })} />
                           </Field>
                         ))}
