@@ -3,6 +3,7 @@ import {
   Eye,
   EyeOff,
   CirclePlus,
+  Skull,
   Swords,
   X,
 } from "lucide-react"
@@ -351,6 +352,32 @@ export function InitiativeVisibilityButton({ entry, onChange }: {
     <Button type="button" size="icon" variant={entry.hidden ? "secondary" : "ghost"}
       aria-label={label} title={label} onClick={() => onChange(!entry.hidden)}>
       <Icon className="h-4 w-4" />
+    </Button>
+  )
+}
+
+export function InitiativeDefeatButton({ entry, onChange }: {
+  entry: InitiativeEntry
+  onChange: (patch: Partial<InitiativeEntry>) => void
+}) {
+  const confirmDefeat = entry.defeated && entry.defeatReason === "zeroHp"
+    && entry.sourceId?.startsWith("compendium:")
+  const defeated = Boolean(confirmDefeat || !entry.defeated)
+  const label = confirmDefeat ? "Confirmar derrota" : defeated ? "Marcar como derrotado" : "Reativar"
+
+  return (
+    <Button
+      size="icon"
+      variant={entry.defeated ? "outline" : "ghost"}
+      title={label}
+      aria-label={label}
+      onClick={() => onChange({
+        defeated,
+        downed: defeated ? false : entry.downed,
+        defeatReason: defeated ? "manual" : undefined,
+      })}
+    >
+      <Skull className="h-4 w-4" />
     </Button>
   )
 }

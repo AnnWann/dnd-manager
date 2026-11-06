@@ -79,3 +79,19 @@ test('companion gallery renders only names and portraits without sheet controls'
     delete globalThis.__companionGalleryRuntime
   }
 })
+
+test('automatic challenge drives proficiency and XP while manual values remain available', async () => {
+  const { creatureDefeatXp } = await load('../../../apps/web/src/models/creatures/CreatureChallenge.ts')
+  const { getCreatureProficiencyBonusFromChallengeRating } = await load('../../../apps/web/src/models/creatures/CompendiumCreature.ts')
+  const creature = normalizeCompendiumCreature({
+    name: 'Teste', challengeRating: '2', maxHp: 140, armorClass: 15,
+    challengeEstimate: { damagePerRound: 36, accuracy: 6, accuracyKind: 'attack', hpMultiplier: 1 },
+  })
+  assert.equal(creature.challengeRating, '5')
+  assert.equal(getCreatureProficiencyBonusFromChallengeRating(creature.challengeRating), 3)
+  assert.equal(creatureDefeatXp(creature), 1800)
+  assert.equal(creatureDefeatXp(normalizeCompendiumCreature({ ...creature, defeatXp: 0 })), 0)
+  assert.equal(creatureDefeatXp(normalizeCompendiumCreature({
+    ...creature, challengeEstimate: undefined, challengeRating: '0,25',
+  })), 50)
+})

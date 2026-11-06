@@ -1,3 +1,4 @@
+import { creatureDefeatXp, estimateCreatureChallenge } from "../../models/creatures/CreatureChallenge"
 import { inferCreatureHitDice, normalizeCreatureHitDice } from "../../models/creatures/CreatureHitDice"
 import { CREATURE_ATTRIBUTE_LABELS, CREATURE_SKILL_OPTIONS } from "../../models/creatures/CreatureRolls"
 import type { Attribute } from "../../models/sheet/Attribute"
@@ -23,6 +24,7 @@ import { getCreatureJsonTemplate } from "./creatureCompendiumIO"
 import { HP_EFFECT_TYPE_OPTIONS, type HpEffectType } from "../../models/combat/Damage"
 import {
   createCreatureFeature,
+  getCreatureProficiencyBonusFromChallengeRating,
   normalizeCompendiumCreature,
   type CompendiumCreature,
   type CreatureAbilityScores,
@@ -76,6 +78,10 @@ export function CreatureEditorDialog({
     setJsonText("")
     setJsonError(undefined)
   }, [creature])
+
+  const challenge = estimateCreatureChallenge(draft)
+  const adoptedRating = challenge?.rating ?? draft.challengeRating
+  const xp = creatureDefeatXp({ ...draft, challengeRating: adoptedRating })
 
   function patch(patchValue: Partial<CompendiumCreature>) {
     setDraft((current) => ({ ...current, ...patchValue }))
@@ -362,12 +368,54 @@ export function CreatureEditorDialog({
                 placeholder="Médio"
                 onChange={(size) => patch({ size })}
               />
-              <TextInput
-                label="Nível de desafio"
-                value={draft.challengeRating}
-                placeholder="Ex.: 5"
-                onChange={(challengeRating) => patch({ challengeRating })}
-              />
+              <div className="grid gap-2">
+                <label className="flex items-center gap-2 text-sm text-textH">
+                  <input
+                    type="checkbox"
+                    checked={Boolean(draft.challengeEstimate)}
+                    onChange={event => patch({
+                      challengeRating: adoptedRating,
+                      challengeEstimate: event.target.checked
+                        ? { damagePerRound: 0, accuracy: 3, accuracyKind: "attack", hpMultiplier: 1 }
+                        : undefined,
+                    })}
+                  />
+                  Calcular nível de desafio
+                </label>
+                {draft.challengeEstimate ? (
+                  <div className="grid gap-2">
+                    <Field label="Dano médio por rodada inteira">
+                      <Input type="number" min={0} step="any" value={draft.challengeEstimate.damagePerRound}
+                        onChange={event => patch({ challengeEstimate: { ...draft.challengeEstimate!, damagePerRound: Math.max(0, Number(event.target.value)) } })} />
+                    </Field>
+                    <Field label="Referência ofensiva">
+                      <SharedSelect value={draft.challengeEstimate.accuracyKind}
+                        onChange={event => patch({ challengeEstimate: { ...draft.challengeEstimate!, accuracyKind: event.target.value === "save" ? "save" : "attack" } })}>
+                        <option value="attack">Bônus de ataque</option>
+                        <option value="save">CD de resistência</option>
+                      </SharedSelect>
+                    </Field>
+                    <Input aria-label="Valor do bônus de ataque ou da CD" type="number" value={draft.challengeEstimate.accuracy}
+                      onChange={event => patch({ challengeEstimate: { ...draft.challengeEstimate!, accuracy: Number(event.target.value) } })} />
+                    <Field label="Multiplicador de PV efetivos">
+                      <Input type="number" min={0.1} step="any" value={draft.challengeEstimate.hpMultiplier}
+                        onChange={event => patch({ challengeEstimate: { ...draft.challengeEstimate!, hpMultiplier: Math.max(0.1, Number(event.target.value)) } })} />
+                    </Field>
+                    <p className="text-xs text-textMuted">Ajuste os PV efetivos para refletir resistências ou imunidades relevantes.</p>
+                    <p className="text-sm text-textH">{challenge
+                      ? `ND estimado ${challenge.rating} · Defesa ${challenge.defense} · Ofensa ${challenge.offense}`
+                      : "Preencha PV máximos e CA para estimar o ND."}</p>
+                  </div>
+                ) : (
+                  <TextInput label="Nível de desafio" value={draft.challengeRating} placeholder="Ex.: 5"
+                    onChange={challengeRating => patch({ challengeRating })} />
+                )}
+                <span className="text-xs text-textMuted">Proficiência +{getCreatureProficiencyBonusFromChallengeRating(adoptedRating)}</span>
+                <Field label={`XP por derrota · ${xp.toLocaleString("pt-BR")} XP`}>
+                  <Input type="number" min={0} step={1} value={draft.defeatXp ?? ""} placeholder="Automático pelo ND"
+                    onChange={event => patch({ defeatXp: event.target.value === "" ? undefined : Math.max(0, Math.trunc(Number(event.target.value))) })} />
+                </Field>
+              </div>
               <TextInput
                 label="Pasta"
                 value={draft.folder ?? ""}

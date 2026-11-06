@@ -1,5 +1,5 @@
 import { InitiativeRosterTable } from "../../../../../packages/game-ui/src/InitiativeRosterTable"
-import { HeartPulse, Pencil, Play, Skull, Trash2, Zap } from "lucide-react"
+import { HeartPulse, Pencil, Play, Trash2, Zap } from "lucide-react"
 
 import { Button } from "../../components/ui/Button"
 import type { InitiativeEntry } from "../../models/initiative/Initiative"
@@ -9,6 +9,7 @@ import {
   DeathSaveCounter,
   EntryIdentity,
   InitiativeVisibilityButton,
+  InitiativeDefeatButton,
   HitPointEditor,
   InitiativeEditor,
   TradeControls,
@@ -169,20 +170,7 @@ function TableEntryRows({
                 <Pencil className="h-4 w-4" />
               </Button>
             ) : null}
-            <Button
-              size="icon"
-              variant={entry.defeated ? "outline" : "ghost"}
-              title={entry.defeated ? "Reativar" : "Marcar como derrotado"}
-              onClick={() =>
-                patchEntry(entry.id, {
-                  defeated: !entry.defeated,
-                  downed: entry.defeated ? entry.downed : false,
-                  defeatReason: entry.defeated ? undefined : "manual",
-                })
-              }
-            >
-              <Skull className="h-4 w-4" />
-            </Button>
+            <InitiativeDefeatButton entry={entry} onChange={patch => patchEntry(entry.id, patch)} />
             <Button
               size="icon"
               variant="ghost"

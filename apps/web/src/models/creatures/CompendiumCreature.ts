@@ -1,3 +1,4 @@
+import { estimateCreatureChallenge, type CreatureChallengeEstimate } from "./CreatureChallenge"
 import { inferCreatureHitDice, normalizeCreatureHitDice } from "./CreatureHitDice"
 import type { Attribute } from "../sheet/Attribute"
 import type { Skill } from "../sheet/Skills"
@@ -89,6 +90,8 @@ export type CompendiumCreature = {
   category: string
   size: string
   challengeRating: string
+  challengeEstimate?: CreatureChallengeEstimate
+  defeatXp?: number
   /** Optional named folder used only to organize the compendium UI. */
   folder?: string
   unique: boolean
@@ -188,7 +191,9 @@ export function createCompendiumCreature(
     basicName: patch.basicName?.trim() || patch.name?.trim() || "Nova criatura",
     category: patch.category ?? "Monstro",
     size: patch.size ?? "Médio",
-    challengeRating: patch.challengeRating ?? "",
+    challengeRating: estimateCreatureChallenge(patch)?.rating ?? patch.challengeRating ?? "",
+    challengeEstimate: patch.challengeEstimate,
+    defeatXp: patch.defeatXp,
     folder: optionalStringValue(patch.folder),
     unique: patch.unique ?? false,
     initiativeTurns: Math.max(1, Math.trunc(finiteNumber(patch.initiativeTurns, 1))),
@@ -243,6 +248,22 @@ export function normalizeCompendiumCreature(raw: unknown): CompendiumCreature {
   const now = Date.now()
   const abilityScores = asRecord(value.abilityScores)
   const featureGroups = asRecord(value.features)
+  const estimate = asRecord(value.challengeEstimate)
+  const damagePerRound = optionalFiniteNumber(estimate?.damagePerRound)
+  const accuracy = optionalFiniteNumber(estimate?.accuracy)
+  const hpMultiplier = optionalFiniteNumber(estimate?.hpMultiplier)
+  const challengeEstimate: CreatureChallengeEstimate | undefined =
+    damagePerRound !== undefined && damagePerRound >= 0 && accuracy !== undefined
+      && hpMultiplier !== undefined && hpMultiplier > 0
+      ? { damagePerRound, accuracy, hpMultiplier, accuracyKind: estimate?.accuracyKind === "save" ? "save" : "attack" }
+      : undefined
+  const defeatXp = optionalFiniteNumber(value.defeatXp)
+  const challengeRating = estimateCreatureChallenge({
+    maxHp: optionalFiniteNumber(value.maxHp),
+    armorClass: optionalFiniteNumber(value.armorClass),
+    challengeEstimate,
+  })?.rating ?? stringValue(value.challengeRating)
+
 
   return {
     id: stringValue(value.id).trim() || crypto.randomUUID(),
@@ -254,7 +275,9 @@ export function normalizeCompendiumCreature(raw: unknown): CompendiumCreature {
       name,
     category: stringValue(value.category, "Monstro"),
     size: stringValue(value.size, "Médio"),
-    challengeRating: stringValue(value.challengeRating),
+    challengeRating,
+    challengeEstimate,
+    defeatXp: defeatXp !== undefined ? Math.max(0, Math.min(Number.MAX_SAFE_INTEGER, Math.trunc(defeatXp))) : undefined,
     folder: optionalStringValue(value.folder),
     unique: booleanValue(value.unique),
     initiativeTurns: Math.max(1, Math.trunc(finiteNumber(value.initiativeTurns, 1))),
@@ -264,7 +287,7 @@ export function normalizeCompendiumCreature(raw: unknown): CompendiumCreature {
     maxHp: optionalFiniteNumber(value.maxHp),
     hitDice: normalizeCreatureHitDice(value.hitDice) ?? inferCreatureHitDice({
       maxHp: optionalFiniteNumber(value.maxHp), size: stringValue(value.size, "Médio"),
-      challengeRating: stringValue(value.challengeRating),
+      challengeRating,
       abilityScores: { con: finiteNumber(abilityScores?.con, 10) },
     }),
     showInCompanions: value.showInCompanions === true,

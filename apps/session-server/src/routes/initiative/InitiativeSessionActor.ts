@@ -1,3 +1,4 @@
+import { creatureDefeatXp } from "../../../../web/src/models/creatures/CreatureChallenge";
 import { canControlCompanion, hasPersistentCompanionState } from "../../../../web/src/shared/session-runtime/companionRuntime";
 import { MAX_CHARACTER_STATE_LOG_RECORDS } from "../characters/sheet/characterState";
 import type { SessionAbilityState } from "../characters/abilities/abilityProtocol";
@@ -261,6 +262,43 @@ export class SessionActor {
       nextSession,
       runtimeConfig,
     ).session;
+    let experienceAward: { perCharacter: number; recipientCount: number } | undefined;
+    if (connection.role === "MASTER" && runtimeConfig && (runtimeConfig.config.progression?.mode ?? "xp") === "xp"
+      && operation.type === "initiative.entry.update" && operation.patch.defeatReason === "manual") {
+      const previous = current.entries.find(entry => entry.id === operation.entryId);
+      const defeated = nextSession.entries.find(entry => entry.id === operation.entryId);
+      const creature = findRuntimeCreature(runtimeConfig, defeated?.sourceId);
+      const combatantIds = new Set(sharedCombatantEntryIds(nextSession, operation.entryId));
+      if (creature && defeated?.defeated && defeated.defeatReason === "manual"
+        && !(previous?.defeated && previous.defeatReason === "manual")
+        && !current.entries.some(entry => combatantIds.has(entry.id) && entry.defeatXpAwarded)) {
+        const recipients = new Set<string>();
+        for (const entry of nextSession.entries) {
+          if (entry.sourceType !== "character") continue;
+          const id = linkedCharacterIdForInitiativeEntry(entry);
+          if (id && hp[id]?.statsInitialized && runtimeConfig.config.characters.some(character => character.characterId === id && character.type === "pc")) {
+            recipients.add(id);
+          }
+        }
+        const perCharacter = recipients.size ? Math.floor(creatureDefeatXp(creature) / recipients.size) : 0;
+        if (perCharacter > 0) {
+          for (const id of recipients) {
+            const recipient = hp[id];
+            sourceSync.previousHp[id] ??= structuredClone(recipient);
+            hp[id] = {
+              ...recipient,
+              stats: { ...recipient.stats, experience: Math.min(Number.MAX_SAFE_INTEGER, recipient.stats.experience + perCharacter) },
+              revision: recipient.revision + 1,
+            };
+            sourceSync.changedHpIds.add(id);
+          }
+          nextSession = { ...nextSession, entries: nextSession.entries.map(entry =>
+            combatantIds.has(entry.id) ? { ...entry, defeatXpAwarded: true } : entry) };
+          experienceAward = { perCharacter, recipientCount: recipients.size };
+        }
+      }
+    }
+
     state.session = nextSession as unknown as Record<string, unknown>;
     state.revision += 1;
     const changedCharacterIds = new Set([
@@ -274,7 +312,9 @@ export class SessionActor {
     ];
     const record = createSessionLogRecord({
       actorId: connection.userId,
-      operation: result.operation,
+      operation: result.operation.type === "initiative.entry.update"
+        ? { ...result.operation, experienceAward }
+        : result.operation,
       affectedScopes,
       reverseOperation: {
         type: "session.initiative.restore",
@@ -1060,7 +1100,9 @@ function normalizeEntryPatch(value: Record<string, unknown>): Partial<Initiative
   if (typeof value.hidden === "boolean") patch.hidden = value.hidden;
   if (typeof value.defeated === "boolean") patch.defeated = value.defeated;
   if (typeof value.downed === "boolean") patch.downed = value.downed;
-  if ("defeatReason" in value) {
+  if (patch.defeated === false) {
+    patch.defeatReason = undefined;
+  } else if ("defeatReason" in value) {
     patch.defeatReason = value.defeatReason === "manual" || value.defeatReason === "zeroHp"
       ? value.defeatReason
       : undefined;
