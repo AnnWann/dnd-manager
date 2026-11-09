@@ -494,7 +494,7 @@ function resolveCastSource(
         };
       }
     }
-    return { ok: true, source: known.source, grant: matchedGrant?.additionalResourceCost ? matchedGrant : undefined };
+    return { ok: true, source: known.source, grant: matchedGrant };
   }
 
   const grant = getCharacterGrantedSpells(character).find(
