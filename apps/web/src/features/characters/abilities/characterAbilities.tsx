@@ -1,6 +1,7 @@
 import { abilityNeedsActivationDialog } from "../../../models/abilities/abilityActivationDialog"
 import { getInitiativeRollSelection } from "../../initiative/initiativeRollSelection"
 import { useEffect, useMemo, useState } from "react"
+import { meetsUnlockRequirements } from "../../../models/magic/spells/grantedSpellUnlocks"
 
 import { Button } from "../../../components/ui/Button"
 import { requestActionRoll } from "../../../lib/diceRoller"
@@ -118,6 +119,7 @@ export function CharacterAbilitiesTab({ character, updateCharacter }: Props) {
     const normalizedSearch = search.trim().toLocaleLowerCase()
 
     return abilities
+      .filter((ability) => meetsUnlockRequirements(displayCharacter, ability.unlockRequirements))
       .filter((ability) => {
         const equipmentAbility = isEquipmentAbility(ability)
         const raceAbility = isRaceAbility(ability)
@@ -149,7 +151,7 @@ export function CharacterAbilitiesTab({ character, updateCharacter }: Props) {
         return matchesSource && matchesKind && matchesSearch
       })
       .sort((left, right) => left.name.localeCompare(right.name, "pt-BR"))
-  }, [abilities, kindFilter, search, sourceFilter, weaponIds])
+  }, [abilities, displayCharacter, kindFilter, search, sourceFilter, weaponIds])
 
   function dispatchSessionAbility(
     operation: Parameters<NonNullable<typeof sessionRuntime>["dispatchAbilityOperation"]>[0],

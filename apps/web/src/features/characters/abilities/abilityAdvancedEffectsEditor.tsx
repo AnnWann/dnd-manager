@@ -297,7 +297,7 @@ function MiniAbilityEditor({ ability, character, onChange }: { ability: Ability;
               </label>
             </div>
             <label className="grid gap-1 text-xs text-textMuted">Descrição<Textarea className="min-h-20" value={ability.description ?? ""} onChange={(event) => onChange({ ...ability, description: event.target.value })} /></label>
-            <UnlockRequirementsEditor value={ability.unlockRequirements} onChange={unlockRequirements => onChange({ ...ability, unlockRequirements })} />
+            <UnlockRequirementsEditor character={character} value={ability.unlockRequirements} onChange={unlockRequirements => onChange({ ...ability, unlockRequirements })} />
             <div className="grid gap-2 md:grid-cols-3">
               <label className="grid gap-1 text-xs text-textMuted">Tipo<Select value={ability.kind ?? "active"} onChange={(event) => { const kind = event.target.value as AbilityKind; onChange({ ...ability, kind, effectDuration: kind === "active" ? "instant" : kind === "feature" ? undefined : "lasting" }) }}>{ABILITY_KIND_OPTIONS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</Select></label>
               <label className="grid gap-1 text-xs text-textMuted">Ação<Select value={ability.actionKind ?? "free"} disabled={(ability.kind ?? "active") !== "active"} onChange={(event) => onChange({ ...ability, actionKind: event.target.value as AbilityActionKind })}>{ABILITY_ACTION_OPTIONS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</Select></label>

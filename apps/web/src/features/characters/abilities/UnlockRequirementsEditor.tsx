@@ -1,56 +1,89 @@
+import { Plus, Trash2 } from "lucide-react"
+import { Button } from "../../../components/ui/Button"
 import { Input } from "../../../components/ui/Input"
-import { Select } from "../../../components/ui/Select"
-import type { Attribute } from "../../../models/sheet/Attribute"
-import type { UnlockRequirements } from "../../../models/magic/spells/grantedSpellUnlocks"
+import { FormulaVariablePicker } from "../../customSystems/FormulaVariablePicker"
+import {
+  listCharacterFormulaVariables,
+} from "../../../lib/customSystems/CharacterFormulaVariables"
+import { validateCharacterSheetFormula } from "../../../lib/customSystems/CharacterSheetFormula"
+import type { CharacterTemplate } from "../../../models/characters/CharacterTemplate"
+import type {
+  UnlockRequirements,
+  UnlockVariableRequirement,
+} from "../../../models/magic/spells/grantedSpellUnlocks"
 
-const ATTRIBUTES: Array<{ value: Attribute; label: string }> = [
-  { value: "str", label: "Força" },
-  { value: "dex", label: "Destreza" },
-  { value: "con", label: "Constituição" },
-  { value: "int", label: "Inteligência" },
-  { value: "wis", label: "Sabedoria" },
-  { value: "cha", label: "Carisma" },
-]
+function asConditions(value?: UnlockRequirements): UnlockVariableRequirement[] {
+  if (value?.conditions?.length) return value.conditions
+  const entries: UnlockVariableRequirement[] = []
+  if (value?.minimumCharacterLevel !== undefined) {
+    entries.push({ variable: "character.level", minimum: String(value.minimumCharacterLevel) })
+  }
+  if (value?.attribute && value.minimumAttributeScore !== undefined) {
+    entries.push({
+      variable: `character.attribute.${value.attribute}`,
+      minimum: String(value.minimumAttributeScore),
+    })
+  }
+  return entries
+}
 
 export function UnlockRequirementsEditor({
   value,
   onChange,
+  character,
+  description = "A habilidade e seus efeitos só ficam disponíveis quando todos os requisitos forem atendidos.",
 }: {
   value?: UnlockRequirements
   onChange: (requirements: UnlockRequirements | undefined) => void
+  character?: CharacterTemplate
+  description?: string
 }) {
-  const update = (next: UnlockRequirements) =>
-    onChange(next.minimumCharacterLevel === undefined && !next.attribute ? undefined : next)
+  const variables = listCharacterFormulaVariables(character).filter(entry => entry.valueType === "number")
+  const requirements = asConditions(value)
+  const update = (next: UnlockVariableRequirement[]) =>
+    onChange(next.length ? { conditions: next } : undefined)
+  const patch = (index: number, change: Partial<UnlockVariableRequirement>) =>
+    update(requirements.map((entry, i) => i === index ? { ...entry, ...change } : entry))
 
   return <section className="grid gap-3 rounded-lg border border-border bg-bg-subtle p-3">
-    <div className="text-xs font-semibold text-textH">Requisitos de desbloqueio (opcional)</div>
-    <p className="text-xs text-textMuted">A habilidade e seus efeitos só ficam disponíveis quando todos os requisitos forem atendidos.</p>
-    <label className="grid gap-1 text-xs text-textMuted md:max-w-48">
-      Nível mínimo do personagem
-      <Input type="number" min={1} max={20} placeholder="Sem requisito"
-        value={value?.minimumCharacterLevel ?? ""}
-        onChange={event => {
-          const raw = event.target.value
-          update({ ...value, minimumCharacterLevel: raw ? Math.max(1, Math.min(20, Math.trunc(Number(raw) || 1))) : undefined })
-        }} />
-    </label>
-    <div className="grid gap-2 md:grid-cols-2">
-      <label className="grid gap-1 text-xs text-textMuted">
-        Atributo exigido
-        <Select value={value?.attribute ?? ""}
-          onChange={event => {
-            const attribute = event.target.value as Attribute | ""
-            update({ ...value, attribute: attribute || undefined, minimumAttributeScore: attribute ? value?.minimumAttributeScore ?? 10 : undefined })
-          }}>
-          <option value="">Nenhum</option>
-          {ATTRIBUTES.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}
-        </Select>
-      </label>
-      {value?.attribute ? <label className="grid gap-1 text-xs text-textMuted">
-        Valor mínimo do atributo
-        <Input type="number" min={1} max={30} value={value.minimumAttributeScore ?? 10}
-          onChange={event => update({ ...value, minimumAttributeScore: Math.max(1, Math.min(30, Math.trunc(Number(event.target.value) || 1))) })} />
-      </label> : null}
+    <div>
+      <div className="text-xs font-semibold text-textH">Requisitos de desbloqueio (opcional)</div>
+      <p className="mt-1 text-[11px] text-textMuted">{description}</p>
     </div>
+    {requirements.map((entry, index) => {
+      const variable = variables.find(option => option.path === entry.variable)
+      const formulaError = entry.minimum.trim()
+        ? validateCharacterSheetFormula(entry.minimum, character)
+        : "Informe o valor mínimo."
+      return <div key={index} className="grid gap-2 rounded-lg border border-border bg-bg p-3">
+        <div className="flex items-center justify-between gap-2">
+          <span className="text-xs font-semibold text-textH">Condição {index + 1}</span>
+          <Button size="sm" variant="ghost" onClick={() => update(requirements.filter((_, i) => i !== index))}>
+            <Trash2 className="h-4 w-4" /> Remover
+          </Button>
+        </div>
+        <div className="grid gap-2 md:grid-cols-2">
+          <div className="grid gap-1">
+            <span className="text-[11px] font-medium text-textMuted">Variável da ficha</span>
+            <div className="text-xs text-textH break-all">{variable?.label ?? (entry.variable || "Selecione uma variável")}</div>
+            <FormulaVariablePicker variables={variables} buttonLabel="Escolher variável"
+              onSelect={path => patch(index, { variable: path })} />
+          </div>
+          <label className="grid gap-1">
+            <span className="text-[11px] font-medium text-textMuted">Valor mínimo (número ou fórmula)</span>
+            <Input value={entry.minimum} placeholder="Ex.: 10 + character.proficiencyBonus"
+              onChange={event => patch(index, { minimum: event.target.value })} />
+            <FormulaVariablePicker variables={variables} buttonLabel="Inserir variável na fórmula"
+              onSelect={path => patch(index, { minimum: entry.minimum ? `${entry.minimum} + ${path}` : path })} />
+          </label>
+        </div>
+        {!entry.variable ? <span className="text-xs text-danger">Selecione uma variável numérica.</span> : null}
+        {formulaError ? <span className="text-xs text-danger">{formulaError}</span> : null}
+      </div>
+    })}
+    <Button size="sm" variant="secondary" onClick={() => update([...requirements, { variable: "", minimum: "" }])}>
+      <Plus className="h-4 w-4" /> Adicionar requisito
+    </Button>
+    <p className="text-[11px] text-textMuted">Todas as condições são obrigatórias (E). Ex.: Nível total ≥ 7 e Inteligência ≥ 10 + bônus de proficiência.</p>
   </section>
 }
