@@ -28,6 +28,8 @@ export type CharacterGrantedSpell = {
   castingMode: SpellGrantCastingMode
   source: SpellSource
   usage?: Usage
+  /** Quantidade de usos exigidos da habilidade para esta magia. */
+  abilityChargeCost?: number
   usageSource?: CharacterGrantedSpellUsageSource
   equipmentSpellUsageSource?: CharacterGrantedEquipmentSpellUsageSource
   additionalResourceCost?: AdditionalSpellResourceCost
@@ -190,6 +192,7 @@ function addAbilitySpellGrants(
       additionalResourceCost: grant.additionalResourceCost,
       resourceCost: grant.additionalResourceCost ? undefined : grant.resourceCost,
       usage: !usesAlternateResource && castingMode === "source" ? ability.usage : undefined,
+      abilityChargeCost: grant.abilityChargeCost,
       usageSource:
         !usesAlternateResource && castingMode === "source" && ability.usage
           ? usageSource
@@ -201,16 +204,18 @@ function addAbilitySpellGrants(
 export function spendGrantedSpellAbilityUse(
   character: CharacterTemplate,
   source: CharacterGrantedSpellUsageSource,
+  amount = 1,
 ): CharacterTemplate {
+  const cost = Math.max(1, Math.trunc(amount))
   const spend = (ability: Ability): Ability => {
     if (!ability.usage || ability.usage.reset === "spellSlot") return ability
     const maximum = getAbilityUsageMax(character, ability.usage)
-    if (ability.usage.used >= maximum) return ability
+    if (maximum - ability.usage.used < cost) return ability
     return {
       ...ability,
       usage: {
         ...ability.usage,
-        used: Math.min(maximum, ability.usage.used + 1),
+        used: ability.usage.used + cost,
       },
     }
   }
