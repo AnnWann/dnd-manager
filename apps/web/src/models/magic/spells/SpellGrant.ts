@@ -12,6 +12,12 @@ export type SpellGrant = {
   index: string
   /** Cargas do contador da habilidade consumidas por conjuração (padrão: 1). */
   abilityChargeCost?: number
+  /** Concede a magia apenas após atingir todos os requisitos configurados. */
+  unlockRequirements?: {
+    minimumCharacterLevel?: number
+    attribute?: Attribute
+    minimumAttributeScore?: number
+  }
   castingMode?: SpellGrantCastingMode
   attribute?: Attribute
   /**
