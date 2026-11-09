@@ -317,3 +317,55 @@ test('formula-driven unlocks compare selected sheet variables against numeric an
   assert.equal(meetsUnlockRequirements(make(7, 20), { conditions: [{ variable: 'character.level', minimum: 'invalid_variable' }] }), false)
   assert.equal(meetsUnlockRequirements(make(7, 20), { minimumCharacterLevel: 8 }), false)
 })
+
+test('Eye of Vecna Disintegrate spends four shared charges through the authoritative casting path', () => {
+  const eye = {
+    id: 'vecna-power',
+    name: 'Poder Arcano de Vecna',
+    kind: 'feature',
+    usage: { max: 8, used: 0, reset: 'limited' },
+    grantedSpells: [{ index: 'disintegrate', attribute: 'int', castingMode: 'source', abilityChargeCost: 4 }],
+  }
+  let character = CharacterTemplate.fromJSON({
+    id: 'aldren-test',
+    sheet: { type: 'pc', classes: [{ className: 'wizard', level: 5 }] },
+    abilities: [eye],
+    magic: { spells: { knownSpells: [], slots: {} } },
+  })
+  const spell = { index: 'disintegrate', slotLevel: 6 }
+  const grant = getCharacterGrantedSpells(character)[0]
+  const payment = { type: 'ability-use', source: grant.usageSource }
+
+  // Some character imports also retain the granted spell in knownSpells:
+  // its source payment rules must still apply.
+  character = character.with('magic', {
+    ...character.get('magic'),
+    spells: {
+      ...character.get('magic').spells,
+      knownSpells: [{ spells: { id: spell.index, prepared: true }, source: grant.source }],
+    },
+  })
+  const resolved = resolveCastSource(character, spell, grant.source.sourceId)
+  assert.equal(resolved.ok, true)
+  assert.equal(resolved.grant?.abilityChargeCost, 4)
+  const first = applySpellCastPayment(character, spell, resolved.grant, 6, payment)
+  assert.equal(first.ok, true)
+  assert.equal(first.character.get('abilities')[0].usage.used, 4)
+  assert.equal(getCharacterGrantedSpells(first.character)[0].usage.used, 4)
+  const second = applySpellCastPayment(first.character, spell, getCharacterGrantedSpells(first.character)[0], 6, payment)
+  assert.equal(second.ok, true)
+  assert.equal(second.character.get('abilities')[0].usage.used, 8)
+  const beforeThird = JSON.stringify(second.character.toJSON())
+  const third = applySpellCastPayment(second.character, spell, getCharacterGrantedSpells(second.character)[0], 6, payment)
+  assert.equal(third.ok, false)
+  assert.equal(third.code, 'SPELL_ABILITY_USE_UNAVAILABLE')
+  assert.equal(JSON.stringify(second.character.toJSON()), beforeThird)
+
+  const insufficient = first.character.updateAbility({
+    ...first.character.get('abilities')[0],
+    usage: { ...first.character.get('abilities')[0].usage, used: 5 },
+  })
+  const denied = applySpellCastPayment(insufficient, spell, getCharacterGrantedSpells(insufficient)[0], 6, payment)
+  assert.equal(denied.ok, false)
+  assert.equal(insufficient.get('abilities')[0].usage.used, 5)
+})
