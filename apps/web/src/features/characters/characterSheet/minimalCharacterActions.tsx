@@ -73,7 +73,6 @@ import type {
 } from "../../../models/customSystems/CustomSystemDefinition"
 import { useOptionalSessionRuntime } from "../../session-runtime/useSessionRuntime"
 import { AbilityResourceActivationModal } from "../abilities/abilityResourceActivationModal"
-import { CustomSystemActionResources } from "./CustomSystemActionResources"
 
 type ActionFilter = "action" | "bonusAction" | "reaction" | "free" | "passive"
 
@@ -700,8 +699,6 @@ export function MinimalCharacterActions({
       <h2 className="text-xs font-semibold uppercase tracking-wide text-textH">Ações</h2>
 
       <CharacterActionTabs filters={FILTER_OPTIONS} selected={filter} onSelect={setFilter} />
-
-      <CustomSystemActionResources character={character} updateCharacter={updateCharacter} />
 
       <ActionGroup title="Ações padrão" entries={standardActions} onSelect={open} />
       {metamagicActions.length ? (
