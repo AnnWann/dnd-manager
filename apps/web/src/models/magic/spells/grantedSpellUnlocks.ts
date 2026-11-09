@@ -20,12 +20,18 @@ export type UnlockRequirements = {
   minimumAttributeScore?: number
 }
 
+const activeRequirementEvaluations = new WeakSet<UnlockRequirements>()
+
 export function meetsUnlockRequirements(
   character: CharacterTemplate,
   requirements?: UnlockRequirements,
 ): boolean {
   if (!requirements) return true
-
+  // Attribute/derived variables may themselves inspect abilities. A prerequisite
+  // must not contribute its own bonus while deciding whether it is unlocked.
+  if (activeRequirementEvaluations.has(requirements)) return false
+  activeRequirementEvaluations.add(requirements)
+  try {
   const level = requirements.minimumCharacterLevel
   if (level !== undefined) {
     if (!Number.isInteger(level) || level < 1) return false
@@ -54,6 +60,9 @@ export function meetsUnlockRequirements(
     const threshold = evaluateCharacterSheetFormula(minimum, character)
     return threshold !== undefined && Number.isFinite(threshold) && currentValue >= threshold
   })
+  } finally {
+    activeRequirementEvaluations.delete(requirements)
+  }
 }
 
 /** All spell requirements must pass in addition to its parent ability's requirements. */
