@@ -102,11 +102,11 @@ export function CharacterSheetTab({
             character={character}
             updateCharacter={updateCharacter}
           />
-          <CharacterResourcePanel character={character} updateCharacter={updateCharacter} />
           <MinimalMagicActions
             character={character}
             updateCharacter={updateCharacter}
           />
+          <CharacterResourcePanel character={character} updateCharacter={updateCharacter} />
           <CharacterConditions
             character={character}
             updateCharacter={updateConditions}
