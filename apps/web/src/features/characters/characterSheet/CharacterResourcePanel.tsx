@@ -6,7 +6,7 @@ import { getChannelDivinityPool, restoreChannelDivinity, spendChannelDivinity } 
 import { getKiPool, restoreKi, spendKi } from "../../../models/characters/characterKi"
 import { getSorceryPoints, restorePactSlot, restoreSorceryPoint, restoreSpellSlot, spendPactSlot, spendSorceryPoint, spendSpellSlot } from "../../../models/characters/characterMagic"
 import { getCustomSpellSlotPools, restoreCustomSpellSlot, spendCustomSpellSlot } from "../../../models/characters/customClassConfig"
-import { getCharacterGrantedSpells, spendGrantedSpellAbilityUse } from "../../../models/characters/characterGrantedSpells"
+import { spendGrantedSpellAbilityUse } from "../../../models/characters/characterGrantedSpells"
 import { meetsUnlockRequirements } from "../../../models/magic/spells/grantedSpellUnlocks"
 import type { MagicCircleLevel } from "../../../models/magic/spells/spellDefinitions"
 import type { SessionAbilitySource } from "../../session-runtime/abilitySessionProtocol"
@@ -38,7 +38,8 @@ export function CharacterResourcePanel({ character, updateCharacter }: Props) {
   const customSlots = getCustomSpellSlotPools(character)
 
   const pools = new Map<string, AbilityPool>()
-  for (const ability of character.getCharacterAbilities()) {
+  const racialAbilities: Ability[] = (character.get("sheet").race.naturalAbilities ?? []).map(ability => ({ ...ability, source: "race" }))
+  for (const ability of [...character.getCharacterAbilities(), ...racialAbilities]) {
     if (!ability.usage || ability.usage.reset === "spellSlot" || !meetsUnlockRequirements(character, ability.unlockRequirements)) continue
     // Class pools are displayed separately and must never be duplicated.
     if (ability.category === "channelDivinity" || ability.category === "martialArts") continue
@@ -73,17 +74,18 @@ export function CharacterResourcePanel({ character, updateCharacter }: Props) {
     }
     updateCharacter(id, current => {
       if (delta === -1) return spendGrantedSpellAbilityUse(current, pool.chargeSource)
-      switch (pool.source.type) {
-        case "equipment": return current.restoreEquipmentAbility(pool.source.itemId, pool.source.abilityId)
+      const source = pool.source
+      switch (source.type) {
+        case "equipment": return current.restoreEquipmentAbility(source.itemId, source.abilityId)
         case "race": {
           const race = current.get("sheet").race
           return current.withSheet("race", { ...race, naturalAbilities: (race.naturalAbilities ?? []).map(ability =>
-            ability.id === pool.source.abilityId && ability.usage
+            ability.id === source.abilityId && ability.usage
               ? { ...ability, usage: { ...ability.usage, used: Math.max(0, ability.usage.used - 1) } }
               : ability) })
         }
         case "character": return current.restoreAbility(pool.source.abilityId)
-        case "condition": return current.restoreAbility(`condition:${pool.source.conditionId}:${pool.source.abilityId}`)
+        case "condition": return current.restoreAbility(`condition:${source.conditionId}:${pool.source.abilityId}`)
       }
     })
   }
@@ -138,6 +140,7 @@ export function CharacterResourcePanel({ character, updateCharacter }: Props) {
 function abilitySource(ability: Ability): SessionAbilitySource {
   if (ability.source === "equipment" && ability.sourceItemId && ability.originalAbilityId)
     return { type: "equipment", itemId: ability.sourceItemId, abilityId: ability.originalAbilityId }
+  if (ability.source === "race") return { type: "race", abilityId: ability.originalAbilityId ?? ability.id }
   if (ability.source === "condition" && ability.sourceConditionId && ability.originalAbilityId)
     return { type: "condition", conditionId: ability.sourceConditionId, abilityId: ability.originalAbilityId }
   return { type: "character", abilityId: ability.id }
