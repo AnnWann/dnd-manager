@@ -4,10 +4,10 @@ import { build } from 'esbuild'
 import { fileURLToPath } from 'node:url'
 const root = new URL('../../../', import.meta.url)
 const built = await build({
-  stdin: { contents: `export { CharacterTemplate } from './apps/web/src/models/characters/CharacterTemplate'; export * from './apps/web/src/models/magic/spells/additionalSpellResource'; export { getCharacterGrantedSpells } from './apps/web/src/models/characters/characterGrantedSpells';`, resolveDir: fileURLToPath(root), loader: 'ts' },
+  stdin: { contents: `export { CharacterTemplate } from './apps/web/src/models/characters/CharacterTemplate'; export * from './apps/web/src/models/magic/spells/additionalSpellResource'; export { getCharacterGrantedSpells, spendGrantedSpellAbilityUse } from './apps/web/src/models/characters/characterGrantedSpells';`, resolveDir: fileURLToPath(root), loader: 'ts' },
   bundle: true, platform: 'node', format: 'esm', write: false, conditions: ['types'],
 })
-const { CharacterTemplate, paySpellSlotAndAdditionalResource: pay, additionalSpellResourceError, getAdditionalSpellResourceRecovery, getCharacterGrantedSpells } = await import('data:text/javascript;base64,' + Buffer.from(built.outputFiles[0].contents).toString('base64'))
+const { CharacterTemplate, paySpellSlotAndAdditionalResource: pay, additionalSpellResourceError, getAdditionalSpellResourceRecovery, getCharacterGrantedSpells, spendGrantedSpellAbilityUse } = await import('data:text/javascript;base64,' + Buffer.from(built.outputFiles[0].contents).toString('base64'))
 const counter = (id = 'pool', used = 0) => ({ id, name: id, kind: 'passive', usage: { max: 5, used, reset: 'longRest', sharedResourceId: 'mana' } })
 const character = (abilities = [counter()], current = 2) => CharacterTemplate.fromJSON({
   id: 'caster', sheet: { type: 'npc' }, abilities,
@@ -214,4 +214,36 @@ test('cast dialog sends the resource-only choice at base level and rejects it fo
   assert.deepEqual(resolved, { castLevel: 1, payment: { type: 'linked-resource' } })
   assert.equal(makeResolver({ ...selected, additionalResourceCost: cost }, 'linked', value => errors.push(value))(), null)
   assert.equal(errors.length, 1)
+})
+
+test('ability-granted spells consume their individual costs and retain the default of one', () => {
+  const source = character([{ ...counter('arcane-eye'), grantedSpells: [
+    { index: 'disintegrate', castingMode: 'source', abilityChargeCost: 4 },
+    { index: 'clairvoyance', castingMode: 'source', abilityChargeCost: 2 },
+    { index: 'crown-of-madness', castingMode: 'source' },
+  ] }])
+  const grants = getCharacterGrantedSpells(CharacterTemplate.fromJSON(JSON.parse(JSON.stringify(source.toJSON()))))
+  assert.deepEqual(grants.map(grant => grant.abilityChargeCost ?? 1), [4, 2, 1])
+  const afterFour = spendGrantedSpellAbilityUse(source, grants[0].usageSource, grants[0].abilityChargeCost)
+  assert.equal(afterFour.get('abilities')[0].usage.used, 4)
+  const exhausted = spendGrantedSpellAbilityUse(afterFour, grants[1].usageSource, grants[1].abilityChargeCost)
+  assert.equal(exhausted.get('abilities')[0].usage.used, 4)
+  assert.equal(source.get('abilities')[0].usage.used, 0)
+})
+
+test('server enforces variable charge costs atomically for ability-granted spells', () => {
+  const source = character([{ ...counter('arcane-eye'), grantedSpells: [
+    { index: 'disintegrate', castingMode: 'source', abilityChargeCost: 4 },
+    { index: 'clairvoyance', castingMode: 'source', abilityChargeCost: 2 },
+  ] }])
+  const spell = { index: 'disintegrate', slotLevel: 6 }
+  const grant = getCharacterGrantedSpells(source)[0]
+  const payment = { type: 'ability-use', source: grant.usageSource }
+  const spent = applySpellCastPayment(source, spell, grant, 6, payment)
+  assert.equal(spent.ok, true)
+  assert.equal(spent.character.get('abilities')[0].usage.used, 4)
+  const before = JSON.stringify(spent.character.toJSON())
+  const refused = applySpellCastPayment(spent.character, { index: 'clairvoyance', slotLevel: 3 }, getCharacterGrantedSpells(spent.character)[1], 3, payment)
+  assert.equal(refused.ok, false)
+  assert.equal(JSON.stringify(spent.character.toJSON()), before)
 })
