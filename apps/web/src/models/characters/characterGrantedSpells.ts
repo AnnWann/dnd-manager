@@ -295,3 +295,35 @@ export function spendGrantedEquipmentSpellUse(
     },
   })
 }
+
+/** Detect a spell whose configured source exists but is currently locked. */
+export function hasConfiguredGrantedSpellSource(
+  character: CharacterTemplate,
+  spellIndex: string,
+  sourceId: string,
+): boolean {
+  const contains = (ability: Ability) => (ability.grantedSpells ?? []).some(grant => grant.index === spellIndex)
+  for (const ability of character.get("abilities") ?? []) {
+    if (ability.id === sourceId && contains(ability)) return true
+  }
+  for (const ability of character.get("sheet").race.naturalAbilities ?? []) {
+    if (ability.id === sourceId && contains(ability)) return true
+  }
+  const equipment = [
+    ...character.getEquippedItems(),
+    ...(character.get("equipment").shield ? [character.get("equipment").shield!] : []),
+  ] as Equipment[]
+  for (const item of equipment) {
+    if (item.id === sourceId && (item.spells ?? []).some(grant => grant.index === spellIndex)) return true
+    for (const ability of item.abilities ?? []) {
+      if (`${item.id}:${ability.id}` === sourceId && contains(ability)) return true
+    }
+  }
+  for (const condition of getCharacterConditions(character)) {
+    if (sourceId === `condition:${condition.id}` && (condition.grantedSpells ?? []).some(grant => grant.index === spellIndex)) return true
+    for (const ability of condition.grantedAbilities ?? []) {
+      if (sourceId === `condition:${condition.id}:${ability.id}` && contains(ability)) return true
+    }
+  }
+  return false
+}
