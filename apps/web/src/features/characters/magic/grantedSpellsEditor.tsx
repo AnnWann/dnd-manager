@@ -269,10 +269,15 @@ export function GrantedSpellsEditor({
                         </span>
                       </label>
                     ) : (
-                      <div className="text-[11px] text-textMuted">
-                        {abilityHasUsage
+                      <div className="grid gap-2">
+                        {abilityHasUsage ? <label className="grid gap-1 md:max-w-48">
+                          <span className="text-[11px] font-medium text-textMuted">Quantidade consumida</span>
+                          <Input type="number" min={1} max={1000} value={grant.abilityChargeCost ?? 1}
+                            onChange={(event) => updateGrant(index, { abilityChargeCost: Math.max(1, Math.trunc(Number(event.target.value) || 1)) })} />
+                        </label> : null}
+                        <div className="text-[11px] text-textMuted">{abilityHasUsage
                           ? "A magia usa o contador da própria habilidade."
-                          : "Sem contador próprio, a origem não limita quantas vezes a magia pode ser usada."}
+                          : "Sem contador próprio, a origem não limita quantas vezes a magia pode ser usada."}</div>
                       </div>
                     )}
                   </div>
