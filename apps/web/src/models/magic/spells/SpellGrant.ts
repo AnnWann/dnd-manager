@@ -12,6 +12,12 @@ export type SpellGrant = {
   index: string
   /** Cargas do contador da habilidade consumidas por conjuração (padrão: 1). */
   abilityChargeCost?: number
+  /** Requirements that must all be met before this spell becomes available. */
+  unlockRequirements?: {
+    minimumCharacterLevel?: number
+    attribute?: Attribute
+    minimumAttributeScore?: number
+  }
   castingMode?: SpellGrantCastingMode
   attribute?: Attribute
   /**
