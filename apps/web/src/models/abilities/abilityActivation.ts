@@ -81,6 +81,7 @@ export function synchronizeSharedAbilityUsage(character: CharacterTemplate, abil
 }
 
 export function canActivateAbility(character: CharacterTemplate, ability: Ability): boolean {
+  if (!meetsUnlockRequirements(character, ability.unlockRequirements)) return false
   if (abilityRequiresActivation(ability) && isAbilityBenefitsActive(ability)) {
     // Changing an active elemental/stance option isn't another initial activation.
     return Boolean(ability.allowMultipleWeaponActivations || (ability.allowOptionSwitching && ((ability.activationOptions?.length ?? 0) > 0 || getAbilityAttackRiderDamageChoices(ability).length > 0)))
