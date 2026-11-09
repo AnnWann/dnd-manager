@@ -1,3 +1,4 @@
+import { meetsUnlockRequirements } from "../magic/spells/grantedSpellUnlocks"
 import { bindAbilityInputValues, validateAbilityInputValues, validateAbilityInputFormulaValues } from "./abilityManualInputs"
 import { resolveDamage, type DamageType } from "../combat/Damage"
 import { applyAbilitySelfDamage, resolveAbilitySelfDamage } from "./abilitySelfDamage"
