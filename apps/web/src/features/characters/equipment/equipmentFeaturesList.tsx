@@ -1,4 +1,5 @@
 import { useState } from "react"
+import { meetsUnlockRequirements, isGrantedSpellUnlocked } from "../../../models/magic/spells/grantedSpellUnlocks"
 import { Button } from "../../../components/ui/Button"
 import { useMagicContext } from "../../../contexts/magicContext"
 import {
@@ -31,8 +32,8 @@ export function EquipmentFeaturesList<T extends Equipment>({
   const { characters, updateCharacter, mode } = useCharacterWorkspace()
   const character = characters.find((entry) => entry.get("id") === characterId)
   const userMode = mode === "user"
-  const abilities = equipment.abilities ?? []
-  const spells = equipment.spells ?? []
+  const abilities = (equipment.abilities ?? []).filter(ability => character && meetsUnlockRequirements(character, ability.unlockRequirements))
+  const spells = (equipment.spells ?? []).filter(spell => character && isGrantedSpellUnlocked(character, spell))
 
   if (!abilities.length && !spells.length) return null
 
@@ -195,9 +196,9 @@ export function EquipmentFeaturesList<T extends Equipment>({
                     </div>
                   )}
 
-                  {ability.grantedSpells?.length ? (
+                  {ability.grantedSpells?.some(grant => character && isGrantedSpellUnlocked(character, grant)) ? (
                     <div className="mt-2 flex flex-wrap gap-1.5">
-                      {ability.grantedSpells.map((grant) => {
+                      {ability.grantedSpells.filter(grant => character && isGrantedSpellUnlocked(character, grant)).map((grant) => {
                         const grantedSpell = getSpellByIndex(grant.index)
                         return (
                           <span
