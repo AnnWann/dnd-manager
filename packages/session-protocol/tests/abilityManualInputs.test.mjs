@@ -115,3 +115,25 @@ test('a formula invalid for the actual input cannot consume usage or apply its n
   assert.deepEqual(use(c, { valor: 0 }).toJSON(), c.toJSON())
   assert.equal(use(c, { valor: 2 }).get('sheet').HP.current, 15)
 })
+
+test('an ASI feat grants skills and upgrades existing proficiency to expertise', async () => {
+  const { getEffectiveSkillProficiency } = await production('../../../apps/web/src/models/characters/characterProficiencies.ts')
+  const feat = {
+    id: 'skill-feat', name: 'Talento', category: 'feat', kind: 'passive',
+    grantedProficiencies: [
+      { id: 'expert', category: 'skill', name: 'Atletismo', expertise: true },
+      { id: 'grant', category: 'skill', name: 'Persuasão' },
+    ],
+  }
+  const initial = character([]).withSheet('skills', { athletics: 'proficient' })
+    .addProficiency({ id: 'existing', category: 'skill', name: 'athletics' })
+  const asi = { id: 'choice', className: 'fighter', classLevel: 4, kind: 'feat', ability: feat, increases: {} }
+  const withFeat = initial.with('asi', [asi])
+
+  assert.equal(getEffectiveSkillProficiency(withFeat, 'athletics'), 'expertise')
+  assert.equal(getEffectiveSkillProficiency(withFeat, 'persuasion'), 'proficient')
+  assert.equal(getEffectiveSkillProficiency(withFeat.with('asi', []), 'athletics'), 'proficient')
+  assert.equal(getEffectiveSkillProficiency(withFeat.with('asi', []), 'persuasion'), 'none')
+  const inactive = initial.with('asi', [{ ...asi, ability: { ...feat, kind: 'active', benefitsActive: false } }])
+  assert.equal(getEffectiveSkillProficiency(inactive, 'athletics'), 'proficient')
+})

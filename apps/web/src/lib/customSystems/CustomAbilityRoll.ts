@@ -1,3 +1,4 @@
+import { getEffectiveSkillProficiency } from "../../models/characters/characterProficiencies"
 import type { CharacterTemplate } from "../../models/characters/CharacterTemplate"
 import type {
   CustomAbilityActivationDefinition,
@@ -797,7 +798,7 @@ function resolveNativeD20Modifier(
 
   if (roll.skill) {
     const attribute = SKILL_ATTRIBUTES[roll.skill]
-    const proficiency = character.get("sheet").skills?.[roll.skill] ?? "none"
+    const proficiency = getEffectiveSkillProficiency(character, roll.skill)
     const multiplier =
       proficiency === "expertise"
         ? 2

@@ -21,7 +21,7 @@ import {
 } from "./CharacterAsi"
 import { getEncumbranceSpeedPenalty } from "./characterEncumbrance"
 import { getCharacterConditions } from "./characterConditionStorage"
-import { hasProficiency } from "./characterProficiencies"
+import { getEffectiveSkillProficiency, hasProficiency } from "./characterProficiencies"
 import { attributeShort } from "../../lib/attributeShorts"
 
 export type StatBonusKey =
@@ -425,7 +425,7 @@ export function getCalculatedPassivePerception(
   character: CharacterTemplate,
 ): number {
   let wisdomModifier = getEffectiveAttributeModifier(character, "wis")
-  const perceptionProficiency = character.get("sheet").skills.perception
+  const perceptionProficiency = getEffectiveSkillProficiency(character, "perception")
 
   if (perceptionProficiency === "proficient") {
     wisdomModifier += getProficiencyBonus(character)

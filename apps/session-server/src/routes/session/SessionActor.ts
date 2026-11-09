@@ -42,7 +42,7 @@ import { getEffectiveDamageAffinities } from "../../../../web/src/models/charact
 import { getEffectiveArmorClassWithShield } from "../../../../web/src/models/items/equipment/Shield";
 import { projectInitiativeSessionFromCharacterState } from "../initiative/initiativeCharacterProjection";
 import { areSelectedTargetsDistinct, applyHpToReferences, validateAbilityTargets, type MutableHpTargets } from "../characters/abilities/abilityTargeting";
-import { hasProficiency } from "../../../../web/src/models/characters/characterProficiencies";
+import { getEffectiveSkillProficiency } from "../../../../web/src/models/characters/characterProficiencies";
 import { getUnarmedAttackProfile } from "../../../../web/src/models/characters/unarmedAttack";
 import type { Ability } from "../../../../web/src/models/abilities/Ability";
 import type { AbilityRollDefinition } from "../../../../web/src/models/abilities/AbilityRoll";
@@ -2982,16 +2982,7 @@ function d20Plan(
 
 function getAuthoritativeSkillBonus(character: CharacterTemplate, skill: Skill): number {
   const attribute = SKILL_ATTRIBUTES[skill];
-  const label = SKILL_LABELS[skill];
-  const proficiency = character.get("sheet").skills[skill] ?? "none";
-  const granted =
-    hasProficiency(character, "skill", label)
-    || hasProficiency(character, "skill", skill);
-  const effective = proficiency === "expertise"
-    ? "expertise"
-    : proficiency === "proficient" || granted
-      ? "proficient"
-      : "none";
+  const effective = getEffectiveSkillProficiency(character, skill);
   const proficiencyBonus = character.getProficiencyBonus();
 
   const baseValue = character.getEffectiveAttributeModifier(attribute)
@@ -3056,27 +3047,6 @@ const SKILL_ATTRIBUTES: Record<Skill, Attribute> = {
   sleightOfHand: "dex",
   religion: "int",
   survival: "wis",
-};
-
-const SKILL_LABELS: Record<Skill, string> = {
-  acrobatics: "Acrobacia",
-  arcana: "Arcanismo",
-  athletics: "Atletismo",
-  animalHandling: "Lidar com Animais",
-  performance: "Atuação",
-  deception: "Blefe",
-  stealth: "Furtividade",
-  history: "História",
-  intimidation: "Intimidação",
-  insight: "Intuição",
-  investigation: "Investigação",
-  medicine: "Medicina",
-  nature: "Natureza",
-  perception: "Percepção",
-  persuasion: "Persuasão",
-  sleightOfHand: "Prestidigitação",
-  religion: "Religião",
-  survival: "Sobrevivência",
 };
 
 function hydrateCharacterForRest(

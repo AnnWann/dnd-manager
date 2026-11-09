@@ -3,7 +3,7 @@ import { attributeShort } from "../../../../lib/attributeShorts"
 import { formatSigned } from "../../../../lib/formatSigned"
 import { requestD20Roll, rollModeFromEvent, rollModifierHint } from "../../../../lib/diceRoller"
 import type { CharacterTemplate } from "../../../../models/characters/CharacterTemplate"
-import { hasProficiency } from "../../../../models/characters/characterProficiencies"
+import { getEffectiveSkillProficiency } from "../../../../models/characters/characterProficiencies"
 import type { Attribute } from "../../../../models/sheet/Attribute"
 import type { Skill, SkillProficiency } from "../../../../models/sheet/Skills"
 
@@ -30,15 +30,7 @@ export function SelectSkillModule({
   const { dispatchSkillOperation } = useCharacterWorkspace()
   const sheet = character.get("sheet")
   const proficiency = sheet.skills[skillKey] ?? "none"
-  const grantedProficiency =
-    hasProficiency(character, "skill", label) ||
-    hasProficiency(character, "skill", skillKey)
-  const effectiveProficiency =
-    proficiency === "expertise"
-      ? "expertise"
-      : proficiency === "proficient" || grantedProficiency
-        ? "proficient"
-        : "none"
+  const effectiveProficiency = getEffectiveSkillProficiency(character, skillKey)
   const abilityMod = character.getEffectiveAttributeModifier(ability)
 
   const baseBonus =
@@ -120,7 +112,7 @@ export function SelectSkillModule({
             )
           }
           className={
-            proficiency === "expertise"
+            effectiveProficiency === "expertise"
               ? "h-3 w-3 rounded-full border border-yellow-300 bg-yellow-400 shadow-[0_0_6px_rgba(250,204,21,0.8)]"
               : "h-3 w-3 rounded-full border border-text bg-transparent"
           }
