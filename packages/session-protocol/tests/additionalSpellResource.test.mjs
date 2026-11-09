@@ -247,3 +247,24 @@ test('server enforces variable charge costs atomically for ability-granted spell
   assert.equal(refused.ok, false)
   assert.equal(JSON.stringify(spent.character.toJSON()), before)
 })
+
+test('granted spells honor both parent ability and individual spell requirements', () => {
+  const parent = {
+    ...counter('vecna-eye'),
+    unlockRequirements: { minimumCharacterLevel: 7 },
+    grantedSpells: [
+      { index: 'clairvoyance', castingMode: 'source', unlockRequirements: { minimumCharacterLevel: 9 } },
+      { index: 'disintegrate', castingMode: 'source', unlockRequirements: { attribute: 'int', minimumAttributeScore: 18 } },
+      { index: 'eyebite', castingMode: 'source' },
+    ],
+  }
+  const mk = (level, int) => CharacterTemplate.fromJSON({
+    id: 'vecna-caster',
+    sheet: { type: 'pc', classes: [{ className: 'wizard', level }], attributes: { str: 10, dex: 10, con: 10, int, wis: 10, cha: 10 } },
+    abilities: [parent],
+  })
+  assert.deepEqual(getCharacterGrantedSpells(mk(5, 20)).map(grant => grant.index), [])
+  assert.deepEqual(getCharacterGrantedSpells(mk(7, 16)).map(grant => grant.index), ['eyebite'])
+  assert.deepEqual(getCharacterGrantedSpells(mk(9, 16)).map(grant => grant.index), ['clairvoyance', 'eyebite'])
+  assert.deepEqual(getCharacterGrantedSpells(mk(9, 18)).map(grant => grant.index), ['clairvoyance', 'disintegrate', 'eyebite'])
+})
