@@ -1,4 +1,5 @@
 import { AbilityFormulaInputContext } from "./AbilityFormulaInputContext"
+import { UnlockRequirementsEditor } from "./UnlockRequirementsEditor"
 import { AbilityManualInputsEditor } from "./AbilityManualInputsEditor"
 import { validateAbilityInputDefinitions, validateAbilityInputReferences } from "../../../models/abilities/abilityManualInputs"
 import { useEffect, useState } from "react"
@@ -287,6 +288,8 @@ export function AbilityDialog({
                   onChange={(event) => setDraft({ ...draft, description: event.target.value })}
                 />
               </label>
+
+              <UnlockRequirementsEditor value={draft.unlockRequirements} onChange={unlockRequirements => setDraft({ ...draft, unlockRequirements })} />
 
               <div className="grid gap-2 sm:grid-cols-3">
                 <label className="grid gap-1">

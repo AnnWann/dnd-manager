@@ -1,3 +1,4 @@
+import { meetsUnlockRequirements } from "../../../models/magic/spells/grantedSpellUnlocks"
 import { abilityNeedsActivationDialog } from "../../../models/abilities/abilityActivationDialog"
 import { bindAbilityInputValues, validateAbilityInputValues } from "../../../models/abilities/abilityManualInputs"
 import { ManualActionRollFields } from "../../../../../../packages/game-ui/src/ManualActionRollFields"
@@ -1062,6 +1063,7 @@ function getAbilityActions(
 
   const nativeEntries: ActionEntry[] = [...characterAbilities, ...raceAbilities]
     .filter(({ ability }) =>
+      meetsUnlockRequirements(character, ability.unlockRequirements) &&
       (ability.kind ?? "active") === "active" &&
       normalizeActionKind(ability.actionKind) === filter,
     )

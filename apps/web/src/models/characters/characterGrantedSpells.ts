@@ -1,3 +1,5 @@
+import { meetsUnlockRequirements } from "../magic/spells/grantedSpellUnlocks"
+import { isGrantedSpellUnlocked } from "../magic/spells/grantedSpellUnlocks"
 import type { Ability, Usage } from "../abilities/Ability"
 import { getAbilityUsageMax } from "../abilities/abilityActivation"
 import type { Equipment } from "../items/equipment/EquipmentSlot"
@@ -28,6 +30,8 @@ export type CharacterGrantedSpell = {
   castingMode: SpellGrantCastingMode
   source: SpellSource
   usage?: Usage
+  /** Quantidade de usos exigidos da habilidade para esta magia. */
+  abilityChargeCost?: number
   usageSource?: CharacterGrantedSpellUsageSource
   equipmentSpellUsageSource?: CharacterGrantedEquipmentSpellUsageSource
   additionalResourceCost?: AdditionalSpellResourceCost
@@ -46,7 +50,7 @@ export function getCharacterGrantedSpells(
       type: ability.category === "feat" ? "feat" : "ability",
       name: ability.name || (ability.category === "feat" ? "Talento" : "Habilidade"),
       sourceId: ability.id,
-    }, { type: "character", abilityId: ability.id })
+    }, { type: "character", abilityId: ability.id }, character)
   }
 
   const race = character.get("sheet").race
@@ -55,7 +59,7 @@ export function getCharacterGrantedSpells(
       type: "race",
       name: ability.name || race.subrace || race.race,
       sourceId: ability.id,
-    }, { type: "race", abilityId: ability.id })
+    }, { type: "race", abilityId: ability.id }, character)
   }
 
   const shield = character.get("equipment").shield
@@ -71,7 +75,7 @@ export function getCharacterGrantedSpells(
     seenEquipment.add(equipment.id)
 
     for (const grant of equipment.spells ?? []) {
-      if (!grant.index) continue
+      if (!grant.index || !isGrantedSpellUnlocked(character, grant)) continue
 
       const castingMode = grant.additionalResourceCost ? "known" :
         grant.castingMode ??
@@ -101,7 +105,7 @@ export function getCharacterGrantedSpells(
         type: "equipment",
         name: `${equipment.name || "Item"} — ${ability.name || "Habilidade"}`,
         sourceId: `${equipment.id}:${ability.id}`,
-      }, { type: "equipment", itemId: equipment.id, abilityId: ability.id })
+      }, { type: "equipment", itemId: equipment.id, abilityId: ability.id }, character)
     }
   }
 
@@ -131,7 +135,7 @@ export function getCharacterGrantedSpells(
 
   for (const condition of getCharacterConditions(character)) {
     for (const grant of condition.grantedSpells ?? []) {
-      if (!grant.index) continue
+      if (!grant.index || !isGrantedSpellUnlocked(character, grant)) continue
       results.push({
         key: `condition:${condition.id}:${grant.index}`,
         index: grant.index,
@@ -160,7 +164,7 @@ export function getCharacterGrantedSpells(
         type: "condition",
         conditionId: condition.id,
         abilityId: ability.id,
-      })
+      }, character)
     }
   }
 
@@ -172,9 +176,11 @@ function addAbilitySpellGrants(
   ability: Ability,
   source: Pick<SpellSource, "type" | "name" | "sourceId">,
   usageSource: CharacterGrantedSpellUsageSource,
+  character: CharacterTemplate,
 ): void {
+  if (!meetsUnlockRequirements(character, ability.unlockRequirements)) return
   for (const grant of ability.grantedSpells ?? []) {
-    if (!grant.index) continue
+    if (!grant.index || !isGrantedSpellUnlocked(character, grant)) continue
 
     const castingMode = grant.additionalResourceCost ? "known" : grant.castingMode ?? "source"
     const usesAlternateResource = Boolean(grant.resourceCost)
@@ -190,6 +196,7 @@ function addAbilitySpellGrants(
       additionalResourceCost: grant.additionalResourceCost,
       resourceCost: grant.additionalResourceCost ? undefined : grant.resourceCost,
       usage: !usesAlternateResource && castingMode === "source" ? ability.usage : undefined,
+      abilityChargeCost: grant.abilityChargeCost,
       usageSource:
         !usesAlternateResource && castingMode === "source" && ability.usage
           ? usageSource
@@ -201,16 +208,18 @@ function addAbilitySpellGrants(
 export function spendGrantedSpellAbilityUse(
   character: CharacterTemplate,
   source: CharacterGrantedSpellUsageSource,
+  amount = 1,
 ): CharacterTemplate {
+  const cost = Math.max(1, Math.trunc(amount))
   const spend = (ability: Ability): Ability => {
     if (!ability.usage || ability.usage.reset === "spellSlot") return ability
     const maximum = getAbilityUsageMax(character, ability.usage)
-    if (ability.usage.used >= maximum) return ability
+    if (maximum - ability.usage.used < cost) return ability
     return {
       ...ability,
       usage: {
         ...ability.usage,
-        used: Math.min(maximum, ability.usage.used + 1),
+        used: ability.usage.used + cost,
       },
     }
   }
@@ -285,4 +294,36 @@ export function spendGrantedEquipmentSpellUse(
       used: Math.min(maximum, grant.usage.used + 1),
     },
   })
+}
+
+/** Detect a spell whose configured source exists but is currently locked. */
+export function hasConfiguredGrantedSpellSource(
+  character: CharacterTemplate,
+  spellIndex: string,
+  sourceId: string,
+): boolean {
+  const contains = (ability: Ability) => (ability.grantedSpells ?? []).some(grant => grant.index === spellIndex)
+  for (const ability of character.get("abilities") ?? []) {
+    if (ability.id === sourceId && contains(ability)) return true
+  }
+  for (const ability of character.get("sheet").race.naturalAbilities ?? []) {
+    if (ability.id === sourceId && contains(ability)) return true
+  }
+  const equipment = [
+    ...character.getEquippedItems(),
+    ...(character.get("equipment").shield ? [character.get("equipment").shield!] : []),
+  ] as Equipment[]
+  for (const item of equipment) {
+    if (item.id === sourceId && (item.spells ?? []).some(grant => grant.index === spellIndex)) return true
+    for (const ability of item.abilities ?? []) {
+      if (`${item.id}:${ability.id}` === sourceId && contains(ability)) return true
+    }
+  }
+  for (const condition of getCharacterConditions(character)) {
+    if (sourceId === `condition:${condition.id}` && (condition.grantedSpells ?? []).some(grant => grant.index === spellIndex)) return true
+    for (const ability of condition.grantedAbilities ?? []) {
+      if (sourceId === `condition:${condition.id}:${ability.id}` && contains(ability)) return true
+    }
+  }
+  return false
 }

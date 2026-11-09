@@ -4,10 +4,10 @@ import { build } from 'esbuild'
 import { fileURLToPath } from 'node:url'
 const root = new URL('../../../', import.meta.url)
 const built = await build({
-  stdin: { contents: `export { CharacterTemplate } from './apps/web/src/models/characters/CharacterTemplate'; export * from './apps/web/src/models/magic/spells/additionalSpellResource'; export { getCharacterGrantedSpells } from './apps/web/src/models/characters/characterGrantedSpells';`, resolveDir: fileURLToPath(root), loader: 'ts' },
+  stdin: { contents: `export { CharacterTemplate } from './apps/web/src/models/characters/CharacterTemplate'; export * from './apps/web/src/models/magic/spells/additionalSpellResource'; export { getCharacterGrantedSpells, hasConfiguredGrantedSpellSource, spendGrantedSpellAbilityUse } from './apps/web/src/models/characters/characterGrantedSpells';`, resolveDir: fileURLToPath(root), loader: 'ts' },
   bundle: true, platform: 'node', format: 'esm', write: false, conditions: ['types'],
 })
-const { CharacterTemplate, paySpellSlotAndAdditionalResource: pay, additionalSpellResourceError, getAdditionalSpellResourceRecovery, getCharacterGrantedSpells } = await import('data:text/javascript;base64,' + Buffer.from(built.outputFiles[0].contents).toString('base64'))
+const { CharacterTemplate, paySpellSlotAndAdditionalResource: pay, additionalSpellResourceError, getAdditionalSpellResourceRecovery, getCharacterGrantedSpells, hasConfiguredGrantedSpellSource, spendGrantedSpellAbilityUse } = await import('data:text/javascript;base64,' + Buffer.from(built.outputFiles[0].contents).toString('base64'))
 const counter = (id = 'pool', used = 0) => ({ id, name: id, kind: 'passive', usage: { max: 5, used, reset: 'longRest', sharedResourceId: 'mana' } })
 const character = (abilities = [counter()], current = 2) => CharacterTemplate.fromJSON({
   id: 'caster', sheet: { type: 'npc' }, abilities,
@@ -214,4 +214,77 @@ test('cast dialog sends the resource-only choice at base level and rejects it fo
   assert.deepEqual(resolved, { castLevel: 1, payment: { type: 'linked-resource' } })
   assert.equal(makeResolver({ ...selected, additionalResourceCost: cost }, 'linked', value => errors.push(value))(), null)
   assert.equal(errors.length, 1)
+})
+
+test('ability-granted spells consume their individual costs and retain the default of one', () => {
+  const source = character([{ ...counter('arcane-eye'), grantedSpells: [
+    { index: 'disintegrate', castingMode: 'source', abilityChargeCost: 4 },
+    { index: 'clairvoyance', castingMode: 'source', abilityChargeCost: 2 },
+    { index: 'crown-of-madness', castingMode: 'source' },
+  ] }])
+  const grants = getCharacterGrantedSpells(CharacterTemplate.fromJSON(JSON.parse(JSON.stringify(source.toJSON()))))
+  assert.deepEqual(grants.map(grant => grant.abilityChargeCost ?? 1), [4, 2, 1])
+  const afterFour = spendGrantedSpellAbilityUse(source, grants[0].usageSource, grants[0].abilityChargeCost)
+  assert.equal(afterFour.get('abilities')[0].usage.used, 4)
+  const exhausted = spendGrantedSpellAbilityUse(afterFour, grants[1].usageSource, grants[1].abilityChargeCost)
+  assert.equal(exhausted.get('abilities')[0].usage.used, 4)
+  assert.equal(source.get('abilities')[0].usage.used, 0)
+})
+
+test('server enforces variable charge costs atomically for ability-granted spells', () => {
+  const source = character([{ ...counter('arcane-eye'), grantedSpells: [
+    { index: 'disintegrate', castingMode: 'source', abilityChargeCost: 4 },
+    { index: 'clairvoyance', castingMode: 'source', abilityChargeCost: 2 },
+  ] }])
+  const spell = { index: 'disintegrate', slotLevel: 6 }
+  const grant = getCharacterGrantedSpells(source)[0]
+  const payment = { type: 'ability-use', source: grant.usageSource }
+  const spent = applySpellCastPayment(source, spell, grant, 6, payment)
+  assert.equal(spent.ok, true)
+  assert.equal(spent.character.get('abilities')[0].usage.used, 4)
+  const before = JSON.stringify(spent.character.toJSON())
+  const refused = applySpellCastPayment(spent.character, { index: 'clairvoyance', slotLevel: 3 }, getCharacterGrantedSpells(spent.character)[1], 3, payment)
+  assert.equal(refused.ok, false)
+  assert.equal(JSON.stringify(spent.character.toJSON()), before)
+})
+
+test('granted spells honor both parent ability and individual spell requirements', () => {
+  const parent = {
+    ...counter('vecna-eye'),
+    unlockRequirements: { minimumCharacterLevel: 7 },
+    grantedSpells: [
+      { index: 'clairvoyance', castingMode: 'source', unlockRequirements: { minimumCharacterLevel: 9 } },
+      { index: 'disintegrate', castingMode: 'source', unlockRequirements: { attribute: 'int', minimumAttributeScore: 18 } },
+      { index: 'eyebite', castingMode: 'source' },
+    ],
+  }
+  const mk = (level, int) => CharacterTemplate.fromJSON({
+    id: 'vecna-caster',
+    sheet: { type: 'pc', classes: [{ className: 'wizard', level }], attributes: { str: 10, dex: 10, con: 10, int, wis: 10, cha: 10 } },
+    abilities: [parent],
+  })
+  assert.deepEqual(getCharacterGrantedSpells(mk(5, 20)).map(grant => grant.index), [])
+  assert.equal(hasConfiguredGrantedSpellSource(mk(5, 20), 'eyebite', 'vecna-eye'), true)
+  assert.deepEqual(getCharacterGrantedSpells(mk(7, 16)).map(grant => grant.index), ['eyebite'])
+  assert.deepEqual(getCharacterGrantedSpells(mk(9, 16)).map(grant => grant.index), ['clairvoyance', 'eyebite'])
+  assert.deepEqual(getCharacterGrantedSpells(mk(9, 18)).map(grant => grant.index), ['clairvoyance', 'disintegrate', 'eyebite'])
+})
+
+test('server rejects locked granted spells even if they remain in the known spell list', () => {
+  const ability = {
+    id: 'vecna-grant', name: 'Vecna', kind: 'passive',
+    unlockRequirements: { minimumCharacterLevel: 7 },
+    grantedSpells: [{ index: 'clairvoyance', castingMode: 'known' }],
+  }
+  const c = CharacterTemplate.fromJSON({
+    id: 'locked-mage',
+    sheet: { type: 'pc', classes: [{ className: 'wizard', level: 5 }] },
+    abilities: [ability],
+    magic: { spells: { knownSpells: [
+      { spells: { id: 'clairvoyance', prepared: true }, source: { type: 'ability', name: 'Vecna', sourceId: 'vecna-grant', attribute: 'int' } },
+    ], slots: {} } },
+  })
+  const result = resolveCastSource(c, { index: 'clairvoyance', slotLevel: 3 }, 'vecna-grant')
+  assert.equal(result.ok, false)
+  assert.equal(result.code, 'SPELL_SOURCE_LOCKED')
 })

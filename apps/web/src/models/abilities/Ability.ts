@@ -133,6 +133,8 @@ export interface Ability {
   /** Define se os benefícios somem ao término ou permanecem na ficha. */
   effectPersistence?: AbilityEffectPersistence
   trigger?: Trigger
+  /** Requirements for the entire ability and all of its effects. */
+  unlockRequirements?: import('../magic/spells/grantedSpellUnlocks').UnlockRequirements
   grantedSpells?: SpellGrant[]
   grantedProficiencies?: Proficiency[]
   bonuses?: BonusCollection
