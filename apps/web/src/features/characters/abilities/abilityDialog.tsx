@@ -289,7 +289,7 @@ export function AbilityDialog({
                 />
               </label>
 
-              <UnlockRequirementsEditor value={draft.unlockRequirements} onChange={unlockRequirements => setDraft({ ...draft, unlockRequirements })} />
+              <UnlockRequirementsEditor character={character} value={draft.unlockRequirements} onChange={unlockRequirements => setDraft({ ...draft, unlockRequirements })} />
 
               <div className="grid gap-2 sm:grid-cols-3">
                 <label className="grid gap-1">
