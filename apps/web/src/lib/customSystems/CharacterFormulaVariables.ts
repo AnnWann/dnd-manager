@@ -1,3 +1,4 @@
+import { getEffectiveSkillProficiency } from "../../models/characters/characterProficiencies"
 import type { CharacterTemplate } from '../../models/characters/CharacterTemplate'
 import { getCustomClassConfigFromEntry, isCustomClassName } from '../../models/characters/customClassConfig'
 import type { Attribute } from '../../models/sheet/Attribute'
@@ -296,7 +297,7 @@ export function getCharacterFormulaValues(
     const skill = SKILLS.find(({ id }) => path === `character.skill.${id}`)
     if (skill) {
       const modifier = character.getEffectiveAttributeModifier(skill.attribute)
-      const proficiency = sheet.skills?.[skill.id] ?? 'none'
+      const proficiency = getEffectiveSkillProficiency(character, skill.id)
       const multiplier =
         proficiency === 'expertise'
           ? 2

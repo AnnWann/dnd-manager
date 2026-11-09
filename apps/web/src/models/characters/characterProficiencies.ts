@@ -1,3 +1,6 @@
+import { getCharacterAsis } from "./CharacterAsi"
+import { resolveSkill } from "./applyManualProficiencies"
+import type { Skill, SkillProficiency } from "../sheet/Skills"
 import type { CharacterTemplate } from "./CharacterTemplate"
 import type {
   Proficiency,
@@ -46,11 +49,12 @@ export function hasProficiency(
   name: string,
 ): boolean {
   const normalizedName = normalizeProficiencyName(name)
+  const skill = category === "skill" ? resolveSkill(name) : undefined
 
   return getCharacterProficiencies(character).some(
     (proficiency) =>
       proficiency.category === category &&
-      normalizeProficiencyName(proficiency.name) === normalizedName,
+      (skill ? resolveSkill(proficiency.name) === skill : normalizeProficiencyName(proficiency.name) === normalizedName),
   )
 }
 
@@ -65,6 +69,7 @@ export function getAbilityGrantedProficiencies(
 ): AbilityGrantedProficiency[] {
   const abilities = [
     ...(character.get("abilities") ?? []),
+    ...getCharacterAsis(character).flatMap(({ ability }) => ability ? [ability] : []),
     ...(character.get("sheet").race.naturalAbilities ?? []),
     ...getEquippedItems(character).flatMap((item) => item.abilities ?? []),
   ].filter(isAbilityBenefitsActive)
@@ -88,14 +93,26 @@ export function getCharacterProficiencies(
       (entry) => entry.proficiency,
     ),
   ]
-  const seen = new Set<string>()
+  const strongest = new Map<string, Proficiency>()
 
-  return proficiencies.filter((proficiency) => {
-    const key = `${proficiency.category}:${normalizeProficiencyName(proficiency.name)}`
-    if (seen.has(key)) return false
-    seen.add(key)
-    return true
-  })
+  for (const proficiency of proficiencies) {
+    const skill = proficiency.category === "skill" ? resolveSkill(proficiency.name) : undefined
+    const key = `${proficiency.category}:${skill ?? normalizeProficiencyName(proficiency.name)}`
+    const existing = strongest.get(key)
+    if (!existing || (skill && proficiency.expertise && !existing.expertise)) {
+      strongest.set(key, proficiency)
+    }
+  }
+  return Array.from(strongest.values())
+}
+
+export function getEffectiveSkillProficiency(character: CharacterTemplate, skill: Skill): SkillProficiency {
+  const base = character.get("sheet").skills[skill] ?? "none"
+  if (base === "expertise") return base
+  const grant = getCharacterProficiencies(character).find(
+    proficiency => proficiency.category === "skill" && resolveSkill(proficiency.name) === skill,
+  )
+  return grant?.expertise ? "expertise" : grant ? "proficient" : base
 }
 
 function normalizeProficiencyName(value: string): string {

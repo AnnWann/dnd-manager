@@ -102,8 +102,9 @@ export function mergeProficiencies(
   return merged
 }
 
-function resolveSkill(value: string): Skill | undefined {
-  return SKILL_ALIASES[normalize(value).replace(/[^a-z0-9]/g, "")]
+export function resolveSkill(value: string): Skill | undefined {
+  const key = normalize(value).replace(/[^a-z0-9]/g, "")
+  return Object.hasOwn(SKILL_ALIASES, key) ? SKILL_ALIASES[key] : undefined
 }
 
 function normalize(value: string): string {
