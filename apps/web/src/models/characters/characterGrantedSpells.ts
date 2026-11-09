@@ -1,3 +1,4 @@
+import { isGrantedSpellUnlocked } from "../magic/spells/grantedSpellUnlocks"
 import type { Ability, Usage } from "../abilities/Ability"
 import { getAbilityUsageMax } from "../abilities/abilityActivation"
 import type { Equipment } from "../items/equipment/EquipmentSlot"
@@ -48,7 +49,7 @@ export function getCharacterGrantedSpells(
       type: ability.category === "feat" ? "feat" : "ability",
       name: ability.name || (ability.category === "feat" ? "Talento" : "Habilidade"),
       sourceId: ability.id,
-    }, { type: "character", abilityId: ability.id })
+    }, { type: "character", abilityId: ability.id }, character)
   }
 
   const race = character.get("sheet").race
@@ -57,7 +58,7 @@ export function getCharacterGrantedSpells(
       type: "race",
       name: ability.name || race.subrace || race.race,
       sourceId: ability.id,
-    }, { type: "race", abilityId: ability.id })
+    }, { type: "race", abilityId: ability.id }, character)
   }
 
   const shield = character.get("equipment").shield
@@ -73,7 +74,7 @@ export function getCharacterGrantedSpells(
     seenEquipment.add(equipment.id)
 
     for (const grant of equipment.spells ?? []) {
-      if (!grant.index) continue
+      if (!grant.index || !isGrantedSpellUnlocked(character, grant)) continue
 
       const castingMode = grant.additionalResourceCost ? "known" :
         grant.castingMode ??
@@ -103,7 +104,7 @@ export function getCharacterGrantedSpells(
         type: "equipment",
         name: `${equipment.name || "Item"} — ${ability.name || "Habilidade"}`,
         sourceId: `${equipment.id}:${ability.id}`,
-      }, { type: "equipment", itemId: equipment.id, abilityId: ability.id })
+      }, { type: "equipment", itemId: equipment.id, abilityId: ability.id }, character)
     }
   }
 
@@ -133,7 +134,7 @@ export function getCharacterGrantedSpells(
 
   for (const condition of getCharacterConditions(character)) {
     for (const grant of condition.grantedSpells ?? []) {
-      if (!grant.index) continue
+      if (!grant.index || !isGrantedSpellUnlocked(character, grant)) continue
       results.push({
         key: `condition:${condition.id}:${grant.index}`,
         index: grant.index,
@@ -162,7 +163,7 @@ export function getCharacterGrantedSpells(
         type: "condition",
         conditionId: condition.id,
         abilityId: ability.id,
-      })
+      }, character)
     }
   }
 
@@ -174,9 +175,10 @@ function addAbilitySpellGrants(
   ability: Ability,
   source: Pick<SpellSource, "type" | "name" | "sourceId">,
   usageSource: CharacterGrantedSpellUsageSource,
+  character: CharacterTemplate,
 ): void {
   for (const grant of ability.grantedSpells ?? []) {
-    if (!grant.index) continue
+    if (!grant.index || !isGrantedSpellUnlocked(character, grant)) continue
 
     const castingMode = grant.additionalResourceCost ? "known" : grant.castingMode ?? "source"
     const usesAlternateResource = Boolean(grant.resourceCost)
