@@ -653,12 +653,13 @@ function applySpellCastPayment(
     };
   }
   const maximum = getAbilityUsageMax(character, grant.usage);
-  if (grant.usage.used >= maximum) {
-    return { ok: false, code: "SPELL_ABILITY_USE_UNAVAILABLE", message: "No granted spell uses remain." };
+  const chargeCost = Math.max(1, Math.trunc(grant.abilityChargeCost ?? 1));
+  if (maximum - grant.usage.used < chargeCost) {
+    return { ok: false, code: "SPELL_ABILITY_USE_UNAVAILABLE", message: "Not enough granted spell charges remain." };
   }
   return {
     ok: true,
-    character: spendGrantedSpellAbilityUse(character, payment.source),
+    character: spendGrantedSpellAbilityUse(character, payment.source, chargeCost),
   };
 }
 
