@@ -10,6 +10,8 @@ export type SpellGrant = {
   /** Counter payment: cumulative by default; oneOf allows slots OR this counter. */
   additionalResourceCost?: AdditionalSpellResourceCost
   index: string
+  /** Cargas do contador da habilidade consumidas por conjuração (padrão: 1). */
+  abilityChargeCost?: number
   castingMode?: SpellGrantCastingMode
   attribute?: Attribute
   /**
