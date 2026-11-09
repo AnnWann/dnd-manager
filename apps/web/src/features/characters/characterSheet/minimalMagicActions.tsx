@@ -87,6 +87,7 @@ export function MinimalMagicActions({ character, updateCharacter, scrollOnlyItem
             : `ability:${source.type}:${source.abilityId}`
         : `equipment-spell:${entry.sourceEquipmentSpellUsageSource!.itemId}:${entry.sourceEquipmentSpellUsageSource!.spellIndex}`
       return [poolId, {
+        id: poolId,
         label: entry.sourceUsageLabel || sourceLabel(entry.source),
         current: entry.sourceUsageRemaining ?? 0,
         maximum: entry.sourceUsageMaximum ?? 0,
@@ -394,7 +395,7 @@ export function MinimalMagicActions({ character, updateCharacter, scrollOnlyItem
       {sorceryPoints.max > 0 ? <ResourcePill label="Pontos de magia" current={sorceryPoints.current} max={sorceryPoints.max} onDecrease={() => updateCharacter(character.get("id"), spendSorceryPoint)} onIncrease={() => updateCharacter(character.get("id"), restoreSorceryPoint)} /> : null}
       {channelDivinity ? <ResourcePill label="Canalizar Divindade" current={channelDivinity.current} max={channelDivinity.max} onDecrease={() => updateCharacter(character.get("id"), spendChannelDivinity)} onIncrease={() => updateCharacter(character.get("id"), restoreChannelDivinity)} /> : null}
       {ki ? <ResourcePill label="Ki" current={ki.current} max={ki.max} onDecrease={() => updateCharacter(character.get("id"), spendKi)} onIncrease={() => updateCharacter(character.get("id"), restoreKi)} /> : null}
-      {grantedChargePools.map(pool => <ResourcePill key={pool.label} label={pool.label} current={pool.current} max={pool.maximum} />)}
+      {grantedChargePools.map(pool => <ResourcePill key={pool.id} label={pool.label} current={pool.current} max={pool.maximum} />)}
     </div></div> : null}
 
     {selected ? <Modal title={spellName(selected.spell)} onClose={() => setSelected(null)} className="max-w-xl"><div className="grid gap-3"><div className="text-xs text-textMuted">{sourceLabel(selected.source)}{selected.spell.concentration ? " • Concentração" : ""}</div><p className="max-h-56 overflow-y-auto whitespace-pre-wrap text-sm leading-6 text-text">{selected.spell.description}</p>{resourceChoices.length > 1 ? <SpellCastChoiceField label="Recurso" value={castingResource} options={resourceChoices} onChange={changeCastingResource} /> : null}{asksCastLevel ? <SpellCastChoiceField label="Nível de conjuração" value={castLevel ?? selected.spell.slotLevel} onChange={setCastLevel} options={getCastLevels(selected.spell, castingResource, slotChoices).map(level => ({value: level, label: `Nível ${level}${selectedBaseCost ? ` — ${getUpcastResourceCost(selected.spell, selectedBaseCost, level).amount} ${spellResourceLabel(selectedBaseCost.resource)}` : ""}`}))} /> : null}{(getSpellOnCastAttackRiders(selected.spell).some(rider => rider.targetSelection === "onCast") || selected.spell.targeting?.hasAttackRoll) && sessionRuntime ? <SpellCastChoiceField
