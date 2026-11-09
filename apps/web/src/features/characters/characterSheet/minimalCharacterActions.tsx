@@ -1062,6 +1062,7 @@ function getAbilityActions(
 
   const nativeEntries: ActionEntry[] = [...characterAbilities, ...raceAbilities]
     .filter(({ ability }) =>
+      meetsUnlockRequirements(character, ability.unlockRequirements) &&
       (ability.kind ?? "active") === "active" &&
       normalizeActionKind(ability.actionKind) === filter,
     )
