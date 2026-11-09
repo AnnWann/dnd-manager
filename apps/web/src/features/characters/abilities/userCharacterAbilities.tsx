@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react"
+import { meetsUnlockRequirements } from "../../../models/magic/spells/grantedSpellUnlocks"
 
 import { Button } from "../../../components/ui/Button"
 import { Card, CardContent, CardHeader } from "../../../components/ui/Card"
@@ -80,6 +81,7 @@ export function UserCharacterAbilitiesTab({
     const normalizedSearch = search.trim().toLocaleLowerCase("pt-BR")
 
     return abilities
+      .filter((ability) => isEditing || meetsUnlockRequirements(character, ability.unlockRequirements))
       .filter((ability) => {
         const matchesSource = (() => {
           switch (sourceFilter) {
@@ -116,7 +118,7 @@ export function UserCharacterAbilitiesTab({
         return matchesSource && matchesKind && matchesSearch
       })
       .sort((left, right) => left.name.localeCompare(right.name, "pt-BR"))
-  }, [abilities, kindFilter, search, sourceFilter])
+  }, [abilities, character, isEditing, kindFilter, search, sourceFilter])
 
   function saveAbility(ability: Ability) {
     updateCharacter(character.get("id"), (current) => current.saveAbility(ability))
