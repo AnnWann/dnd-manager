@@ -81,7 +81,7 @@ export function UserCharacterAbilitiesTab({
     const normalizedSearch = search.trim().toLocaleLowerCase("pt-BR")
 
     return abilities
-      .filter((ability) => isEditing || meetsUnlockRequirements(character, ability.unlockRequirements))
+      .filter((ability) => meetsUnlockRequirements(character, ability.unlockRequirements))
       .filter((ability) => {
         const matchesSource = (() => {
           switch (sourceFilter) {
