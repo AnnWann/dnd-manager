@@ -5,7 +5,7 @@ import type { CharacterTemplateProps } from "../../../../../web/src/models/chara
 import { getSpellCastDamageChoices, getSpellOnCastAttackRiders } from "../../../../../web/src/models/magic/spells/spellAttackRiders";
 import { resolveAttackRiderDamageChoice } from "../../../../../web/src/models/combat/AttackRider";
 import { getAbilityUsageMax } from "../../../../../web/src/models/abilities/abilityActivation";
-import { getCharacterGrantedSpells, spendGrantedEquipmentSpellUse, spendGrantedSpellAbilityUse, type CharacterGrantedSpell } from "../../../../../web/src/models/characters/characterGrantedSpells";
+import { getCharacterGrantedSpells, hasConfiguredGrantedSpellSource, spendGrantedEquipmentSpellUse, spendGrantedSpellAbilityUse, type CharacterGrantedSpell } from "../../../../../web/src/models/characters/characterGrantedSpells";
 import { CharacterTemplate } from "../../../../../web/src/models/characters/CharacterTemplate";
 import {
   addSpellCastingDescription,
@@ -478,6 +478,9 @@ function resolveCastSource(
     (entry) => entry.spells.id === spell.index && entry.source.sourceId === sourceId,
   );
   if (known) {
+    if (!matchedGrant && hasConfiguredGrantedSpellSource(character, spell.index, sourceId)) {
+      return { ok: false, code: "SPELL_SOURCE_LOCKED", message: "The granted spell prerequisites are not met." };
+    }
     if (spell.slotLevel > 0 && known.source.type === "class") {
       const classEntry = (character.get("sheet").classes ?? []).find(
         (entry) => entry.className === known.source.sourceId,
