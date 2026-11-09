@@ -1,3 +1,4 @@
+import { meetsUnlockRequirements } from "../magic/spells/grantedSpellUnlocks"
 import { isGrantedSpellUnlocked } from "../magic/spells/grantedSpellUnlocks"
 import type { Ability, Usage } from "../abilities/Ability"
 import { getAbilityUsageMax } from "../abilities/abilityActivation"
@@ -177,6 +178,7 @@ function addAbilitySpellGrants(
   usageSource: CharacterGrantedSpellUsageSource,
   character: CharacterTemplate,
 ): void {
+  if (!meetsUnlockRequirements(character, ability.unlockRequirements)) return
   for (const grant of ability.grantedSpells ?? []) {
     if (!grant.index || !isGrantedSpellUnlocked(character, grant)) continue
 
