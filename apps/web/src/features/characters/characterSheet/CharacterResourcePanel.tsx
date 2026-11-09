@@ -64,6 +64,23 @@ export function CharacterResourcePanel({ character, updateCharacter }: Props) {
     })
   }
 
+  const itemSpellPools = character.getEquippedItems().flatMap(item =>
+    (item.spells ?? []).filter(grant => grant.usage?.reset !== "spellSlot" && isGrantedSpellUnlocked(character, grant)).map(grant => {
+      const max = getAbilityUsageMax(character, grant.usage)
+      return { id: `${item.id}:${grant.index}`, itemId: item.id, name: `${item.name} — ${grant.index}`,
+        grant, current: Math.max(0, max - grant.usage.used), max }
+    }).filter(pool => pool.max > 0)
+  )
+
+  function adjustItemSpell(itemId: string, grant: typeof itemSpellPools[number]["grant"], delta: -1 | 1) {
+    updateCharacter(id, current => {
+      const max = getAbilityUsageMax(current, grant.usage)
+      const nextUsed = Math.max(0, Math.min(max, grant.usage.used - delta))
+      if (nextUsed === grant.usage.used) return current
+      return current.updateEquipmentSpell(itemId, { ...grant, usage: { ...grant.usage, used: nextUsed } })
+    })
+  }
+
   function adjustAbility(pool: AbilityPool, delta: 1 | -1) {
     if (runtime) {
       if (runtime.status !== "connected") return
@@ -92,7 +109,7 @@ export function CharacterResourcePanel({ character, updateCharacter }: Props) {
 
   const hasSpells = Object.values(slots).some(slot => slot && slot.max > 0) || Boolean(pact?.max) || customSlots.length > 0
   const hasClassResources = sorcery.max > 0 || Boolean(ki?.max) || Boolean(channel?.max)
-  if (!hasSpells && !hasClassResources && !pools.size) return null
+  if (!hasSpells && !hasClassResources && !pools.size && !itemSpellPools.length) return null
 
   return <section className="rounded-xl border border-border bg-bg p-3 shadow-theme-sm">
     <h2 className="text-xs font-semibold uppercase tracking-wide text-textH">Recursos</h2>
@@ -127,11 +144,13 @@ export function CharacterResourcePanel({ character, updateCharacter }: Props) {
           onIncrease={() => updateCharacter(id, restoreChannelDivinity)} /> : null}
       </div>
     </div> : null}
-    {pools.size ? <div className="mt-3">
+    {pools.size || itemSpellPools.length ? <div className="mt-3">
       <div className="mb-2 text-[11px] font-semibold text-textH">Habilidades e equipamentos</div>
       <div className="flex flex-wrap gap-2">
         {[...pools.values()].map(pool => <ResourcePill key={pool.id} label={pool.name} current={pool.current} max={pool.max}
           onDecrease={() => adjustAbility(pool, -1)} onIncrease={() => adjustAbility(pool, 1)} />)}
+        {itemSpellPools.map(pool => <ResourcePill key={pool.id} label={pool.name} current={pool.current} max={pool.max}
+          onDecrease={() => adjustItemSpell(pool.itemId, pool.grant, -1)} onIncrease={() => adjustItemSpell(pool.itemId, pool.grant, 1)} />)}
       </div>
     </div> : null}
   </section>
