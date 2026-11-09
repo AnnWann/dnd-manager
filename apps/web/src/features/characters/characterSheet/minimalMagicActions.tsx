@@ -74,6 +74,24 @@ export function MinimalMagicActions({ character, updateCharacter, scrollOnlyItem
   const visibleSpells = allSpells.filter((entry) => normalizeCastingTime(entry.spell) === actionFilter).filter((entry) => levelFilter === "all" || entry.spell.slotLevel === levelFilter).sort((a, b) => a.spell.slotLevel - b.spell.slotLevel || spellName(a.spell).localeCompare(spellName(b.spell), "pt-BR"))
   const slots = character.getSpellSlots(), pactSlots = character.getPactSlots(), sorceryPoints = getSorceryPoints(character), channelDivinity = getChannelDivinityPool(character), ki = getKiPool(character)
   const customSlotPools = getCustomSpellSlotPools(character)
+  // One display per shared charge pool, even when the ability grants multiple spells.
+  const grantedChargePools = Array.from(new Map(allSpells
+    .filter(entry => entry.sourceUsageMaximum !== undefined && (entry.sourceUsageSource || entry.sourceEquipmentSpellUsageSource))
+    .map(entry => {
+      const source = entry.sourceUsageSource
+      const poolId = source
+        ? source.type === "equipment"
+          ? `ability:equipment:${source.itemId}:${source.abilityId}`
+          : source.type === "condition"
+            ? `ability:condition:${source.conditionId}:${source.abilityId}`
+            : `ability:${source.type}:${source.abilityId}`
+        : `equipment-spell:${entry.sourceEquipmentSpellUsageSource!.itemId}:${entry.sourceEquipmentSpellUsageSource!.spellIndex}`
+      return [poolId, {
+        label: entry.sourceUsageLabel || sourceLabel(entry.source),
+        current: entry.sourceUsageRemaining ?? 0,
+        maximum: entry.sourceUsageMaximum ?? 0,
+      }] as const
+    })).values())
   const hasMagicResources = Object.values(slots).some((slot) => Boolean(slot && slot.max > 0)) || Boolean(pactSlots?.max) || sorceryPoints.max > 0 || Boolean(channelDivinity?.max) || Boolean(ki?.max) || customSlotPools.length > 0 || allSpells.some((entry) => entry.sourceUsageMaximum !== undefined)
   if (!allSpells.length && !hasMagicResources) return null
 
@@ -350,9 +368,13 @@ export function MinimalMagicActions({ character, updateCharacter, scrollOnlyItem
           name: spellName(entry.spell),
           level: entry.spell.slotLevel,
           source: sourceLabel(entry.source),
-          cost: entry.additionalResourceCost ? `${entry.additionalResourceCost.mode === "oneOf" ? (entry.spell.slotLevel > 0 ? "Espaço OU " : "Truque OU ") : entry.spell.slotLevel > 0 ? "Espaço + " : ""}${entry.additionalResourceCost.amount} recurso (${entry.additionalResourceCost.resourceId})` : entry.sourceResourceCost
-            ? `${entry.sourceResourceCost.amount} ${spellResourceLabel(entry.sourceResourceCost.resource)}`
-            : undefined,
+          cost: entry.additionalResourceCost
+            ? `${entry.additionalResourceCost.mode === "oneOf" ? (entry.spell.slotLevel > 0 ? "Espaço OU " : "Truque OU ") : entry.spell.slotLevel > 0 ? "Espaço + " : ""}${entry.additionalResourceCost.amount} recurso (${entry.additionalResourceCost.resourceId})`
+            : entry.sourceResourceCost
+              ? `${entry.sourceResourceCost.amount} ${spellResourceLabel(entry.sourceResourceCost.resource)}`
+              : entry.sourceUsageSource || entry.sourceEquipmentSpellUsageSource
+                ? `${entry.sourceUsageSource ? (entry.sourceAbilityChargeCost ?? 1) : 1} carga(s) · ${entry.sourceUsageRemaining ?? 0}/${entry.sourceUsageMaximum ?? 0} disponíveis`
+                : undefined,
           original: entry,
         }))}
         filters={ACTION_FILTERS}
@@ -372,6 +394,7 @@ export function MinimalMagicActions({ character, updateCharacter, scrollOnlyItem
       {sorceryPoints.max > 0 ? <ResourcePill label="Pontos de magia" current={sorceryPoints.current} max={sorceryPoints.max} onDecrease={() => updateCharacter(character.get("id"), spendSorceryPoint)} onIncrease={() => updateCharacter(character.get("id"), restoreSorceryPoint)} /> : null}
       {channelDivinity ? <ResourcePill label="Canalizar Divindade" current={channelDivinity.current} max={channelDivinity.max} onDecrease={() => updateCharacter(character.get("id"), spendChannelDivinity)} onIncrease={() => updateCharacter(character.get("id"), restoreChannelDivinity)} /> : null}
       {ki ? <ResourcePill label="Ki" current={ki.current} max={ki.max} onDecrease={() => updateCharacter(character.get("id"), spendKi)} onIncrease={() => updateCharacter(character.get("id"), restoreKi)} /> : null}
+      {grantedChargePools.map(pool => <ResourcePill key={pool.label} label={pool.label} current={pool.current} max={pool.maximum} />)}
     </div></div> : null}
 
     {selected ? <Modal title={spellName(selected.spell)} onClose={() => setSelected(null)} className="max-w-xl"><div className="grid gap-3"><div className="text-xs text-textMuted">{sourceLabel(selected.source)}{selected.spell.concentration ? " • Concentração" : ""}</div><p className="max-h-56 overflow-y-auto whitespace-pre-wrap text-sm leading-6 text-text">{selected.spell.description}</p>{resourceChoices.length > 1 ? <SpellCastChoiceField label="Recurso" value={castingResource} options={resourceChoices} onChange={changeCastingResource} /> : null}{asksCastLevel ? <SpellCastChoiceField label="Nível de conjuração" value={castLevel ?? selected.spell.slotLevel} onChange={setCastLevel} options={getCastLevels(selected.spell, castingResource, slotChoices).map(level => ({value: level, label: `Nível ${level}${selectedBaseCost ? ` — ${getUpcastResourceCost(selected.spell, selectedBaseCost, level).amount} ${spellResourceLabel(selectedBaseCost.resource)}` : ""}`}))} /> : null}{(getSpellOnCastAttackRiders(selected.spell).some(rider => rider.targetSelection === "onCast") || selected.spell.targeting?.hasAttackRoll) && sessionRuntime ? <SpellCastChoiceField
