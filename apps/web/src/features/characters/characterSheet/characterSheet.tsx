@@ -19,6 +19,7 @@ import { CharacterConditions } from "./characterConditions"
 import { CharacterIdentity } from "./character_info/characterIdentity"
 import { MinimalCharacterSheet } from "./minimalCharacterSheet"
 import { MinimalMagicActions } from "./minimalMagicActions"
+import { CharacterResourcePanel } from "./CharacterResourcePanel"
 import { Skills } from "./skills/skills"
 import { UserCharacterStatistics } from "./userCharacterStatistics"
 
@@ -101,6 +102,7 @@ export function CharacterSheetTab({
             character={character}
             updateCharacter={updateCharacter}
           />
+          <CharacterResourcePanel character={character} updateCharacter={updateCharacter} />
           <MinimalMagicActions
             character={character}
             updateCharacter={updateCharacter}
