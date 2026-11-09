@@ -1,3 +1,4 @@
+import { meetsUnlockRequirements } from "../magic/spells/grantedSpellUnlocks"
 import { getCharacterAsis } from "./CharacterAsi"
 import { resolveSkill } from "./applyManualProficiencies"
 import type { Skill, SkillProficiency } from "../sheet/Skills"
@@ -72,7 +73,7 @@ export function getAbilityGrantedProficiencies(
     ...getCharacterAsis(character).flatMap(({ ability }) => ability ? [ability] : []),
     ...(character.get("sheet").race.naturalAbilities ?? []),
     ...getEquippedItems(character).flatMap((item) => item.abilities ?? []),
-  ].filter(isAbilityBenefitsActive)
+  ].filter((ability) => isAbilityBenefitsActive(ability) && meetsUnlockRequirements(character, ability.unlockRequirements))
 
   return abilities.flatMap((ability) =>
     (ability.grantedProficiencies ?? []).map((proficiency) => ({
