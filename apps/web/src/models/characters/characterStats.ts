@@ -2,6 +2,7 @@ import { applyBonus, applyBonuses } from "../../../../../packages/game-core/src/
 import { abilityModifier, proficiencyBonus } from "../../../../../packages/game-core/src/characterMath"
 import type { Ability } from "../abilities/Ability"
 import { isAbilityBenefitsActive } from "../abilities/abilityActivation"
+import { meetsUnlockRequirements } from "../magic/spells/grantedSpellUnlocks"
 import type { Bonus, NormalBonusKey, ScopedBonusKey } from "../bonuses/Bonus"
 import { evaluateCharacterSheetFormula } from "../../lib/customSystems/CharacterSheetFormula"
 import type { Armor } from "../items/equipment/Armor"
@@ -99,7 +100,7 @@ export function getActiveAbilities(
     ...getCharacterConditions(character)
       .filter(isConditionActive)
       .flatMap((condition) => condition.grantedAbilities ?? []),
-  ].filter((ability) => isAbilityBenefitsActive(ability)
+  ].filter((ability) => meetsUnlockRequirements(character, ability.unlockRequirements) && isAbilityBenefitsActive(ability)
     && ability.targeting?.mode !== "targets" && ability.targeting?.mode !== "point")
 }
 
