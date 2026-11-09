@@ -1,4 +1,5 @@
 import { ResourcePill } from "../../../../../../packages/game-ui/src/ResourcePill"
+import { CustomSystemActionResources } from "./CustomSystemActionResources"
 import { getAbilityUsageMax, getSharedAbilityUsage } from "../../../models/abilities/abilityActivation"
 import type { Ability } from "../../../models/abilities/Ability"
 import type { CharacterTemplate } from "../../../models/characters/CharacterTemplate"
@@ -153,6 +154,7 @@ export function CharacterResourcePanel({ character, updateCharacter }: Props) {
           onDecrease={() => adjustItemSpell(pool.itemId, pool.grant, -1)} onIncrease={() => adjustItemSpell(pool.itemId, pool.grant, 1)} />)}
       </div>
     </div> : null}
+    <CustomSystemActionResources character={character} updateCharacter={updateCharacter} />
   </section>
 }
 

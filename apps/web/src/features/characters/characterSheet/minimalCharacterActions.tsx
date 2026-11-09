@@ -65,7 +65,7 @@ import {
 } from "../../../models/characters/characterSorceryPoints"
 import type { CharacterTemplate } from "../../../models/characters/CharacterTemplate"
 import { listBonusRollRequirements, resolveBonusCollectionRolls } from "../../../models/bonuses/BonusRoll"
-import type { CustomAbilityRollDefinition } from "../../../models/customSystems/CustomAbilityDefinition"
+import type { CustomAbilityRollDefinition, CustomAbilityResourceChangeDefinition } from "../../../models/customSystems/CustomAbilityDefinition"
 import type {
   CharacterCustomSystemState,
   CustomAbilityInstance,
@@ -73,7 +73,6 @@ import type {
 } from "../../../models/customSystems/CustomSystemDefinition"
 import { useOptionalSessionRuntime } from "../../session-runtime/useSessionRuntime"
 import { AbilityResourceActivationModal } from "../abilities/abilityResourceActivationModal"
-import { CustomSystemActionResources } from "./CustomSystemActionResources"
 
 type ActionFilter = "action" | "bonusAction" | "reaction" | "free" | "passive"
 
@@ -119,6 +118,7 @@ type ActionEntry = {
   metamagicCost?: number | "spell-level"
   usageRemaining?: number
   usageMaximum?: number
+  resourceSummary?: string
 }
 
 const FILTER_OPTIONS: Array<{ value: ActionFilter; label: string }> = [
@@ -701,8 +701,6 @@ export function MinimalCharacterActions({
 
       <CharacterActionTabs filters={FILTER_OPTIONS} selected={filter} onSelect={setFilter} />
 
-      <CustomSystemActionResources character={character} updateCharacter={updateCharacter} />
-
       <ActionGroup title="Ações padrão" entries={standardActions} onSelect={open} />
       {metamagicActions.length ? (
         <ActionGroup title="Metamagia" entries={metamagicActions} onSelect={open} />
@@ -1002,6 +1000,7 @@ function getCustomSystemActions(
         filter,
         source: definition.name,
         customAbilityRoll: action.roll,
+        resourceSummary: customActionResourceSummary(character, definitions, action.resourceChanges),
         activationLevelBase: action.level
           ? Math.max(1, Math.floor(action.level.baseLevel))
           : undefined,
@@ -1022,6 +1021,46 @@ function getCustomSystemActions(
   }
 
   return entries.sort((left, right) => left.name.localeCompare(right.name, "pt-BR"))
+}
+
+/** Display the current balance of resources actually referenced by a custom action. */
+function customActionResourceSummary(
+  character: CharacterTemplate,
+  definitions: CustomSystemDefinition[],
+  changes?: CustomAbilityResourceChangeDefinition[],
+): string | undefined {
+  const states = (character.get("sheet").customSystems ?? []) as CharacterCustomSystemState[]
+  return describeCustomResourceChanges(changes, systemId => ({
+    definition: definitions.find(entry => entry.id === systemId),
+    state: states.find(entry => entry.systemId === systemId),
+  }))
+}
+
+function customActionResourceSummaryFromState(
+  definition: CustomSystemDefinition,
+  state: CharacterCustomSystemState,
+  changes?: CustomAbilityResourceChangeDefinition[],
+): string | undefined {
+  return describeCustomResourceChanges(changes, systemId =>
+    systemId === definition.id ? { definition, state } : undefined)
+}
+
+function describeCustomResourceChanges(
+  changes: CustomAbilityResourceChangeDefinition[] | undefined,
+  lookup: (systemId: string) => { definition?: CustomSystemDefinition; state?: CharacterCustomSystemState } | undefined,
+): string | undefined {
+  const labels = new Set<string>()
+  for (const change of changes ?? []) {
+    if (change.target.source !== "customSystem") continue
+    const target = lookup(change.target.systemId)
+    const resource = target?.definition?.resources.find(entry => entry.id === change.target.resourceId)
+    const value = target?.state?.resources[change.target.resourceId]
+    if (!resource || !value) continue
+    const maximum = value.maximum ?? resource.maximum
+    const balance = maximum === undefined ? String(value.current) : `${value.current}/${maximum}`
+    labels.add(`${resource.name}: ${balance}`)
+  }
+  return [...labels].join(" · ") || undefined
 }
 
 function getAbilityActions(
@@ -1187,6 +1226,7 @@ function customAbilityEntry(
       canUse: true,
     },
     customAbilityRoll: activation.roll,
+    resourceSummary: customActionResourceSummaryFromState(definition, state, activation.resourceChanges),
     activationLevelBase,
     activationLevelMaximum,
     activationLevelLabel: activation.level?.label,

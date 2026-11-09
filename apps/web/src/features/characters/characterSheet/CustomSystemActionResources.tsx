@@ -1,4 +1,4 @@
-import { Minus, Plus } from 'lucide-react'
+import { ResourcePill } from '../../../../../../packages/game-ui/src/ResourcePill'
 import { useState } from 'react'
 
 import { adjustCustomResource } from '../../../lib/customSystems/CustomSystemState'
@@ -73,67 +73,37 @@ export function CustomSystemActionResources({
 
   return (
     <div className="mt-3">
-      <div className="mb-1.5 text-[10px] font-semibold uppercase tracking-wide text-textMuted">
-        Recursos
-      </div>
-      <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 xl:grid-cols-4">
+      <div className="mb-2 text-[11px] font-semibold text-textH">Sistemas personalizados</div>
+      <div className="flex flex-wrap gap-2">
         {entries.map((entry) => {
           const current = entry.state.current
           const maximum = entry.state.maximum ?? entry.resource.maximum
           const minimum = entry.resource.minimum ?? 0
           const canAdjust = entry.resource.allowManualAdjustment === true
-          return (
-            <article
-              key={`${entry.definition.id}:${entry.resource.id}`}
-              className="rounded-lg border border-border bg-bg-subtle px-3 py-2"
-            >
-              <div className="truncate text-[10px] font-semibold uppercase tracking-wide text-textMuted">
-                {entry.resource.name}
+          const label = `${entry.resource.name} · ${entry.definition.name}`
+          return <div key={`${entry.definition.id}:${entry.resource.id}`} className="min-w-0">
+            {maximum !== undefined ? (
+              <ResourcePill
+                label={label}
+                current={current}
+                max={maximum}
+                onDecrease={canAdjust && current > minimum ? () => adjust(entry, -1) : undefined}
+                onIncrease={canAdjust && current < maximum ? () => adjust(entry, 1) : undefined}
+              />
+            ) : (
+              <div className="rounded-lg border border-border bg-bg-subtle px-3 py-2 text-xs text-textH">
+                {label}: {formatNumber(current)}
+                {canAdjust ? <span className="ml-3 inline-flex gap-2">
+                  <button type="button" disabled={current <= minimum} onClick={() => adjust(entry, -1)}>−</button>
+                  <button type="button" onClick={() => adjust(entry, 1)}>+</button>
+                </span> : null}
               </div>
-              <div className="mt-1 flex items-center justify-between gap-2">
-                {canAdjust ? (
-                  <button
-                    type="button"
-                    title={`Reduzir ${entry.resource.name}`}
-                    disabled={current <= minimum}
-                    onClick={() => adjust(entry, -1)}
-                    className="grid h-7 w-7 shrink-0 place-items-center rounded-md border border-border text-textH hover:bg-bg disabled:cursor-not-allowed disabled:opacity-40"
-                  >
-                    <Minus className="h-3.5 w-3.5" />
-                  </button>
-                ) : null}
-                <div className="min-w-0 flex-1 text-center">
-                  <div className="text-base font-bold text-textH">
-                    {formatNumber(current)}{maximum !== undefined ? ` / ${formatNumber(maximum)}` : ''}
-                  </div>
-                  <div className="truncate text-[10px] text-textMuted">{entry.definition.name}</div>
-                </div>
-                {canAdjust ? (
-                  <button
-                    type="button"
-                    title={`Aumentar ${entry.resource.name}`}
-                    disabled={maximum !== undefined && current >= maximum}
-                    onClick={() => adjust(entry, 1)}
-                    className="grid h-7 w-7 shrink-0 place-items-center rounded-md border border-border text-textH hover:bg-bg disabled:cursor-not-allowed disabled:opacity-40"
-                  >
-                    <Plus className="h-3.5 w-3.5" />
-                  </button>
-                ) : null}
-              </div>
-              {entry.state.temporary ? (
-                <div className="mt-1 text-center text-[10px] text-accent">
-                  Temporário: {formatNumber(entry.state.temporary)}
-                </div>
-              ) : null}
-            </article>
-          )
+            )}
+            {entry.state.temporary ? <p className="mt-1 text-[10px] text-accent">Temporário: {formatNumber(entry.state.temporary)}</p> : null}
+          </div>
         })}
       </div>
-      {error ? (
-        <div className="mt-2 rounded-lg border border-danger bg-dangerBg px-3 py-2 text-xs text-danger">
-          {error}
-        </div>
-      ) : null}
+      {error ? <div className="mt-2 rounded-lg border border-danger bg-dangerBg px-3 py-2 text-xs text-danger">{error}</div> : null}
     </div>
   )
 }
