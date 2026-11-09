@@ -1,3 +1,4 @@
+import { UnlockRequirementsEditor } from "../abilities/UnlockRequirementsEditor"
 import type { CharacterTemplate } from "../../../models/characters/CharacterTemplate"
 import { getAdditionalSpellResourceRecovery, validateAdditionalSpellResource } from "../../../models/magic/spells/additionalSpellResource"
 import { useEffect, useMemo, useState } from "react"
@@ -208,41 +209,12 @@ export function GrantedSpellsEditor({
                   </label>
                 </div>
 
-                <section className="grid gap-2 rounded-lg border border-border bg-bg-subtle p-3">
-                  <div className="text-xs font-semibold text-textH">Requisitos de desbloqueio (opcional)</div>
-                  <p className="text-[11px] text-textMuted">Esta magia só fica disponível quando todos os requisitos definidos forem atendidos.</p>
-                  <label className="grid gap-1 md:max-w-48">
-                    <span className="text-[11px] font-medium text-textMuted">Nível mínimo do personagem</span>
-                    <Input type="number" min={1} max={20} value={grant.unlockRequirements?.minimumCharacterLevel ?? ""}
-                      placeholder="Sem requisito"
-                      onChange={(event) => {
-                        const raw = event.target.value
-                        updateGrant(index, { unlockRequirements: { ...grant.unlockRequirements, minimumCharacterLevel: raw ? Math.max(1, Math.min(20, Math.trunc(Number(raw) || 1))) : undefined } })
-                      }} />
-                  </label>
-                  <div className="grid gap-2 md:grid-cols-2">
-                    <label className="grid gap-1">
-                      <span className="text-[11px] font-medium text-textMuted">Atributo exigido</span>
-                      <Select value={grant.unlockRequirements?.attribute ?? ""}
-                        onChange={(event) => updateGrant(index, { unlockRequirements: {
-                          ...grant.unlockRequirements,
-                          attribute: event.target.value ? event.target.value as Attribute : undefined,
-                          minimumAttributeScore: event.target.value ? grant.unlockRequirements?.minimumAttributeScore ?? 10 : undefined,
-                        } })}>
-                        <option value="">Nenhum</option>
-                        {ATTRIBUTE_OPTIONS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
-                      </Select>
-                    </label>
-                    {grant.unlockRequirements?.attribute ? <label className="grid gap-1">
-                      <span className="text-[11px] font-medium text-textMuted">Valor mínimo do atributo</span>
-                      <Input type="number" min={1} max={30} value={grant.unlockRequirements?.minimumAttributeScore ?? 10}
-                        onChange={(event) => updateGrant(index, { unlockRequirements: {
-                          ...grant.unlockRequirements,
-                          minimumAttributeScore: Math.max(1, Math.min(30, Math.trunc(Number(event.target.value) || 1))),
-                        } })} />
-                    </label> : null}
-                  </div>
-                </section>
+                <UnlockRequirementsEditor
+                  character={character}
+                  value={grant.unlockRequirements}
+                  description="Esta magia só fica disponível quando todos os requisitos definidos forem atendidos."
+                  onChange={unlockRequirements => updateGrant(index, { unlockRequirements })}
+                />
 
                 {grant.additionalResourceCost ? <section className="grid gap-2 rounded-lg border border-border bg-bg-subtle p-3">
                   <label className="grid gap-1 text-xs text-textMuted">ID do recurso adicional
