@@ -4,10 +4,10 @@ import { build } from 'esbuild'
 import { fileURLToPath } from 'node:url'
 const root = new URL('../../../', import.meta.url)
 const built = await build({
-  stdin: { contents: `export { CharacterTemplate } from './apps/web/src/models/characters/CharacterTemplate'; export * from './apps/web/src/models/magic/spells/additionalSpellResource'; export { getCharacterGrantedSpells, hasConfiguredGrantedSpellSource, spendGrantedSpellAbilityUse } from './apps/web/src/models/characters/characterGrantedSpells';`, resolveDir: fileURLToPath(root), loader: 'ts' },
+  stdin: { contents: `export { CharacterTemplate } from './apps/web/src/models/characters/CharacterTemplate'; export * from './apps/web/src/models/magic/spells/additionalSpellResource'; export { meetsUnlockRequirements } from './apps/web/src/models/magic/spells/grantedSpellUnlocks'; export { getCharacterGrantedSpells, hasConfiguredGrantedSpellSource, spendGrantedSpellAbilityUse } from './apps/web/src/models/characters/characterGrantedSpells';`, resolveDir: fileURLToPath(root), loader: 'ts' },
   bundle: true, platform: 'node', format: 'esm', write: false, conditions: ['types'],
 })
-const { CharacterTemplate, paySpellSlotAndAdditionalResource: pay, additionalSpellResourceError, getAdditionalSpellResourceRecovery, getCharacterGrantedSpells, hasConfiguredGrantedSpellSource, spendGrantedSpellAbilityUse } = await import('data:text/javascript;base64,' + Buffer.from(built.outputFiles[0].contents).toString('base64'))
+const { CharacterTemplate, meetsUnlockRequirements, paySpellSlotAndAdditionalResource: pay, additionalSpellResourceError, getAdditionalSpellResourceRecovery, getCharacterGrantedSpells, hasConfiguredGrantedSpellSource, spendGrantedSpellAbilityUse } = await import('data:text/javascript;base64,' + Buffer.from(built.outputFiles[0].contents).toString('base64'))
 const counter = (id = 'pool', used = 0) => ({ id, name: id, kind: 'passive', usage: { max: 5, used, reset: 'longRest', sharedResourceId: 'mana' } })
 const character = (abilities = [counter()], current = 2) => CharacterTemplate.fromJSON({
   id: 'caster', sheet: { type: 'npc' }, abilities,
@@ -287,4 +287,33 @@ test('server rejects locked granted spells even if they remain in the known spel
   const result = resolveCastSource(c, { index: 'clairvoyance', slotLevel: 3 }, 'vecna-grant')
   assert.equal(result.ok, false)
   assert.equal(result.code, 'SPELL_SOURCE_LOCKED')
+})
+
+test('formula-driven unlocks compare selected sheet variables against numeric and computed thresholds', () => {
+  const ability = {
+    id: 'eye-of-vecna',
+    name: 'Olho de Vecna',
+    unlockRequirements: { conditions: [{ variable: 'character.level', minimum: '7' }] },
+    grantedSpells: [{
+      index: 'clairvoyance',
+      castingMode: 'source',
+      unlockRequirements: { conditions: [
+        { variable: 'character.attribute.int', minimum: '10 + character.proficiencyBonus' },
+      ] },
+    }],
+  }
+  const make = (level, intelligence) => CharacterTemplate.fromJSON({
+    id: 'formula-unlock-character',
+    sheet: { type: 'pc', classes: [{ className: 'wizard', level }],
+      attributes: { str: 10, dex: 10, con: 10, int: intelligence, wis: 10, cha: 10 } },
+    abilities: [ability],
+  })
+  assert.deepEqual(getCharacterGrantedSpells(make(5, 20)).map(x => x.index), [])
+  assert.deepEqual(getCharacterGrantedSpells(make(7, 12)).map(x => x.index), [])
+  assert.deepEqual(getCharacterGrantedSpells(make(7, 13)).map(x => x.index), ['clairvoyance'])
+  assert.equal(meetsUnlockRequirements(make(7, 20), { conditions: [{ variable: 'character.level', minimum: 'character.level + 1' }] }), false)
+  assert.equal(meetsUnlockRequirements(make(7, 20), { conditions: [{ variable: 'character.level', minimum: '3 + 4' }] }), true)
+  assert.equal(meetsUnlockRequirements(make(7, 20), { conditions: [{ variable: 'character.inspiration', minimum: '1' }] }), false)
+  assert.equal(meetsUnlockRequirements(make(7, 20), { conditions: [{ variable: 'character.level', minimum: 'invalid_variable' }] }), false)
+  assert.equal(meetsUnlockRequirements(make(7, 20), { minimumCharacterLevel: 8 }), false)
 })
