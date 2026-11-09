@@ -7,7 +7,7 @@ import { getKiPool, restoreKi, spendKi } from "../../../models/characters/charac
 import { getSorceryPoints, restorePactSlot, restoreSorceryPoint, restoreSpellSlot, spendPactSlot, spendSorceryPoint, spendSpellSlot } from "../../../models/characters/characterMagic"
 import { getCustomSpellSlotPools, restoreCustomSpellSlot, spendCustomSpellSlot } from "../../../models/characters/customClassConfig"
 import { spendGrantedSpellAbilityUse } from "../../../models/characters/characterGrantedSpells"
-import { meetsUnlockRequirements } from "../../../models/magic/spells/grantedSpellUnlocks"
+import { meetsUnlockRequirements, isGrantedSpellUnlocked } from "../../../models/magic/spells/grantedSpellUnlocks"
 import type { MagicCircleLevel } from "../../../models/magic/spells/spellDefinitions"
 import type { SessionAbilitySource } from "../../session-runtime/abilitySessionProtocol"
 import { useOptionalSessionRuntime } from "../../session-runtime/useSessionRuntime"
@@ -101,8 +101,8 @@ export function CharacterResourcePanel({ character, updateCharacter }: Props) {
               ? { ...ability, usage: { ...ability.usage, used: Math.max(0, ability.usage.used - 1) } }
               : ability) })
         }
-        case "character": return current.restoreAbility(pool.source.abilityId)
-        case "condition": return current.restoreAbility(`condition:${source.conditionId}:${pool.source.abilityId}`)
+        case "character": return current.restoreAbility(source.abilityId)
+        case "condition": return current.restoreAbility(`condition:${source.conditionId}:${source.abilityId}`)
       }
     })
   }
