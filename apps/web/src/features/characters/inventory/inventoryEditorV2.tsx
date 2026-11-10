@@ -293,7 +293,7 @@ export function InventoryEditor({
             const moved = verdict.items.find(item => item.id === itemId)
             if (moved) onUpdateItem(itemId, () => moved)
           } : undefined}
-          renderItem={(item, actions) => (
+          renderItem={(item, actions, compartmentCard) => (
             <InventoryItemTile item={item} actions={actions}
               isAttuned={attunedItemIds.includes(item.id)}
               typeLabel={item.kind === "supply"
@@ -309,7 +309,7 @@ export function InventoryEditor({
               onTransfer={onTransferItem ? () => onTransferItem(item) : undefined}
               transferLabel={transferLabel}
               onRemove={onRemoveItem ? () => onRemoveItem(item.id) : undefined}
-            />
+            >{compartmentCard}</InventoryItemTile>
           )}
         />
       </CardContent>
