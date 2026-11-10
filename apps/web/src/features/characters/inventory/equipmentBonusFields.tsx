@@ -49,7 +49,7 @@ const SKILLS: Array<{ value: Skill; label: string }> = [
   { value: "athletics", label: "Atletismo" },
   { value: "animalHandling", label: "Lidar com Animais" },
   { value: "performance", label: "Atuação" },
-  { value: "deception", label: "Blefe" },
+  { value: "deception", label: "Enganação" },
   { value: "stealth", label: "Furtividade" },
   { value: "history", label: "História" },
   { value: "intimidation", label: "Intimidação" },

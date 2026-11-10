@@ -1,3 +1,4 @@
+import { getProficiencyDisplayName } from "../../../models/characters/applyManualProficiencies"
 import { useState, type ReactNode } from "react"
 import { Plus, Trash2, X } from "lucide-react"
 
@@ -417,7 +418,7 @@ export function CharacterRaceTab({
               >
                 <div className="min-w-0">
                   <div className="truncate text-sm font-medium text-textH">
-                    {proficiency.name}
+                    {getProficiencyDisplayName(proficiency)}
                   </div>
                   <div className="mt-0.5 text-xs text-textMuted">
                     {formatProficiencyCategory(proficiency.category)}
@@ -432,7 +433,7 @@ export function CharacterRaceTab({
                 <button
                   type="button"
                   title="Remover proficiência"
-                  aria-label={`Remover ${proficiency.name}`}
+                  aria-label={`Remover ${getProficiencyDisplayName(proficiency)}`}
                   onClick={() => removeProficiency(proficiency.id)}
                   className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-transparent text-textMuted transition-colors hover:border-danger hover:bg-dangerBg hover:text-danger"
                 >

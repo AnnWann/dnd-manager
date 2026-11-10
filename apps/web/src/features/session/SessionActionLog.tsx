@@ -1,3 +1,4 @@
+import { getProficiencyDisplayName } from "../../models/characters/applyManualProficiencies"
 import type { HiddenSpellPublicEntry } from "../../../../../packages/session-protocol/src/hiddenSpellcasting"
 import { ChevronDown, ChevronUp, Dices, History, PanelRightClose, PanelRightOpen, Undo2 } from "lucide-react"
 import { useEffect, useMemo, useState, type FormEvent } from "react"
@@ -1278,7 +1279,7 @@ function describeSessionOperation(
       return `Executou ${action?.name ?? operation.actionId} em ${operation.entryIds.length} alvo${operation.entryIds.length === 1 ? "" : "s"} da iniciativa${definition ? ` — ${definition.name}` : ""}.`
     }
     case "initiative.reset": return `Limpou o combate atual.`
-    case "character.proficiency.add": return `${characterName} ganhou a proficiência ${operation.proficiency.name}.`
+    case "character.proficiency.add": return `${characterName} ganhou a proficiência ${getProficiencyDisplayName(operation.proficiency)}.`
     case "character.proficiency.remove": return `${characterName} perdeu a proficiência ${operation.proficiencyName || "selecionada"}.`
     case "character.race.replace": return `${characterName} atualizou a raça.`
     case "character.race.spells.replace": return `${characterName} atualizou as magias raciais.`
@@ -1532,7 +1533,7 @@ function skillLabel(skill: SessionSkill): string {
     athletics: "Atletismo",
     animalHandling: "Lidar com Animais",
     performance: "Atuação",
-    deception: "Blefe",
+    deception: "Enganação",
     stealth: "Furtividade",
     history: "História",
     intimidation: "Intimidação",

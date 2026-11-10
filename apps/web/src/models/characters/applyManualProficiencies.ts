@@ -15,6 +15,7 @@ const SKILL_ALIASES: Record<string, Skill> = {
   atuacao: "performance",
   deception: "deception",
   blefe: "deception",
+  enganacao: "deception",
   stealth: "stealth",
   furtividade: "stealth",
   history: "history",
@@ -105,6 +106,15 @@ export function mergeProficiencies(
 export function resolveSkill(value: string): Skill | undefined {
   const key = normalize(value).replace(/[^a-z0-9]/g, "")
   return Object.hasOwn(SKILL_ALIASES, key) ? SKILL_ALIASES[key] : undefined
+}
+
+export function getProficiencyDisplayName(proficiency: Pick<Proficiency, "category" | "name">): string {
+  if (proficiency.category === "skill") {
+    const skill = resolveSkill(proficiency.name)
+    if (skill === "deception") return "Enganação"
+    if (skill === "persuasion") return "Persuasão"
+  }
+  return proficiency.name
 }
 
 function normalize(value: string): string {
