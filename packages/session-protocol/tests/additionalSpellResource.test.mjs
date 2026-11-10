@@ -7,7 +7,7 @@ const built = await build({
   stdin: { contents: `export { CharacterTemplate } from './apps/web/src/models/characters/CharacterTemplate'; export * from './apps/web/src/models/magic/spells/additionalSpellResource'; export { meetsUnlockRequirements } from './apps/web/src/models/magic/spells/grantedSpellUnlocks'; export { getCharacterGrantedSpells, hasConfiguredGrantedSpellSource, spendGrantedSpellAbilityUse } from './apps/web/src/models/characters/characterGrantedSpells';`, resolveDir: fileURLToPath(root), loader: 'ts' },
   bundle: true, platform: 'node', format: 'esm', write: false, conditions: ['types'],
 })
-const { CharacterTemplate, meetsUnlockRequirements, paySpellSlotAndAdditionalResource: pay, additionalSpellResourceError, getAdditionalSpellResourceRecovery, getCharacterGrantedSpells, hasConfiguredGrantedSpellSource, spendGrantedSpellAbilityUse } = await import('data:text/javascript;base64,' + Buffer.from(built.outputFiles[0].contents).toString('base64'))
+const { CharacterTemplate, meetsUnlockRequirements, paySpellSlotAndAdditionalResource: pay, additionalSpellResourceError, getAdditionalSpellResourceRecovery, getAdditionalSpellResourceName, getCharacterGrantedSpells, hasConfiguredGrantedSpellSource, spendGrantedSpellAbilityUse } = await import('data:text/javascript;base64,' + Buffer.from(built.outputFiles[0].contents).toString('base64'))
 const counter = (id = 'pool', used = 0) => ({ id, name: id, kind: 'passive', usage: { max: 5, used, reset: 'longRest', sharedResourceId: 'mana' } })
 const character = (abilities = [counter()], current = 2) => CharacterTemplate.fromJSON({
   id: 'caster', sheet: { type: 'npc' }, abilities,
@@ -368,4 +368,21 @@ test('Eye of Vecna Disintegrate spends four shared charges through the authorita
   const denied = applySpellCastPayment(insufficient, spell, getCharacterGrantedSpells(insufficient)[0], 6, payment)
   assert.equal(denied.ok, false)
   assert.equal(insufficient.get('abilities')[0].usage.used, 5)
+})
+
+test('racial resources show their shared name or ability name instead of the reference ID', () => {
+  const id = '9ba4e559-9878-45a5-aa8a-b2b573001a11'
+  const ability = { ...counter(id), name: 'Iniciado em Magia (mago)' }
+  const c = character([]).withSheet('race', {
+    ...character([]).get('sheet').race, naturalAbilities: [ability],
+  })
+  const direct = { resourceId: id, amount: 1 }
+  assert.equal(getAdditionalSpellResourceName(c, direct), 'Iniciado em Magia (mago)')
+  const named = c.withSheet('race', {
+    ...c.get('sheet').race,
+    naturalAbilities: [{ ...ability, usage: { ...ability.usage, sharedResourceName: 'Magia iniciada' } }],
+  })
+  assert.equal(getAdditionalSpellResourceName(named, direct), 'Magia iniciada')
+  assert.equal(getAdditionalSpellResourceName(named, cost), 'Magia iniciada')
+  assert.equal(getAdditionalSpellResourceName(named, { ...direct, resourceId: 'missing' }), 'Recurso indisponível')
 })

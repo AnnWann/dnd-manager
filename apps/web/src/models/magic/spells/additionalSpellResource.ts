@@ -49,6 +49,19 @@ function findResource(character: CharacterTemplate, cost: AdditionalSpellResourc
   return { matches }
 }
 
+export function getAdditionalSpellResourceName(
+  character: CharacterTemplate,
+  cost: AdditionalSpellResourceCost,
+): string {
+  const resource = findResource(character, cost)
+  const matches = resource.matches
+  if (!matches?.length) return "Recurso indisponível"
+  return matches.find(entry => entry.ability.usage?.sharedResourceName?.trim())
+    ?.ability.usage?.sharedResourceName?.trim()
+    || matches.find(entry => entry.ability.name?.trim())?.ability.name.trim()
+    || "Recurso sem nome"
+}
+
 /** Recovery belongs to the linked counter, even when it has no uses remaining. */
 export function getAdditionalSpellResourceRecovery(character: CharacterTemplate, cost: AdditionalSpellResourceCost): string {
   const resource = findResource(character, cost)
@@ -70,7 +83,7 @@ function resolveResource(character: CharacterTemplate, cost: AdditionalSpellReso
   const { matches } = resource
   const max = getAbilityUsageMax(character, matches[0].ability.usage!)
   const used = Math.max(...matches.map(entry => Math.max(0, entry.ability.usage!.used)))
-  if (!Number.isFinite(used) || max - used < cost.amount) return { error: `Não há usos suficientes no recurso “${cost.resourceId.trim()}”.` }
+  if (!Number.isFinite(used) || max - used < cost.amount) return { error: `Não há usos suficientes no recurso “${getAdditionalSpellResourceName(character, cost)}”.` }
   return { matches, used, error: undefined }
 }
 
