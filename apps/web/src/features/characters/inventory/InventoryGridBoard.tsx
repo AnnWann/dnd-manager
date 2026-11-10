@@ -27,7 +27,7 @@ type Props = {
   filtered: boolean
   mutationsDisabled?: boolean
   emptyMessage: string
-  renderItem: (item: Itemmable, actions: InventoryTileActions) => ReactNode
+  renderItem: (item: Itemmable, actions: InventoryTileActions, compartmentCard?: ReactNode) => ReactNode
   onMoveItem?: (id: string, destinationId?: string) => void
   /** Equipment pockets are a virtual compartment, not items in the inventory array. */
   pocketItems?: Itemmable[]
@@ -155,18 +155,22 @@ export function InventoryGridBoard({
         onDragStart={event => startDrag(event, item.id)}
         onDragEnd={() => { setDraggedId(null); setHoverTarget(null) }}
         className={`min-w-0 ${draggedId === item.id ? "opacity-40" : ""}`}>
-        {renderItem(item, {
-          selected: validSelection.includes(item.id),
-          toggleSelected: () => setSelectedIds(previous =>
-            previous.includes(item.id) ? previous.filter(id => id !== item.id) : [...previous, item.id]),
-          requestMove: () => { setError(""); setMoveDialogIds([item.id]) },
-          canMove,
-        })}
+        {renderItem(item, tileActions(item))}
         {filtered ? <div className="mt-1 truncate px-1 text-[11px] text-textMuted" title={folderPath(item)}>
           Em: {folderPath(item)}
         </div> : null}
       </div>
     )
+  }
+
+  function tileActions(item: Itemmable): InventoryTileActions {
+    return {
+      selected: validSelection.includes(item.id),
+      toggleSelected: () => setSelectedIds(previous =>
+        previous.includes(item.id) ? previous.filter(id => id !== item.id) : [...previous, item.id]),
+      requestMove: () => { setError(""); setMoveDialogIds([item.id]) },
+      canMove,
+    }
   }
 
   function folder(item: Itemmable): ReactNode {
@@ -188,7 +192,7 @@ export function InventoryGridBoard({
           hovering ? (canDropHere ? "border-accentBorder bg-accentBg" : "border-danger bg-bg-subtle")
             : selected ? "border-accentBorder bg-accentBg" : "border-border bg-bg-subtle hover:border-accentBorder"
         }`}>
-        <button type="button" onClick={() => { setActiveId(item.id); setError("") }}
+        {renderItem(item, tileActions(item), <button type="button" onClick={() => { setActiveId(item.id); setError("") }}
           aria-pressed={selected}
           aria-label={`Abrir compartimento ${item.name}`}
           className="flex w-full min-w-0 flex-col gap-2 p-3 text-left">
@@ -213,7 +217,7 @@ export function InventoryGridBoard({
             {hovering ? (canDropHere ? "Solte para guardar aqui" : "Sem espaço ou destino inválido")
               : (canDropHere ? "Pode receber o item" : "Indisponível")}
           </span> : null}
-        </button>
+        </button>)}
       </div>
     )
   }
@@ -331,12 +335,12 @@ export function InventoryGridBoard({
           <div className="mt-2 max-w-64">{tile(active)}</div>
         </details> : null}
         {nestedFolders.length ? <div className="mb-3 grid grid-cols-2 gap-2 sm:grid-cols-3">
-          {nestedFolders.map(item => <button type="button" key={item.id}
+          {nestedFolders.map(item => <div key={item.id}>{renderItem(item, tileActions(item), <button type="button"
             onClick={() => setActiveId(item.id)}
-            className="flex min-w-0 items-center gap-2 rounded-lg border border-border bg-bg p-2 text-left text-xs text-textH hover:border-accentBorder">
+            className="flex w-full min-w-0 items-center gap-2 rounded-lg border border-border bg-bg p-2 text-left text-xs text-textH hover:border-accentBorder">
             <Folder className="h-4 w-4 shrink-0 text-accent" />
             <span className="truncate">{item.name}</span>
-          </button>)}
+          </button>)}</div>)}
         </div> : null}
 
         {canMove && validSelection.length ? <div className="mb-3 flex flex-wrap items-center justify-between gap-2 rounded-lg border border-accentBorder bg-accentBg p-2">
