@@ -197,7 +197,7 @@ const actionsUrl = new URL('../../../apps/web/src/features/characters/characterS
 const actionsSource = await readFile(actionsUrl, 'utf8')
 const choicesSource = actionsSource.slice(actionsSource.indexOf('function getResourceChoices('), actionsSource.indexOf('function buildAvailableSpells('))
 const resolverSource = actionsSource.slice(actionsSource.indexOf('  function resolveAuthoritativeCastPayment()'), actionsSource.indexOf('  const linkedResourceError ='))
-const choicesBuilt = await build({ stdin: { contents: `import { additionalSpellResourceError } from '../../../models/magic/spells/additionalSpellResource'; export ${choicesSource} export function makeResolver(selected, castingResource, setError) { ${resolverSource}; return resolveAuthoritativeCastPayment }`, loader: 'ts', resolveDir: fileURLToPath(new URL('.', actionsUrl)) }, bundle: true, platform: 'node', format: 'esm', write: false, conditions: ['types'] })
+const choicesBuilt = await build({ stdin: { contents: `import { additionalSpellResourceError, getAdditionalSpellResourceName } from '../../../models/magic/spells/additionalSpellResource'; export ${choicesSource} export function makeResolver(selected, castingResource, setError) { ${resolverSource}; return resolveAuthoritativeCastPayment }`, loader: 'ts', resolveDir: fileURLToPath(new URL('.', actionsUrl)) }, bundle: true, platform: 'node', format: 'esm', write: false, conditions: ['types'] })
 const { getResourceChoices, makeResolver } = await import('data:text/javascript;base64,' + Buffer.from(choicesBuilt.outputFiles[0].contents).toString('base64'))
 test('cast dialog offers separate OR choices and disables only the unavailable payment', () => {
   const entry = { spell: { slotLevel: 1 }, additionalResourceCost: eitherCost }
