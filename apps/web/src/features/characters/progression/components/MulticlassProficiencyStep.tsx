@@ -1,3 +1,4 @@
+import { getProficiencyDisplayName } from "../../../../models/characters/applyManualProficiencies"
 import { Button } from "../../../../components/ui/Button"
 import { Input } from "../../../../components/ui/Input"
 import { SKILL_LABELS } from "../../../../data/characterCreation/phbPresets"
@@ -64,7 +65,7 @@ export function MulticlassProficiencyStep({
               <div className="mt-2 flex flex-wrap gap-2">
                 {rule.multiclass.length ? (
                   rule.multiclass.map((proficiency) => (
-                    <Badge key={proficiency.id}>{proficiency.name}</Badge>
+                    <Badge key={proficiency.id}>{getProficiencyDisplayName(proficiency)}</Badge>
                   ))
                 ) : (
                   <span className="text-xs text-textMuted">

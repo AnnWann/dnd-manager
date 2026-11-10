@@ -1,3 +1,4 @@
+import { getProficiencyDisplayName } from "../../../models/characters/applyManualProficiencies"
 import { useMemo, useState } from "react"
 import { meetsUnlockRequirements } from "../../../models/magic/spells/grantedSpellUnlocks"
 
@@ -312,7 +313,7 @@ function UserAbilityCard({
             <DefinitionSection title="Proficiências concedidas">
               {proficiencies.map((proficiency) => (
                 <DefinitionPill key={proficiency.id}>
-                  {proficiency.name}
+                  {getProficiencyDisplayName(proficiency)}
                 </DefinitionPill>
               ))}
             </DefinitionSection>

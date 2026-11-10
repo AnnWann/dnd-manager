@@ -1,3 +1,4 @@
+import { getProficiencyDisplayName } from "../../../models/characters/applyManualProficiencies"
 import { useState } from "react"
 import { Plus, Trash2 } from "lucide-react"
 
@@ -62,7 +63,7 @@ const SKILL_OPTIONS: ProficiencyPreset[] = [
   { value: "Arcanismo", label: "Arcanismo (INT)" },
   { value: "Atletismo", label: "Atletismo (FOR)" },
   { value: "Atuação", label: "Atuação (CAR)" },
-  { value: "Blefe", label: "Blefe (CAR)" },
+  { value: "Enganação", label: "Enganação (CAR)" },
   { value: "Furtividade", label: "Furtividade (DES)" },
   { value: "História", label: "História (INT)" },
   { value: "Intimidação", label: "Intimidação (CAR)" },
@@ -136,7 +137,7 @@ export function GrantedProficienciesEditor({
 
       return (
         proficiency.category === storedCategory &&
-        normalizeName(proficiency.name) === normalizeName(normalizedName)
+        normalizeName(getProficiencyDisplayName(proficiency)) === normalizeName(normalizedName)
       )
     })
 
@@ -198,7 +199,7 @@ export function GrantedProficienciesEditor({
             >
               <div className="min-w-0 flex-1">
                 <div className="text-sm font-medium text-textH">
-                  {proficiency.name}
+                  {getProficiencyDisplayName(proficiency)}
                 </div>
                 <div className="mt-0.5 text-[10px] text-textMuted">
                   {categoryLabel(proficiency)}
@@ -228,7 +229,7 @@ export function GrantedProficienciesEditor({
 
               <button
                 type="button"
-                aria-label={`Remover ${proficiency.name}`}
+                aria-label={`Remover ${getProficiencyDisplayName(proficiency)}`}
                 onClick={() =>
                   onChange(
                     proficiencies.filter(

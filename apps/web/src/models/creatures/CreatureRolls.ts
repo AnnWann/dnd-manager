@@ -35,7 +35,7 @@ export const CREATURE_SKILL_OPTIONS: Array<{
   { skill: "animalHandling", label: "Adestrar Animais", attribute: "wis", aliases: ["animal handling", "adestrar animais", "lidar com animais"] },
   { skill: "arcana", label: "Arcanismo", attribute: "int", aliases: ["arcana", "arcanismo"] },
   { skill: "athletics", label: "Atletismo", attribute: "str", aliases: ["athletics", "atletismo"] },
-  { skill: "deception", label: "Enganação", attribute: "cha", aliases: ["deception", "enganacao", "enganação"] },
+  { skill: "deception", label: "Enganação", attribute: "cha", aliases: ["deception", "enganacao", "enganação", "blefe"] },
   { skill: "history", label: "História", attribute: "int", aliases: ["history", "historia", "história"] },
   { skill: "insight", label: "Intuição", attribute: "wis", aliases: ["insight", "intuicao", "intuição"] },
   { skill: "intimidation", label: "Intimidação", attribute: "cha", aliases: ["intimidation", "intimidacao", "intimidação"] },

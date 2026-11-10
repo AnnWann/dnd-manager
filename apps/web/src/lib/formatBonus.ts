@@ -73,7 +73,7 @@ export function formatSkillName(skill: Skill): string {
     athletics: "Atletismo",
     animalHandling: "Lidar com Animais",
     performance: "Atuação",
-    deception: "Blefe",
+    deception: "Enganação",
     stealth: "Furtividade",
     history: "História",
     intimidation: "Intimidação",

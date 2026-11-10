@@ -83,7 +83,7 @@ const SKILLS: Array<{ key: Skill; label: string; ability: Attribute }> = [
   { key: "arcana", label: "Arcanismo", ability: "int" },
   { key: "athletics", label: "Atletismo", ability: "str" },
   { key: "performance", label: "Atuação", ability: "cha" },
-  { key: "deception", label: "Blefe", ability: "cha" },
+  { key: "deception", label: "Enganação", ability: "cha" },
   { key: "stealth", label: "Furtividade", ability: "dex" },
   { key: "history", label: "História", ability: "int" },
   { key: "intimidation", label: "Intimidação", ability: "cha" },

@@ -137,3 +137,12 @@ test('an ASI feat grants skills and upgrades existing proficiency to expertise',
   const inactive = initial.with('asi', [{ ...asi, ability: { ...feat, kind: 'active', benefitsActive: false } }])
   assert.equal(getEffectiveSkillProficiency(inactive, 'athletics'), 'proficient')
 })
+
+test('legacy Blefe and Enganação resolve to deception while Persuasão stays separate', async () => {
+  const { getProficiencyDisplayName, resolveSkill } = await production('../../../apps/web/src/models/characters/applyManualProficiencies.ts')
+  assert.equal(resolveSkill('Blefe'), 'deception')
+  assert.equal(resolveSkill('Enganação'), 'deception')
+  assert.equal(resolveSkill('Persuasão'), 'persuasion')
+  assert.equal(getProficiencyDisplayName({ category: 'skill', name: 'Blefe' }), 'Enganação')
+  assert.equal(getProficiencyDisplayName({ category: 'skill', name: 'persuasao' }), 'Persuasão')
+})

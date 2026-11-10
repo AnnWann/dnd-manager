@@ -1,3 +1,4 @@
+import { getProficiencyDisplayName } from "../../../models/characters/applyManualProficiencies"
 import { useMemo, useState } from "react"
 import { Hand, Plus, Search, Trash2, X } from "lucide-react"
 
@@ -161,6 +162,7 @@ export function CharacterProficienciesTab({
 
       const matchesSearch =
         normalizedSearch.length === 0 ||
+        getProficiencyDisplayName(proficiency).toLocaleLowerCase().includes(normalizedSearch) ||
         proficiency.name.toLocaleLowerCase().includes(normalizedSearch) ||
         proficiency.notes?.toLocaleLowerCase().includes(normalizedSearch)
 
@@ -428,7 +430,7 @@ function ProficiencyGroup({
             <div className="min-w-0">
               <div className="flex flex-wrap items-center gap-2">
                 <div className="truncate text-sm font-medium text-textH">
-                  {proficiency.name}
+                  {getProficiencyDisplayName(proficiency)}
                 </div>
 
                 {source === "race" || source === "ability" ? (
@@ -449,7 +451,7 @@ function ProficiencyGroup({
               <button
                 type="button"
                 title="Remover proficiência"
-                aria-label={`Remover ${proficiency.name}`}
+                aria-label={`Remover ${getProficiencyDisplayName(proficiency)}`}
                 onClick={() => onRemove(proficiency.id)}
                 className="flex h-8 w-8 items-center justify-center rounded-lg border border-transparent text-textMuted transition-colors hover:border-danger hover:bg-dangerBg hover:text-danger"
               >

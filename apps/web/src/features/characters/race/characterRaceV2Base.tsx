@@ -1,3 +1,4 @@
+import { resolveSkill } from "../../../models/characters/applyManualProficiencies"
 import { useEffect, useMemo, useState } from "react"
 import { Check, Plus, Trash2 } from "lucide-react"
 
@@ -834,7 +835,7 @@ function getSkillFromName(name: string): Skill | undefined {
   return (Object.entries(SKILL_LABELS) as Array<[Skill, string]>).find(
     ([skill, label]) =>
       normalizeText(skill) === normalized || normalizeText(label) === normalized,
-  )?.[0]
+  )?.[0] ?? resolveSkill(name)
 }
 
 function getAttributeFromName(name: string): Attribute | undefined {
