@@ -128,6 +128,10 @@ function decodeSessionMessage(raw: string): DecodedSessionMessage | null {
 
 export class SessionSocket {
   private readonly transport: SessionMessageClient<SessionOutgoingMessage, DecodedSessionMessage>
+  private trackedMutations = false
+  private activeMutation: { id: string; timer: ReturnType<typeof setTimeout> } | null = null
+  private mutationQueue: Array<{ message: SessionOutgoingMessage; id?: string }> = []
+  private bufferedUpdates: DecodedSessionMessage[] = []
   private paused = false
   private pendingMagicOperations: SessionMagicOperation[] = []
   private magicFlushQueued = false
@@ -151,12 +155,34 @@ export class SessionSocket {
   }
 
 
+  get supportsTrackedMutations(): boolean { return this.trackedMutations }
+
   connect(): void { this.transport.connect() }
 
-  send(message: SessionOutgoingMessage): boolean {
+  send(message: SessionOutgoingMessage, mutationId?: string): boolean {
     if (!this.transport.connected) return false
     // Do not buffer operations created while paused; the server is authoritative.
     if (this.paused && this.options.role !== "MASTER" && message.type !== "session.heartbeat" && message.type !== "session.ping") return false
+
+    if (this.activeMutation && message.type !== "session.heartbeat" && message.type !== "session.ping") {
+      this.mutationQueue.push({ message, id: mutationId })
+      return true
+    }
+
+    if (mutationId) {
+      this.flushMagicOperations()
+      const sent = this.transport.sendRaw(JSON.stringify({ ...message, mutationId }))
+      if (!sent) return false
+      this.activeMutation = {
+        id: mutationId,
+        timer: setTimeout(() => {
+          this.finishMutation(mutationId, { code: "SESSION_MUTATION_TIMEOUT", message: "A confirmação demorou. A sessão será sincronizada novamente." })
+          this.clearLocalState()
+          this.transport.connect()
+        }, 8000),
+      }
+      return true
+    }
 
     if (message.type === "session.magic.operation") {
       if (message.operation.type === "character.spell.cast") {
@@ -178,7 +204,21 @@ export class SessionSocket {
     this.clearLocalState()
   }
 
+  private finishMutation(id: string, error?: { code: string; message: string }): void {
+    const active = this.activeMutation
+    if (active?.id !== id) return
+    clearTimeout(active.timer)
+    this.activeMutation = null
+    for (const update of this.bufferedUpdates.splice(0)) this.handleMessage(update)
+    this.options.onMessage({ type: "session.mutation.result", requestId: id, error })
+  }
+
   private clearLocalState(): void {
+    if (this.activeMutation) clearTimeout(this.activeMutation.timer)
+    this.activeMutation = null
+    this.trackedMutations = false
+    this.mutationQueue = []
+    this.bufferedUpdates = []
     this.paused = false
     this.pendingMagicOperations = []
     this.magicFlushQueued = false
@@ -186,7 +226,27 @@ export class SessionSocket {
     setRuntimeCustomSystemOverride(null)
   }
 
-  private handleMessage({ message, abilityMessage, lifecycleMessage, runtimeConfigMessage }: DecodedSessionMessage): void {
+  private handleMessage(decoded: DecodedSessionMessage): void {
+      const { message, abilityMessage, lifecycleMessage, runtimeConfigMessage } = decoded
+      if (message.type === "session.mutation.result") {
+        if (message.requestId !== this.activeMutation?.id) return
+        this.finishMutation(message.requestId, message.error)
+        while (!this.activeMutation && this.mutationQueue.length) {
+          const queued = this.mutationQueue.shift()!
+          if (!this.send(queued.message, queued.id) && queued.id) {
+            this.options.onMessage({ type: "session.mutation.result", requestId: queued.id,
+              error: { code: "SESSION_MUTATION_NOT_SENT", message: "A sessão está pausada ou desconectada." } })
+          }
+        }
+        return
+      }
+      // Apply confirmed snapshots and remove the corresponding projection in the same render.
+      if (this.activeMutation && (message.type.endsWith(".updated") || message.type.endsWith(".snapshot")
+        || message.type === "session.character.removed")) {
+        this.bufferedUpdates.push(decoded)
+        return
+      }
+      if (message.type === "session.ready") this.trackedMutations = message.trackedMutations === true
       if (message.type === "session.pause.state") {
         this.paused = message.state.paused
         if (this.paused) this.pendingMagicOperations = []

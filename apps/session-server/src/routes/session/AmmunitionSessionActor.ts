@@ -1,3 +1,4 @@
+import { handleTrackedSessionMutation, readTrackedMutation } from "./trackedSessionMutation";
 import { CharacterTemplate, type CharacterTemplateProps } from "../../../../web/src/models/characters/CharacterTemplate";
 import { getAmmunitionKey } from "../../../../web/src/models/items/Ammunition";
 import { hasWeaponProperty, type Weapon } from "../../../../web/src/models/items/equipment/Weapon";
@@ -47,6 +48,11 @@ export class SessionActor extends CreatureDropSessionActor {
     const raw = typeof message === "string"
       ? message
       : new TextDecoder().decode(message);
+    const tracked = readTrackedMutation(raw);
+    if (tracked) {
+      await handleTrackedSessionMutation(webSocket, tracked, (socket, payload) => this.webSocketMessage(socket, payload));
+      return;
+    }
     const parsed = parseInventoryClientMessage(raw);
 
     if (

@@ -175,7 +175,7 @@ export class SessionActor extends DurableObject<Env> {
     this.ctx.acceptWebSocket(server);
     refreshConnectionVisibility(server, await readRuntimeConfig(this.ctx.storage));
 
-    this.send(server, { type: "session.ready", sessionId: connection.sessionId, clientId: connection.clientId, serverTime: Date.now() });
+    this.send(server, { type: "session.ready", sessionId: connection.sessionId, clientId: connection.clientId, serverTime: Date.now(), trackedMutations: true });
     await Promise.all([this.sendHpSnapshot(server), this.sendConditionsSnapshot(server), this.sendCompanionsSnapshot(server)]);
     if (connection.role === "MASTER") await this.sendHpLog(server);
     await this.sendPanelSnapshot(server, connection.role === "MASTER");

@@ -1,6 +1,7 @@
+import type { SessionMutationResult } from "./sessionMutation.ts"
 import type { SessionRuntimePresenceUser, SessionHpState, SessionConditionsState, SessionHpLogRecord, SessionHpSeed, SessionAuthoritativeOperation, SessionConditionSeed, SessionConditionOperation, SessionConcentrationOperation, SessionLoggedOperation } from "./sessionCore.ts"
 
-export type SessionReadyMessage = { type: "session.ready"; sessionId: string; clientId: string; serverTime: number }
+export type SessionReadyMessage = { type: "session.ready"; sessionId: string; clientId: string; serverTime: number; trackedMutations?: boolean }
 export type SessionHeartbeatAckMessage = { type: "session.heartbeat.ack"; serverTime: number }
 export type SessionPresenceMessage = { type: "session.presence"; users: SessionRuntimePresenceUser[] }
 export type SessionHpSnapshotMessage = { type: "session.hp.snapshot"; characters: SessionHpState[] }
@@ -18,7 +19,7 @@ export type ServerSessionMessage<TDiceResult, TActionResult> =
   | SessionReadyMessage | SessionHeartbeatAckMessage | SessionPresenceMessage
   | SessionHpSnapshotMessage | SessionHpUpdatedMessage
   | SessionConditionsSnapshotMessage | SessionConditionsUpdatedMessage
-  | SessionHpLogMessage | SessionPongMessage | SessionDiceResultMessage<TDiceResult> | SessionActionResultMessage<TActionResult> | SessionCustomSystemNoticeMessage | SessionErrorMessage
+  | SessionHpLogMessage | SessionPongMessage | SessionDiceResultMessage<TDiceResult> | SessionActionResultMessage<TActionResult> | SessionCustomSystemNoticeMessage | SessionErrorMessage | SessionMutationResult
 
 export type CharacterSheetRoute =
   | "characters/sheet/hp"
@@ -73,6 +74,11 @@ export function parseServerSessionMessage<TDiceResult, TActionResult>(raw: strin
     case "session.dice.result": if (message.result && typeof message.result === "object") return message as SessionDiceResultMessage<TDiceResult>; break
     case "session.action.result": if (message.result && typeof message.result === "object") return message as SessionActionResultMessage<TActionResult>; break
     case "session.customSystem.notice": if (typeof message.characterId === "string" && typeof message.title === "string" && typeof message.message === "string") return message as SessionCustomSystemNoticeMessage; break
+    case "session.mutation.result":
+      if (typeof message.requestId === "string" && (message.error === undefined ||
+        (message.error && typeof message.error === "object" && "code" in message.error && "message" in message.error
+          && typeof message.error.code === "string" && typeof message.error.message === "string"))) return message as SessionMutationResult
+      break
     case "session.error": if (typeof message.code === "string" && typeof message.message === "string") return message as SessionErrorMessage; break
   }
   return null
