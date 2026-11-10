@@ -180,3 +180,33 @@ export function moveEquippedItemToCharacterStorage(
     ],
   })
 }
+
+export function updateEquippedItem(
+  character: CharacterTemplate,
+  reference: EquippedItemReference,
+  item: Itemmable,
+): CharacterTemplate {
+  const current = getEquippedItem(character, reference)
+  if (!current || current.id !== item.id) return character
+  const equipment = character.get("equipment")
+
+  if (reference.type === "weapon") {
+    return character.with("equipment", { ...equipment, weapons: equipment.weapons.map((entry) => entry.id === reference.itemId ? item as any : entry) })
+  }
+  if (reference.type === "shield") {
+    return character.with("equipment", { ...equipment, shield: item as any })
+  }
+  if (reference.type === "held-item") {
+    return character.with("equipment", { ...equipment, heldItems: (equipment.heldItems ?? []).map((entry) => entry.id === reference.itemId ? item : entry) })
+  }
+  if (reference.type === "slot") {
+    return character.with("equipment", { ...equipment, [reference.slot]: item as any })
+  }
+  if (reference.type === "ring") {
+    return character.with("equipment", { ...equipment, rings: equipment.rings.map((entry) => entry.id === reference.itemId ? item as any : entry) })
+  }
+  if (reference.type === "body-part") {
+    return character.with("equipment", { ...equipment, bodyParts: (equipment.bodyParts ?? []).map(entry => entry.id === reference.itemId ? item as any : entry) })
+  }
+  return character.with("equipment", { ...equipment, necklaces: (equipment.necklaces ?? []).map((entry) => entry.id === reference.itemId ? item as any : entry) })
+}

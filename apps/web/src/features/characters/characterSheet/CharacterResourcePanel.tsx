@@ -84,7 +84,6 @@ export function CharacterResourcePanel({ character, updateCharacter }: Props) {
 
   function adjustAbility(pool: AbilityPool, delta: 1 | -1) {
     if (runtime) {
-      if (runtime.status !== "connected") return
       runtime.dispatchAbilityOperation(delta === -1
         ? { type: "character.ability.usage.spend", characterId: id, source: pool.chargeSource, abilityName: pool.name }
         : { type: "character.ability.restore", characterId: id, source: pool.source, abilityName: pool.name })

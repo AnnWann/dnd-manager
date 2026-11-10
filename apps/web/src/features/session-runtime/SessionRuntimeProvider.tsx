@@ -1,3 +1,8 @@
+import { Button } from "../../components/ui/Button"
+import {
+  canProjectAbilityOperation, canProjectInitiativeOperation, canProjectMagicOperation, canProjectResourceOperation, canProjectSheetOperation,
+  projectSessionMutations, type OptimisticSessionMutation,
+} from "./optimisticSessionMutation"
 import type { HiddenSpellClientMessage, HiddenSpellPublicEntry } from "../../../../../packages/session-protocol/src/hiddenSpellcasting"
 import {
   createContext,
@@ -203,6 +208,17 @@ function SessionRuntimeProviderInner({ sessionId, userId, role, children }: {
   const [companionsById, setCompanionsById] = useState<Record<string, CompanionState>>({})
   const [hpLog, setHpLog] = useState<SessionLogRecord[]>([])
   const [customNotice, setCustomNotice] = useState<{title:string;message:string}|null>(null)
+  const [pendingMutations, setPendingMutations] = useState<OptimisticSessionMutation[]>([])
+  const pendingMutationsRef = useRef<OptimisticSessionMutation[]>([])
+  const [mutationErrors, setMutationErrors] = useState<Array<{ id: string; code: string; message: string }>>([])
+  const reportMutationError = useCallback((error: { code: string; message: string }) => {
+    setMutationErrors(current => [...current.slice(-3), { ...error, id: crypto.randomUUID() }])
+  }, [])
+  const updatePending = useCallback((update: (current: OptimisticSessionMutation[]) => OptimisticSessionMutation[]) => {
+    const next = update(pendingMutationsRef.current)
+    pendingMutationsRef.current = next
+    setPendingMutations(next)
+  }, [])
   const socketRef = useRef<SessionSocket | null>(null)
   const clientId = useMemo(() => getOrCreateClientId(sessionId), [sessionId])
   const baseUrl = resolveSessionServerUrl()
@@ -225,6 +241,8 @@ function SessionRuntimeProviderInner({ sessionId, userId, role, children }: {
     setInitiativeState(null)
     setCompanionsById({})
     setHpLog([])
+    setMutationErrors([])
+    updatePending(() => [])
 
     if (!baseUrl) {
       console.warn("[session-runtime] VITE_SESSION_SERVER_URL is not configured; realtime session runtime is disabled.")
@@ -238,7 +256,13 @@ function SessionRuntimeProviderInner({ sessionId, userId, role, children }: {
       userId,
       role,
       clientId,
-      onStatusChange: setStatus,
+      onStatusChange: nextStatus => {
+        setStatus(nextStatus)
+        if (nextStatus !== "connected" && pendingMutationsRef.current.length) {
+          updatePending(() => [])
+          reportMutationError({ code: "SESSION_CONNECTION_LOST", message: "A conexão caiu antes da confirmação das alterações." })
+        }
+      },
       onMessage: (message) => {
         if (message.type === "session.hiddenSpell.snapshot") { setHiddenSpellEntries(message.entries); return }
         if (message.type === "session.pause.state") { setPauseState(message.state); return }
@@ -345,7 +369,13 @@ function SessionRuntimeProviderInner({ sessionId, userId, role, children }: {
           return
         }
         if (message.type === "session.customSystem.notice") { setCustomNotice({ title: message.title, message: message.message }); return }
+        if (message.type === "session.mutation.result") {
+          updatePending(current => current.filter(entry => entry.id !== message.requestId))
+          if (message.error) reportMutationError(message.error)
+          return
+        }
         if (message.type === "session.error") {
+          reportMutationError(message)
           console.error(`[session-runtime] ${message.code}: ${message.message}`)
           if (message.code.startsWith("HIDDEN_SPELL_") || message.code === "SESSION_PAUSED") setHiddenSpellError(message.message)
         }
@@ -385,7 +415,7 @@ function SessionRuntimeProviderInner({ sessionId, userId, role, children }: {
       if (socketRef.current === socket) socketRef.current = null
       socket.disconnect()
     }
-  }, [baseUrl, clientId, role, sessionId, userId])
+  }, [baseUrl, clientId, reportMutationError, role, sessionId, updatePending, userId])
 
   const dispatchHiddenSpell = useCallback((operation: HiddenSpellClientMessage) => {
     setHiddenSpellError(null)
@@ -429,18 +459,34 @@ function SessionRuntimeProviderInner({ sessionId, userId, role, children }: {
     socketRef.current?.send({ type: "session.missions.initialize", missions }) ?? false, [])
   const initializeInitiative = useCallback((session: InitiativeSession) =>
     socketRef.current?.send({ type: "session.initiative.initialize", session }) ?? false, [])
+  const sendMutation = useCallback((
+    message: Parameters<SessionSocket["send"]>[0],
+    operation?: OptimisticSessionMutation["operation"],
+  ) => {
+    const socket = socketRef.current
+    const id = operation && socket?.supportsTrackedMutations ? crypto.randomUUID() : undefined
+    const sent = socket?.send(message, id) ?? false
+    if (sent && id && operation) updatePending(current => [...current, { id, operation }])
+    if (!sent) reportMutationError({ code: "SESSION_MUTATION_NOT_SENT", message: "A sessão está pausada ou desconectada." })
+    return sent
+  }, [reportMutationError, updatePending])
   const dispatchSheetOperation = useCallback((operation: SessionLoggedOperation) =>
-    socketRef.current?.send(toSheetOperationMessage(operation)) ?? false, [])
+    sendMutation(toSheetOperationMessage(operation), canProjectSheetOperation(operation)
+      ? { domain: "sheet", value: operation } : undefined), [sendMutation])
   const dispatchHpOperation = useCallback((operation: SessionAuthoritativeOperation) =>
     dispatchSheetOperation(operation), [dispatchSheetOperation])
   const dispatchConcentrationOperation = useCallback((operation: SessionConcentrationOperation) =>
     dispatchSheetOperation(operation), [dispatchSheetOperation])
   const dispatchAbilityOperation = useCallback((operation: SessionAbilityOperation) =>
-    socketRef.current?.send({ type: "session.abilities.operation", operation }) ?? false, [])
+    sendMutation({ type: "session.abilities.operation", operation },
+      canProjectAbilityOperation(operation) || canProjectResourceOperation(operation)
+        ? { domain: "character", value: operation } : undefined), [sendMutation])
   const dispatchMagicOperation = useCallback((operation: SessionMagicOperation) =>
-    socketRef.current?.send({ type: "session.magic.operation", operation }) ?? false, [])
+    sendMutation({ type: "session.magic.operation", operation }, canProjectMagicOperation(operation)
+      ? { domain: "character", value: operation } : undefined), [sendMutation])
   const dispatchEquipmentOperation = useCallback((operation: SessionEquipmentOperation) =>
-    socketRef.current?.send({ type: "session.equipment.operation", operation }) ?? false, [])
+    sendMutation({ type: "session.equipment.operation", operation }, operation.type === "character.equipment.item.update"
+      ? { domain: "character", value: operation } : undefined), [sendMutation])
   const dispatchInventoryOperation = useCallback((operation: SessionInventoryOperation) =>
     socketRef.current?.send({ type: "session.inventory.operation", operation }) ?? false, [])
   const dispatchMissionOperation = useCallback((operation: SessionMissionOperation) =>
@@ -450,7 +496,8 @@ function SessionRuntimeProviderInner({ sessionId, userId, role, children }: {
   const dispatchCompanionOperation = useCallback((operation: CompanionOperation) =>
     socketRef.current?.send({ type: "session.companions.operation", operation }) ?? false, [])
   const dispatchInitiativeOperation = useCallback((operation: SessionInitiativeOperation) =>
-    socketRef.current?.send({ type: "session.initiative.operation", operation }) ?? false, [])
+    sendMutation({ type: "session.initiative.operation", operation }, canProjectInitiativeOperation(operation)
+      ? { domain: "initiative", value: operation } : undefined), [sendMutation])
   const dispatchProficiencyOperation = useCallback((operation: SessionProficiencyOperation) =>
     socketRef.current?.send({ type: "session.proficiency.operation", operation }) ?? false, [])
   const dispatchRaceOperation = useCallback((operation: SessionRaceOperation) =>
@@ -460,7 +507,8 @@ function SessionRuntimeProviderInner({ sessionId, userId, role, children }: {
   const dispatchCustomClassOperation = useCallback((operation: SessionCustomClassOperation) =>
     socketRef.current?.send({ type: "session.custom-class.operation", operation }) ?? false, [])
   const dispatchCustomSystemOperation = useCallback((operation: SessionCustomSystemOperation) =>
-    socketRef.current?.send({ type: "session.customSystem.operation", operation }) ?? false, [])
+    sendMutation({ type: "session.customSystem.operation", operation }, canProjectResourceOperation(operation)
+      ? { domain: "character", value: operation } : undefined), [sendMutation])
   const dispatchCharacterLifecycleOperation = useCallback((operation: SessionCharacterLifecycleOperation) =>
     socketRef.current?.send({ type: "session.character.operation", operation }) ?? false, [])
 
@@ -487,11 +535,16 @@ function SessionRuntimeProviderInner({ sessionId, userId, role, children }: {
   const undoLog = useCallback((logId: string) =>
     socketRef.current?.send({ type: "session.log.undo", logId }) ?? false, [])
 
+  const projected = useMemo(() => projectSessionMutations(
+    hpByCharacterId, abilitiesByCharacterId, initiativeState, pendingMutations,
+    runtimeConfigSnapshot?.config.customSystems ?? [], role === "MASTER" ? "master" : "owner",
+  ), [hpByCharacterId, abilitiesByCharacterId, initiativeState, pendingMutations, runtimeConfigSnapshot, role])
+
   const value = useMemo<SessionRuntimeContextValue>(() => ({
     status, sessionId, clientId, role, presence, lastHeartbeatAckAt, runtimeConfigSnapshot,
     panelsState, dispatchPanelOperation, hiddenSpellEntries, hiddenSpellError, dispatchHiddenSpell,
-    hpByCharacterId, conditionsByCharacterId, abilitiesByCharacterId, sessionCharactersById, characterSnapshotReady,
-    inventoryState, missionState, initiativeState, pauseState, setSessionPaused, companionsById, dispatchCompanionOperation,
+    hpByCharacterId: projected.hp, conditionsByCharacterId, abilitiesByCharacterId: projected.abilities, sessionCharactersById, characterSnapshotReady,
+    inventoryState, missionState, initiativeState: projected.initiative, pauseState, setSessionPaused, companionsById, dispatchCompanionOperation,
     publishRuntimeConfig,
     initializeHp, initializeConditions, initializeAbilities, initializeInventory, initializeMissions, initializeInitiative,
     dispatchSheetOperation, dispatchHpOperation, dispatchConditionOperation,
@@ -500,7 +553,7 @@ function SessionRuntimeProviderInner({ sessionId, userId, role, children }: {
     dispatchRaceOperation, dispatchProfileOperation, dispatchCustomClassOperation, dispatchCustomSystemOperation,
     dispatchCharacterLifecycleOperation,
   }), [
-    abilitiesByCharacterId, characterSnapshotReady, clientId, conditionsByCharacterId, companionsById, dispatchCompanionOperation,
+    projected, characterSnapshotReady, clientId, conditionsByCharacterId, companionsById, dispatchCompanionOperation,
     dispatchAbilityOperation, dispatchCharacterLifecycleOperation, dispatchConditionOperation, dispatchConcentrationOperation,
     dispatchCustomClassOperation, dispatchCustomSystemOperation, dispatchEquipmentOperation, dispatchHpOperation,
     dispatchInitiativeOperation, dispatchInventoryOperation, dispatchMagicOperation, dispatchMissionOperation,
@@ -519,6 +572,22 @@ function SessionRuntimeProviderInner({ sessionId, userId, role, children }: {
   return (
     <SessionRuntimeContext.Provider value={value}>
       <SessionRuntimeLogContext.Provider value={logValue}>
+        {mutationErrors.length > 0 ? (
+          <div className="fixed inset-x-3 top-3 z-[20000] mx-auto grid max-w-xl gap-2">
+            {mutationErrors.map(error => (
+              <div key={error.id} role="alert" className="flex items-start gap-3 rounded-xl border border-danger bg-bg p-3 text-sm text-textH shadow-lg">
+                <div className="min-w-0 flex-1">
+                  <div className="font-semibold">Erro na sessão</div>
+                  <p>{error.message}</p>
+                  <p className="break-all text-xs text-textMuted">{error.code}</p>
+                </div>
+                <Button size="sm" variant="ghost" onClick={() => setMutationErrors(current => current.filter(entry => entry.id !== error.id))}>
+                  Fechar
+                </Button>
+              </div>
+            ))}
+          </div>
+        ) : null}
         {children}
       </SessionRuntimeLogContext.Provider>
     </SessionRuntimeContext.Provider>

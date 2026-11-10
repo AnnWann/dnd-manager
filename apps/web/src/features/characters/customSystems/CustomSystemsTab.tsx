@@ -405,24 +405,10 @@ function ResourceSection({
 }) {
   const resource = definition.resources.find((entry) => entry.id === resourceId)!
   const resourceState = state.resources[resourceId]
-  const authoritativeCurrent = resourceState?.current ?? 0
-  const [optimisticCurrent, setOptimisticCurrent] = useState<number | null>(null)
-
-  useEffect(() => {
-    if (optimisticCurrent === null) return
-
-    const confirmed = authoritativeCurrent === optimisticCurrent
-    const timeout = window.setTimeout(
-      () => setOptimisticCurrent(null),
-      confirmed ? 400 : 3000,
-    )
-    return () => window.clearTimeout(timeout)
-  }, [authoritativeCurrent, optimisticCurrent])
-
   if (!resource || !resourceState) return null
 
   const maximum = resourceState.maximum ?? resource.maximum
-  const displayedCurrent = optimisticCurrent ?? authoritativeCurrent
+  const displayedCurrent = resourceState.current
   const canEdit =
     resource.allowManualAdjustment !== false &&
     !(resource.editPermission === 'masterOnly' && actor !== 'master')
@@ -438,13 +424,11 @@ function ResourceSection({
       maximum,
     )
     if (next === displayedCurrent) return
-    setOptimisticCurrent(next)
     onRun(() => adjustCustomResource(definition, state, resource.id, amount, actor))
   }
 
   function stageSet(value: number) {
     const next = clampResourceValue(value, resource.minimum, maximum)
-    setOptimisticCurrent(next)
     onRun(() =>
       setCustomResourceCurrent(
         definition,
@@ -458,8 +442,6 @@ function ResourceSection({
 
   function stageReset() {
     const nextState = resetCustomResource(definition, state, resource.id, actor)
-    const nextCurrent = nextState.resources[resource.id]?.current
-    if (typeof nextCurrent === 'number') setOptimisticCurrent(nextCurrent)
     onRun(() => nextState)
   }
 

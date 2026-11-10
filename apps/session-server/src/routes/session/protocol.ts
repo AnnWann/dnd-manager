@@ -144,7 +144,7 @@ export type ClientSessionMessage =
   | { type: "session.companions.operation"; operation: CompanionOperation };
 
 export type ServerSessionMessage =
-  | { type: "session.ready"; sessionId: string; clientId: string; serverTime: number }
+  | { type: "session.ready"; sessionId: string; clientId: string; serverTime: number; trackedMutations?: boolean }
   | { type: "session.heartbeat.ack"; serverTime: number }
   | { type: "session.pong"; serverTime: number }
   | { type: "session.presence"; users: SessionPresenceUser[] }

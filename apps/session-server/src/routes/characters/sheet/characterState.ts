@@ -466,7 +466,7 @@ function validateOperation(
   return null;
 }
 
-function mutateState(previous: SessionHpState, operation: SessionAuthoritativeOperation): SessionHpState {
+export function mutateState(previous: SessionHpState, operation: SessionAuthoritativeOperation): SessionHpState {
   const next = cloneState(previous);
 
   switch (operation.type) {
