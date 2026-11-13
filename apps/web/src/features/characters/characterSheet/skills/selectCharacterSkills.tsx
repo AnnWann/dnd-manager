@@ -3,7 +3,7 @@ import { attributeShort } from "../../../../lib/attributeShorts"
 import { formatSigned } from "../../../../lib/formatSigned"
 import { requestD20Roll, rollModeFromEvent, rollModifierHint } from "../../../../lib/diceRoller"
 import type { CharacterTemplate } from "../../../../models/characters/CharacterTemplate"
-import { getEffectiveSkillProficiency } from "../../../../models/characters/characterProficiencies"
+import { getEffectiveSkillProficiency, setManualSkillProficiency } from "../../../../models/characters/characterProficiencies"
 import type { Attribute } from "../../../../models/sheet/Attribute"
 import type { Skill, SkillProficiency } from "../../../../models/sheet/Skills"
 
@@ -51,12 +51,7 @@ export function SelectSkillModule({
       proficiency: next,
     })) return
 
-    updateCharacter(character.get("id"), (c) =>
-      c.withSheet("skills", {
-        ...c.get("sheet").skills,
-        [skillKey]: next,
-      }),
-    )
+    updateCharacter(character.get("id"), c => setManualSkillProficiency(c, skillKey, next))
   }
 
   return (
@@ -93,7 +88,7 @@ export function SelectSkillModule({
           title="Proficiência"
           onClick={() =>
             setProficiency(
-              proficiency === "proficient" ? "none" : "proficient",
+              effectiveProficiency !== "none" ? "none" : "proficient",
             )
           }
           className={
@@ -108,7 +103,7 @@ export function SelectSkillModule({
           title="Especialização"
           onClick={() =>
             setProficiency(
-              proficiency === "expertise" ? "proficient" : "expertise",
+              effectiveProficiency === "expertise" ? "proficient" : "expertise",
             )
           }
           className={

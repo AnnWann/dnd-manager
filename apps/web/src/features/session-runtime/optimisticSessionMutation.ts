@@ -1,3 +1,4 @@
+import { setManualSkillProficiency } from "../../models/characters/characterProficiencies"
 import { updateEquippedItem } from "../../models/characters/characterEquippedItemMovement"
 import type { Itemmable } from "../../models/items/item"
 import {
@@ -92,6 +93,13 @@ export function projectSessionMutations(
       if (operation.domain === "sheet") {
         const previous = projectedHp[id]
         if (previous) projectedHp[id] = mutateState(previous, operation.value)
+        if (operation.value.type === "character.skill.set" && projectedAbilities[id]?.initialized) {
+          const stored = projectedAbilities[id]
+          const character = CharacterTemplate.fromJSON(stored.character)
+          projectedAbilities[id] = { ...stored, character: setManualSkillProficiency(
+            character, operation.value.skill, operation.value.proficiency,
+          ).toJSON() }
+        }
         continue
       }
       const previous = projectedAbilities[id]
