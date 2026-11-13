@@ -123,3 +123,18 @@ function normalizeProficiencyName(value: string): string {
     .trim()
     .toLocaleLowerCase("pt-BR")
 }
+
+export function setManualSkillProficiency(
+  character: CharacterTemplate,
+  skill: Skill,
+  proficiency: SkillProficiency,
+): CharacterTemplate {
+  const sheet = character.get("sheet")
+  const proficiencies = (sheet.proficiencies ?? []).flatMap(entry => {
+    if (entry.category !== "skill" || resolveSkill(entry.name) !== skill) return [entry]
+    return proficiency === "none" ? [] : [{ ...entry, expertise: proficiency === "expertise" }]
+  })
+  return character.withPatch({
+    sheet: { ...sheet, skills: { ...sheet.skills, [skill]: proficiency }, proficiencies },
+  })
+}

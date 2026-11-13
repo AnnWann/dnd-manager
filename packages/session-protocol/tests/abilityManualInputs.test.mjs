@@ -146,3 +146,23 @@ test('legacy Blefe and Enganação resolve to deception while Persuasão stays s
   assert.equal(getProficiencyDisplayName({ category: 'skill', name: 'Blefe' }), 'Enganação')
   assert.equal(getProficiencyDisplayName({ category: 'skill', name: 'persuasao' }), 'Persuasão')
 })
+
+test('removing manual skill proficiency clears legacy list entries while preserving granted sources', async () => {
+  const { getEffectiveSkillProficiency, setManualSkillProficiency } = await production('../../../apps/web/src/models/characters/characterProficiencies.ts')
+  const initial = character([]).withSheet('skills', { insight: 'none' }).withSheet('proficiencies', [
+    { id: 'legacy-insight', category: 'skill', name: 'Intuição' },
+    { id: 'duplicate-insight', category: 'skill', name: 'insight', expertise: true },
+    { id: 'language', category: 'language', name: 'Comum' },
+  ])
+  assert.equal(getEffectiveSkillProficiency(initial, 'insight'), 'expertise')
+  const reduced = setManualSkillProficiency(initial, 'insight', 'proficient')
+  assert.equal(getEffectiveSkillProficiency(reduced, 'insight'), 'proficient')
+  const removed = setManualSkillProficiency(reduced, 'insight', 'none')
+  assert.equal(getEffectiveSkillProficiency(removed, 'insight'), 'none')
+  assert.deepEqual(removed.get('sheet').proficiencies.map(entry => entry.id), ['language'])
+  assert.equal(initial.get('sheet').proficiencies.length, 3)
+  const racial = removed.withSheet('race', { ...removed.get('sheet').race, proficiencies: [
+    { id: 'racial-insight', category: 'skill', name: 'Intuição' },
+  ] })
+  assert.equal(getEffectiveSkillProficiency(setManualSkillProficiency(racial, 'insight', 'none'), 'insight'), 'proficient')
+})

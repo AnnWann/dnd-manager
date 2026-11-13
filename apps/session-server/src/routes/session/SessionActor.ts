@@ -42,7 +42,7 @@ import { getEffectiveDamageAffinities } from "../../../../web/src/models/charact
 import { getEffectiveArmorClassWithShield } from "../../../../web/src/models/items/equipment/Shield";
 import { projectInitiativeSessionFromCharacterState } from "../initiative/initiativeCharacterProjection";
 import { areSelectedTargetsDistinct, applyHpToReferences, validateAbilityTargets, type MutableHpTargets } from "../characters/abilities/abilityTargeting";
-import { getEffectiveSkillProficiency } from "../../../../web/src/models/characters/characterProficiencies";
+import { getEffectiveSkillProficiency, setManualSkillProficiency } from "../../../../web/src/models/characters/characterProficiencies";
 import { getUnarmedAttackProfile } from "../../../../web/src/models/characters/unarmedAttack";
 import type { Ability } from "../../../../web/src/models/abilities/Ability";
 import type { AbilityRollDefinition } from "../../../../web/src/models/abilities/AbilityRoll";
@@ -1314,6 +1314,24 @@ export class SessionActor extends DurableObject<Env> {
     const currentConditions = conditionsState[operation.characterId];
     let automationAbility: SessionAbilityState | null = null;
     let record = result.record as unknown as SessionLogRecord;
+
+    if (operation.type === "character.skill.set" && storedAbility?.initialized) {
+      const character = CharacterTemplate.fromJSON(storedAbility.character as Partial<CharacterTemplateProps>);
+      const next = setManualSkillProficiency(character, operation.skill, operation.proficiency);
+      automationAbility = { ...storedAbility, character: next.toJSON() as unknown as Record<string, unknown>, revision: storedAbility.revision + 1 };
+      abilities[operation.characterId] = automationAbility;
+      if (currentConditions?.initialized) {
+        record = createSessionLogRecord({
+          actorId: connection.userId,
+          operation: result.record.operation as unknown as SessionLogRecord["operation"],
+          reverseOperation: {
+            type: "character.ability.restore",
+            characterId: operation.characterId,
+            snapshot: { ability: structuredClone(storedAbility), hp: structuredClone(current), conditions: structuredClone(currentConditions) },
+          },
+        });
+      }
+    }
 
     if (event && storedAbility?.initialized && currentConditions?.initialized && runtimeConfig) {
       try {
