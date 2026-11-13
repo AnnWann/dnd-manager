@@ -21,14 +21,14 @@ export function ManualAttributeConfiguration({ character }: { character: Charact
   const originalAttributes = original.get("sheet").attributes
   const changes = ATTRIBUTE_KEYS.filter(attribute => attributes[attribute] !== originalAttributes[attribute])
   if (!changes.length) return null
-  const canConfirm = runtime.role === "MASTER" && runtime.status === "connected"
+  const canConfirm = runtime?.role === "MASTER" && runtime.status === "connected"
 
   function confirm() {
     if (!canConfirm) return
     setError("")
     // The projected character already contains the authoritative manual scores.
     // Resync promotes those scores into the structural snapshot used as baseline.
-    const accepted = runtime.dispatchCharacterLifecycleOperation({
+    const accepted = runtime?.dispatchCharacterLifecycleOperation({
       type: "character.session.resync",
       characterId: character.get("id"),
       character: character.toJSON(),
