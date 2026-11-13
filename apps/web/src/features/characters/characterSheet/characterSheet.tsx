@@ -1,3 +1,4 @@
+import { ManualAttributeConfiguration } from "./ManualAttributeConfiguration"
 import { CharacterSheetLayout } from "../../../../../../packages/game-ui/src/CharacterSheetLayout"
 import { useEffect, useState } from "react"
 
@@ -131,6 +132,8 @@ export function CharacterSheetTab({
             character={character}
             updateCharacter={updateCharacter}
           />
+
+          <ManualAttributeConfiguration character={character} />
 
           <UserCharacterStatistics
             character={character}
