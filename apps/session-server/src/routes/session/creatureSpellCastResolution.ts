@@ -1,3 +1,4 @@
+import { getSpellInformation } from "../../../../web/src/models/magic/spells/spellInformation";
 import { abilityShortPtBr } from "../../../../web/src/i18n/ptBR"
 import {
   getCreatureEffectiveAbilityModifier,
@@ -80,6 +81,7 @@ export function resolveCreatureSpellCastAction(args: {
     sourceType: "creature" as const,
     title: spell.displayName || spell.name,
     subtitle: `${creature.name} · ${spell.slotLevel === 0 ? "Truque" : `Magia de nível ${spell.slotLevel}`}`,
+    spellInformation: getSpellInformation(spell),
     description: joinDescription(
       spell.description,
       spell.higherLevelText?.trim()
