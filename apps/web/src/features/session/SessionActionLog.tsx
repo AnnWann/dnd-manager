@@ -1,3 +1,4 @@
+import { SpellInformation } from "../characters/magic/SpellInformation"
 import { getProficiencyDisplayName } from "../../models/characters/applyManualProficiencies"
 import type { HiddenSpellPublicEntry } from "../../../../../packages/session-protocol/src/hiddenSpellcasting"
 import { ChevronDown, ChevronUp, Dices, History, PanelRightClose, PanelRightOpen, Undo2 } from "lucide-react"
@@ -772,6 +773,8 @@ export function ActionRollEntry({
             }
           />
         ))}
+
+        {roll.spellInformation?.length ? <SpellInformation entries={roll.spellInformation} /> : null}
 
         {roll.description ? (
           roll.sourceType === "announcement" ? (

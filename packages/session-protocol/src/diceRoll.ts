@@ -147,6 +147,7 @@ export type SessionActionRollResult = {
   title: string
   subtitle?: string
   description?: string
+  spellInformation?: Array<{ label: string; value: string }>
   descriptionVisibility?: "master"
   details?: string[]
   attack?: SessionResolvedD20Roll
