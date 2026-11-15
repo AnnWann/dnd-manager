@@ -1,11 +1,10 @@
+import { projectSessionCharacterState } from "../../session-runtime/projectSessionCharacterState"
 import { useCallback, useMemo, useState, type ReactNode } from "react"
 
 import { useCharacterContext } from "../../../contexts/characterContext"
 import { useSyncContext } from "../../../contexts/syncContext"
 import { getChannelDivinityPool } from "../../../models/characters/characterChannelDivinity"
 import { endConcentration, getConcentrationCondition } from "../../../models/characters/characterConcentration"
-import type { CharacterCondition } from "../../../models/characters/CharacterCondition"
-import { withCharacterConditions } from "../../../models/characters/characterConditionStorage"
 import {
   getCharacterGrantedSpells,
   spendGrantedSpellAbilityUse,
@@ -30,7 +29,6 @@ import type { SessionMagicOperation } from "../../session-runtime/magicSessionPr
 import type { SessionProficiencyOperation } from "../../session-runtime/proficiencySessionProtocol"
 import type {
   SessionConcentrationOperation,
-  SessionDieSides,
 } from "../../session-runtime/sessionProtocol"
 import { useOptionalSessionRuntime } from "../../session-runtime/useSessionRuntime"
 import {
@@ -60,57 +58,7 @@ export function SessionCharacterWorkspace({ children }: { children: ReactNode })
         const authoritativeHp = sessionRuntime.hpByCharacterId[characterId]
         const authoritativeConditions = sessionRuntime.conditionsByCharacterId[characterId]
 
-        if (authoritativeHp) {
-          const sheet = projected.get("sheet")
-          const authoritativeHitDice = Object.fromEntries(
-            Object.entries(authoritativeHp.hitDice ?? {}).flatMap(([side, pool]) =>
-              pool ? [[side, {
-                current: { quantity: pool.current, sides: side as SessionDieSides },
-                max: { quantity: pool.max, sides: side as SessionDieSides },
-              }]] : [],
-            ),
-          ) as typeof sheet.HP.hitDice
-
-          projected = projected.withPatch({
-            sheet: {
-              ...sheet,
-              attributes: authoritativeHp.attributesInitialized
-                ? { ...authoritativeHp.attributes }
-                : sheet.attributes,
-              savingThrowProficiencies: authoritativeHp.savingThrowsInitialized
-                ? { ...authoritativeHp.savingThrows }
-                : sheet.savingThrowProficiencies,
-              skills: authoritativeHp.skillsInitialized
-                ? { ...authoritativeHp.skills }
-                : sheet.skills,
-              stats: authoritativeHp.statsInitialized ? {
-                ...sheet.stats,
-                armorClassAdjustment: authoritativeHp.stats.armorClassAdjustment,
-                initiativeAdjustment: authoritativeHp.stats.initiativeAdjustment,
-                mobilityAdjustment: authoritativeHp.stats.mobilityAdjustment,
-                passivePerceptionAdjustment: authoritativeHp.stats.passivePerceptionAdjustment,
-                exhaustion: authoritativeHp.stats.exhaustion,
-                inspiration: authoritativeHp.stats.inspiration,
-                experience: authoritativeHp.stats.experience,
-              } : sheet.stats,
-              HP: {
-                ...sheet.HP,
-                current: authoritativeHp.current,
-                temporary: authoritativeHp.temporary,
-                max: authoritativeHp.max,
-                currentMax: authoritativeHp.currentMax,
-                hitDice: authoritativeHitDice,
-              },
-            },
-          })
-        }
-
-        if (authoritativeConditions?.initialized) {
-          projected = withCharacterConditions(
-            projected,
-            authoritativeConditions.conditions as CharacterCondition[],
-          )
-        }
+        projected = projectSessionCharacterState(projected, authoritativeHp, authoritativeConditions)
 
         return [projected]
       } catch (error) {
