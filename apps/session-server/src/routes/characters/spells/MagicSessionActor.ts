@@ -1,3 +1,4 @@
+import { broadcastRollResult } from "../../session/rollAdjustment";
 import { paySpellSlotAndAdditionalResource } from "../../../../../web/src/models/magic/spells/additionalSpellResource";
 import type { HiddenSpellCommitment } from "../../../../../../packages/session-protocol/src/hiddenSpellcasting";
 import { applyCriticalDamageRule } from "../../../../../web/src/shared/session-runtime/criticalDamage";
@@ -458,7 +459,7 @@ export class SessionActor extends AbilitySessionActor {
       }
     }
 
-    if (actionResult) broadcastVisibilityFiltered(this.ctx.getWebSockets(), {
+    if (actionResult) await broadcastRollResult(this.ctx.storage, this.ctx.getWebSockets(), {
       type: "session.action.result", result: actionResult,
     });
   }

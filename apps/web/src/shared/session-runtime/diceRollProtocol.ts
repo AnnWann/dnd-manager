@@ -1,1 +1,3 @@
 export type { SessionDiceRollMode, SessionRollVisibility, SessionDiceRollKind, SessionDiceD20Source, SessionDiceDamageSource, SessionDiceManualSource, SessionDiceRollSource, SessionDiceRollRequest, SessionDiceRollGroupResult, SessionDiceRollResult, SessionActionRollSource, SessionActionRollRequest, SessionResolvedD20Roll, SessionResolvedDamageRoll, SessionResolvedPrimaryRoll, SessionActionInstanceResult, SessionActionRollResult, SessionCreatureRollSource, SessionCreatureRollRequest } from "../../../../../packages/session-protocol/src/diceRoll"
+
+export type { SessionRollAdjustmentRequest } from "../../../../../packages/session-protocol/src/diceRoll"

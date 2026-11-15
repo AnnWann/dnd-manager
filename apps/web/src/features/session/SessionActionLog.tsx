@@ -1,3 +1,4 @@
+import { RollAdjustmentControls } from "./RollAdjustmentControls"
 import { SpellInformation } from "../characters/magic/SpellInformation"
 import { getProficiencyDisplayName } from "../../models/characters/applyManualProficiencies"
 import type { HiddenSpellPublicEntry } from "../../../../../packages/session-protocol/src/hiddenSpellcasting"
@@ -259,6 +260,7 @@ export function SessionActionLog() {
       </>
     ) : (
       <DiceRollPanel
+        canAdjust={isMaster}
         hiddenSpells={runtime?.hiddenSpellEntries ?? []}
         revealHiddenSpell={isMaster ? (id) => { runtime?.dispatchHiddenSpell({ type: "session.hiddenSpell.reveal", id }) } : undefined}
         entries={displayedRolls}
@@ -400,6 +402,7 @@ export function SessionActionLog() {
 }
 
 function DiceRollPanel({
+  canAdjust = false,
   hiddenSpells,
   revealHiddenSpell,
   entries,
@@ -411,6 +414,7 @@ function DiceRollPanel({
   onPrivateRollsChange,
   onClear,
 }: {
+  canAdjust?: boolean
   hiddenSpells: HiddenSpellPublicEntry[]
   revealHiddenSpell?: (id: string) => void
   entries: RollFeedEntry[]
@@ -599,6 +603,7 @@ function DiceRollPanel({
               <ActionRollEntry
                 key={entry.result.id}
                 roll={entry.result}
+                canAdjust={canAdjust}
                 characterName={
                   (entry.result.characterId
                     ? characterNames.get(entry.result.characterId)
@@ -610,6 +615,7 @@ function DiceRollPanel({
               <DiceRollEntry
                 key={entry.result.id}
                 roll={entry.result}
+                canAdjust={canAdjust}
                 characterName={
                   (entry.result.characterId
                     ? characterNames.get(entry.result.characterId)
@@ -662,10 +668,14 @@ function AbilityRollEntry({ entry, characterName }: {
 }
 
 export function ActionRollEntry({
+  canAdjust = false,
+  onAdjust,
   roll,
   characterName,
 }: {
   roll: SessionActionRollResult
+  canAdjust?: boolean
+  onAdjust?: (request: import("../../shared/session-runtime/diceRollProtocol").SessionRollAdjustmentRequest) => void
   characterName?: string
 }) {
   const attack = roll.attack
@@ -773,6 +783,8 @@ export function ActionRollEntry({
             }
           />
         ))}
+
+        {canAdjust ? <RollAdjustmentControls roll={roll} onAdjust={onAdjust} /> : null}
 
         {roll.spellInformation?.length ? <SpellInformation entries={roll.spellInformation} /> : null}
 
@@ -966,10 +978,14 @@ function formatResolvedGroups(
 }
 
 export function DiceRollEntry({
+  canAdjust = false,
+  onAdjust,
   roll,
   characterName,
 }: {
   roll: SessionDiceRollResult
+  canAdjust?: boolean
+  onAdjust?: (request: import("../../shared/session-runtime/diceRollProtocol").SessionRollAdjustmentRequest) => void
   characterName?: string
 }) {
   const naturalClass = roll.natural === 20
@@ -991,7 +1007,7 @@ export function DiceRollEntry({
             ) : null}
           </div>
           <div className="mt-0.5 text-[10px] uppercase tracking-wide text-textMuted">
-            {diceModeLabel(roll)}
+            {diceModeLabel(roll)}{roll.critical ? " · Crítico" : ""}
           </div>
         </div>
         <div className={`shrink-0 text-2xl font-black ${naturalClass}`}>
@@ -1007,6 +1023,7 @@ export function DiceRollEntry({
         {roll.damages.map((damage, index) => <ResolvedDamageBlock key={`${damage.label ?? "rider"}:${index}`} damage={damage} />)}
       </div> : null}
 
+      {canAdjust ? <RollAdjustmentControls roll={roll} onAdjust={onAdjust} /> : null}
       <div className="mt-2 flex items-center justify-between gap-2 border-t border-border pt-2 text-[10px] text-textMuted">
         <span className="truncate">
           {characterName || (roll.kind === "manual" && !roll.characterId ? "Sem identificador" : "Personagem")}

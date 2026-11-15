@@ -2,7 +2,7 @@ import { useState } from "react"
 import { Dices, Eye, EyeOff, History, Send } from "lucide-react"
 import { ActionRollEntry, DiceRollEntry } from "../../web/src/features/session/SessionActionLog"
 import { parseManualDiceExpression } from "../../web/src/shared/session-runtime/manualDiceExpression"
-import type { SessionDiceRollResult, SessionActionRollResult } from "../../web/src/shared/session-runtime/diceRollProtocol"
+import type { SessionRollAdjustmentRequest, SessionDiceRollResult, SessionActionRollResult } from "../../web/src/shared/session-runtime/diceRollProtocol"
 
 export type DiceHistoryEntry =
   | { kind: "dice"; result: SessionDiceRollResult }
@@ -11,7 +11,9 @@ export type DiceHistoryEntry =
 const PRESETS = ["1d4", "1d6", "1d8", "1d10", "1d12", "1d20", "1d100"]
 const field = "w-full rounded-lg border border-border bg-bg-subtle px-3 py-2 text-sm text-textH focus:outline-none focus:ring-2 focus:ring-accentBorder"
 
-export function SessionDicePanel({ connected, selectedCharacterId, onRoll, history, characterNames = {} }: {
+export function SessionDicePanel({ connected, selectedCharacterId, onRoll, history, canAdjust = false, onAdjust, characterNames = {} }: {
+  canAdjust?: boolean
+  onAdjust?: (request: SessionRollAdjustmentRequest) => void
   connected: boolean
   selectedCharacterId?: string
   onRoll: (request: Record<string, unknown>) => boolean
@@ -73,8 +75,8 @@ export function SessionDicePanel({ connected, selectedCharacterId, onRoll, histo
       <div className="mb-3 flex items-center gap-2 text-textH"><History className="h-4 w-4"/><h3 className="text-sm font-semibold">Rolagens da sessão</h3></div>
       {history.length===0 ? <p className="text-xs text-textMuted">As próximas rolagens aparecerão aqui.</p> : <div className="grid gap-2">
         {history.map(entry => entry.kind === "action"
-          ? <ActionRollEntry key={entry.result.id} roll={entry.result} characterName={(entry.result.characterId ? characterNames[entry.result.characterId] : undefined) || entry.result.sourceName}/>
-          : <DiceRollEntry key={entry.result.id} roll={entry.result} characterName={(entry.result.characterId ? characterNames[entry.result.characterId] : undefined) || entry.result.sourceName}/>
+          ? <ActionRollEntry key={entry.result.id} roll={entry.result} canAdjust={canAdjust} onAdjust={onAdjust} characterName={(entry.result.characterId ? characterNames[entry.result.characterId] : undefined) || entry.result.sourceName}/>
+          : <DiceRollEntry key={entry.result.id} roll={entry.result} canAdjust={canAdjust} onAdjust={onAdjust} characterName={(entry.result.characterId ? characterNames[entry.result.characterId] : undefined) || entry.result.sourceName}/>
         )}
       </div>}
     </section>

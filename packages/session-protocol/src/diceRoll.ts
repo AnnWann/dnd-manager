@@ -70,6 +70,8 @@ export type SessionDiceRollResult = {
   visibility?: SessionRollVisibility
   damages?: SessionResolvedDamageRoll[]
   damageType?: string
+  critical?: boolean
+  normalDamage?: SessionResolvedDamageRoll["normalDamage"]
   createdAt: string
 }
 
@@ -111,6 +113,8 @@ export type SessionResolvedDamageRoll = {
   modifier: number
   total: number
   critical: boolean
+  /** Preserved before applying the campaign critical formula. */
+  normalDamage?: { groups: SessionDiceRollGroupResult[]; modifier: number; total: number }
   label?: string
   damageType?: string
   magical?: boolean
@@ -208,4 +212,15 @@ export type SessionCreatureRollRequest = {
   visibility?: SessionRollVisibility
   hideDescription?: boolean
   source: SessionCreatureRollSource
+}
+
+
+/** Master-only corrections to an existing server result. */
+export type SessionRollAdjustmentRequest = {
+  rollId: string
+  target: "dice" | "attack" | "primary" | "damage"
+  instanceIndex?: number
+  damageIndex?: number
+  mode?: SessionDiceRollMode
+  critical?: boolean
 }

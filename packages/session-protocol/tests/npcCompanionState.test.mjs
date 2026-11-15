@@ -15,6 +15,7 @@ function setup(extra = {}) {
   const data = new Map([['runtime-config-state', snapshot]])
   const sockets = ['MASTER', 'PLAYER'].map(role => ({ messages: [], deserializeAttachment: () => ({ role, userId: role === 'MASTER' ? 'dm' : 'owner', visibleCharacterIds: [], lastHeartbeatAt: Date.now() }), send(raw) { this.messages.push(JSON.parse(raw)) } }))
   const ctx = { storage: { get: async key => structuredClone(data.get(key)), put: async (key, value) => { if (typeof key === 'string') data.set(key, structuredClone(value)); else for (const [k, v] of Object.entries(key)) data.set(k, structuredClone(v)) } }, getWebSockets: () => sockets }
+  ctx.storage.transaction = async callback => callback(ctx.storage)
   return { npc, snapshot, data, sockets, actor: new SessionActor(ctx) }
 }
 test('master maintains unassigned NPC HP, feature uses and spell slots outside initiative', async () => {
