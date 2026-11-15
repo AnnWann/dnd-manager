@@ -1,3 +1,4 @@
+import { broadcastRollResult } from "../../session/rollAdjustment";
 import { applyCriticalDamageRule } from "../../../../../web/src/shared/session-runtime/criticalDamage";
 import {
   addCustomAbility,
@@ -428,7 +429,7 @@ export class SessionActor extends BaseSessionActor {
     ) {
       // Announce from the server only AFTER the authoritative activation
       // commits. No dice are fabricated for description-only abilities.
-      broadcastVisibilityFiltered(sockets, {
+      await broadcastRollResult(this.ctx.storage, sockets, {
         type: "session.action.result",
         result: actionResult!,
       });

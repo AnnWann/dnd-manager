@@ -1,7 +1,7 @@
 import type { SessionHpOperation as SharedSessionHpOperation, SessionRestOperation as SharedSessionRestOperation, SessionAuthoritativeOperation as SharedSessionAuthoritativeOperation } from "../../../../../packages/session-protocol/src/sessionCore"
 import type { SessionDieSides as SharedSessionDieSides, SessionHitDicePool as SharedSessionHitDicePool, SessionHitDiceState as SharedSessionHitDiceState, SessionAttribute as SharedSessionAttribute, SessionAttributesState as SharedSessionAttributesState, SessionSavingThrowsState as SharedSessionSavingThrowsState, SessionSkill as SharedSessionSkill, SessionSkillProficiency as SharedSessionSkillProficiency, SessionSkillsState as SharedSessionSkillsState, SessionStatsState as SharedSessionStatsState, SessionConditionDuration as SharedSessionConditionDuration, SessionCondition as SharedSessionCondition, SessionConditionsState as SharedSessionConditionsState, SessionConditionSeed as SharedSessionConditionSeed, SessionHpState as SharedSessionHpState, SessionHpSeed as SharedSessionHpSeed, SessionHitDiceOperation as SharedSessionHitDiceOperation, SessionCalculatedStatOperation as SharedSessionCalculatedStatOperation, SessionSimpleStatOperation as SharedSessionSimpleStatOperation, SessionStatOperation as SharedSessionStatOperation, SessionAttributeOperation as SharedSessionAttributeOperation, SessionSavingThrowOperation as SharedSessionSavingThrowOperation, SessionSkillOperation as SharedSessionSkillOperation, SessionConditionOperation as SharedSessionConditionOperation, SessionConcentrationOperation as SharedSessionConcentrationOperation, SessionLoggedOperation as SharedSessionLoggedOperation } from "../../../../../packages/session-protocol/src/sessionCore"
 import { routeForSheetOperation, type CharacterSheetRoute } from "../characters/sheet";
-import type { SessionActionRollRequest, SessionActionRollResult, SessionCreatureRollRequest, SessionDiceRollRequest, SessionDiceRollResult } from "../../../../web/src/shared/session-runtime/diceRollProtocol";
+import type { SessionRollAdjustmentRequest, SessionActionRollRequest, SessionActionRollResult, SessionCreatureRollRequest, SessionDiceRollRequest, SessionDiceRollResult } from "../../../../web/src/shared/session-runtime/diceRollProtocol";
 import type { CompanionOperation, CompanionServerMessage } from "../../../../web/src/shared/session-runtime/companionRuntime";
 import { parseManualDiceExpression } from "../../../../web/src/shared/session-runtime/manualDiceExpression";
 import type { SessionPanelsServerMessage } from "../../../../../packages/session-protocol/src/sessionPanels";
@@ -138,6 +138,7 @@ export type ClientSessionMessage =
   | { type: "session.conditions.operation"; operation: SessionConditionOperation | SessionConcentrationOperation }
   | { type: "session.sheet.operation"; route: CharacterSheetRoute; operation: SessionLoggedOperation }
   | { type: "session.log.undo"; logId: string }
+  | { type: "session.roll.adjust"; request: SessionRollAdjustmentRequest }
   | { type: "session.dice.roll"; request: SessionDiceRollRequest }
   | { type: "session.action.roll"; request: SessionActionRollRequest }
   | { type: "session.creature.roll"; request: SessionCreatureRollRequest }

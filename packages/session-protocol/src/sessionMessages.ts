@@ -1,3 +1,4 @@
+import type { SessionRollAdjustmentRequest } from "./diceRoll.ts"
 import type { SessionMutationResult } from "./sessionMutation.ts"
 import type { SessionRuntimePresenceUser, SessionHpState, SessionConditionsState, SessionHpLogRecord, SessionHpSeed, SessionAuthoritativeOperation, SessionConditionSeed, SessionConditionOperation, SessionConcentrationOperation, SessionLoggedOperation } from "./sessionCore.ts"
 
@@ -47,6 +48,7 @@ export type ClientSessionMessage<TDiceRequest, TActionRequest, TCreatureRequest>
   | { type: "session.conditions.operation"; operation: SessionConditionOperation | SessionConcentrationOperation }
   | { type: "session.sheet.operation"; route: CharacterSheetRoute; operation: SessionLoggedOperation }
   | { type: "session.log.undo"; logId: string }
+  | { type: "session.roll.adjust"; request: SessionRollAdjustmentRequest }
   | { type: "session.dice.roll"; request: TDiceRequest }
   | { type: "session.action.roll"; request: TActionRequest }
   | { type: "session.creature.roll"; request: TCreatureRequest }

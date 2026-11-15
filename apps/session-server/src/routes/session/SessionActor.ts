@@ -1,3 +1,4 @@
+import { broadcastRollResult } from "./rollAdjustment";
 import { canControlCompanion, hasPersistentCompanionState } from "../../../../web/src/shared/session-runtime/companionRuntime";
 import type { HiddenSpellCommitment } from "../../../../../packages/session-protocol/src/hiddenSpellcasting";
 import { applyCriticalDamageRule } from "../../../../web/src/shared/session-runtime/criticalDamage";
@@ -677,7 +678,7 @@ export class SessionActor extends DurableObject<Env> {
         if (updated) await this.persistCompanionResources(creature, updated);
       }
 
-      if (actionResult) this.broadcast({ type: "session.action.result", result: actionResult });
+      if (actionResult) await broadcastRollResult(this.ctx.storage, this.activeSockets(), { type: "session.action.result", result: actionResult });
       return;
     }
 
@@ -760,7 +761,7 @@ export class SessionActor extends DurableObject<Env> {
       resolution.result.descriptionVisibility = "master";
     }
 
-    this.broadcast(
+    await broadcastRollResult(this.ctx.storage, this.activeSockets(),
       resolution.resultType === "action"
         ? { type: "session.action.result", result: resolution.result }
         : { type: "session.dice.result", result: resolution.result },
@@ -934,7 +935,7 @@ export class SessionActor extends DurableObject<Env> {
         }
       }
     }
-    this.broadcast({ type: "session.action.result", result: resolved.result });
+    await broadcastRollResult(this.ctx.storage, this.activeSockets(), { type: "session.action.result", result: resolved.result });
   }
 
   private async handleDiceRoll(
@@ -976,7 +977,7 @@ export class SessionActor extends DurableObject<Env> {
         return;
       }
 
-      this.broadcast({ type: "session.dice.result", result: resolved.result });
+      await broadcastRollResult(this.ctx.storage, this.activeSockets(), { type: "session.dice.result", result: resolved.result });
       return;
     }
 
@@ -1045,7 +1046,7 @@ export class SessionActor extends DurableObject<Env> {
       }
     }
 
-    this.broadcast({ type: "session.dice.result", result: resolved.result });
+    await broadcastRollResult(this.ctx.storage, this.activeSockets(), { type: "session.dice.result", result: resolved.result });
   }
 
   private async registerRolledCharacterInitiative(
@@ -1616,7 +1617,7 @@ export class SessionActor extends DurableObject<Env> {
             // Rest handling is initiated by one client and the roll panel is
             // event-driven, so publish through the same visibility-aware path
             // used by ordinary dice rolls.
-            broadcastVisibilityFiltered(this.ctx.getWebSockets(), {
+            await broadcastRollResult(this.ctx.storage, this.ctx.getWebSockets(), {
               type: "session.dice.result",
               result: diceResult,
             });

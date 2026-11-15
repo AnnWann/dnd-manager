@@ -210,3 +210,9 @@ function publishRequest(request: SessionDiceRollRequest): void {
 function createRequestId(): string {
   return `${Date.now()}-${requestSequence++}`
 }
+
+
+export const ROLL_ADJUSTMENT_REQUEST_EVENT = "dndmm:roll-adjustment-request"
+export function requestRollAdjustment(request: import("../shared/session-runtime/diceRollProtocol").SessionRollAdjustmentRequest): void {
+  window.dispatchEvent(new CustomEvent(ROLL_ADJUSTMENT_REQUEST_EVENT, { detail: request }))
+}

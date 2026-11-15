@@ -266,6 +266,21 @@ export function applyCriticalDamageRule(
   random: (sides: number) => number = rollCriticalDie,
 ): void {
   if (!settings || settings.mode === "standard") return;
+  // Retain the original hit, including its modifier, for later master corrections.
+  const remember = (damage: SessionResolvedDamageRoll) => {
+    if (!damage.critical || damage.normalDamage || damage.damageType === "healing" || !damage.groups.length) return;
+    const groups = damage.groups.map(group => {
+      const quantity = Math.floor(group.quantity / 2);
+      return { ...group, quantity, rolls: group.rolls.slice(0, quantity) };
+    });
+    damage.normalDamage = {
+      groups, modifier: damage.modifier,
+      total: Math.max(0, sum(groups.flatMap(group => group.rolls)) + damage.modifier),
+    };
+  };
+  if (result.damage) remember(result.damage);
+  result.damages?.forEach(remember);
+  result.instances?.forEach(instance => instance.damages?.forEach(remember));
   const formula = criticalFormula(settings),
     root = parse(formula);
   function apply(damages?: SessionResolvedDamageRoll[]) {

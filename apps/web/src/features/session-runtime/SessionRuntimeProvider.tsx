@@ -19,10 +19,10 @@ import type {
   SessionPanelsState,
   SessionPanelOperation,
 } from "../../../../../packages/session-protocol/src/sessionPanels"
-import { ACTION_ROLL_REQUEST_EVENT, CREATURE_ROLL_REQUEST_EVENT, DICE_ROLL_REQUEST_EVENT, publishServerActionRoll, publishServerDiceRoll } from "../../lib/diceRoller"
+import { ROLL_ADJUSTMENT_REQUEST_EVENT, ACTION_ROLL_REQUEST_EVENT, CREATURE_ROLL_REQUEST_EVENT, DICE_ROLL_REQUEST_EVENT, publishServerActionRoll, publishServerDiceRoll } from "../../lib/diceRoller"
 import type { CompanionOperation, CompanionState } from "../../shared/session-runtime/companionRuntime"
 import type { SessionPauseState } from "../../shared/session-runtime/sessionPause"
-import type { SessionActionRollRequest, SessionCreatureRollRequest, SessionDiceRollRequest } from "../../shared/session-runtime/diceRollProtocol"
+import type { SessionRollAdjustmentRequest, SessionActionRollRequest, SessionCreatureRollRequest, SessionDiceRollRequest } from "../../shared/session-runtime/diceRollProtocol"
 import { toSheetOperationMessage } from "./sheetRoutes"
 import type {
   SessionAbilityOperation,
@@ -403,12 +403,18 @@ function SessionRuntimeProviderInner({ sessionId, userId, role, children }: {
       socket.send({ type: "session.creature.roll", request })
     }
 
+    const onRollAdjustment = (event: Event) => {
+      if (role !== "MASTER") return
+      socket.send({ type: "session.roll.adjust", request: (event as CustomEvent<SessionRollAdjustmentRequest>).detail })
+    }
+    window.addEventListener(ROLL_ADJUSTMENT_REQUEST_EVENT, onRollAdjustment)
     window.addEventListener(DICE_ROLL_REQUEST_EVENT, onDiceRollRequest)
     window.addEventListener(ACTION_ROLL_REQUEST_EVENT, onActionRollRequest)
     window.addEventListener(CREATURE_ROLL_REQUEST_EVENT, onCreatureRollRequest)
     socketRef.current = socket
     socket.connect()
     return () => {
+      window.removeEventListener(ROLL_ADJUSTMENT_REQUEST_EVENT, onRollAdjustment)
       window.removeEventListener(DICE_ROLL_REQUEST_EVENT, onDiceRollRequest)
       window.removeEventListener(ACTION_ROLL_REQUEST_EVENT, onActionRollRequest)
       window.removeEventListener(CREATURE_ROLL_REQUEST_EVENT, onCreatureRollRequest)
