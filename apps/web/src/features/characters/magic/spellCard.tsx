@@ -1,3 +1,4 @@
+import { getSpellComponents, formatComponentsCompact, formatCastingTime, formatRange, formatDuration, formatTargeting, formatArea, formatAreaShape, formatAttackAndSave } from "../../../models/magic/spells/spellInformation"
 import { Select as SharedSelect } from "../../../components/ui/Select"
 import { useEffect, useState, type ReactNode } from "react"
 import { createPortal } from "react-dom"
@@ -5,7 +6,6 @@ import { createPortal } from "react-dom"
 import { MarkdownText } from "../../../components/ui/MarkdownText"
 import { Button } from "../../../components/ui/Button"
 import {
-  CASTING_TIME_NAMES,
   CLASS_NAMES,
   MAGIC_SCHOOLS_MAP,
 } from "../../../contexts/consts"
@@ -698,23 +698,11 @@ function stripMarkdownForPreview(text: string): string {
     .replace(/`([^`]+)`/g, "$1")
 }
 
-function getSpellComponents(spell: Spell): Array<"V" | "S" | "M"> {
-  if (!Array.isArray(spell.components)) return []
-
-  const order: Array<"V" | "S" | "M"> = ["V", "S", "M"]
-  return order.filter((component) => spell.components.includes(component))
-}
 
 function formatSpellLevel(spell: Spell): string {
   return spell.slotLevel === 0 ? "Truque" : `${spell.slotLevel}º círculo`
 }
 
-function formatComponentsCompact(spell: Spell): string {
-  const components = getSpellComponents(spell)
-  return components.length
-    ? `Componentes: ${components.join(", ")}`
-    : "Componentes: nenhum"
-}
 
 function formatComponentLong(component: "V" | "S" | "M"): string {
   if (component === "V") return "V — Verbal"
@@ -722,121 +710,12 @@ function formatComponentLong(component: "V" | "S" | "M"): string {
   return "M — Material"
 }
 
-function formatCastingTime(spell: Spell): string {
-  const castingTime = spell.castingTime
-  if (castingTime.type === "special") return castingTime.special || "Especial"
-  if (castingTime.type === "reaction") {
-    return castingTime.reactionWhen
-      ? `Reação: ${castingTime.reactionWhen}`
-      : "Reação"
-  }
-  const label = CASTING_TIME_NAMES[castingTime.type] ?? castingTime.type
-  return castingTime.value === 1
-    ? `1 ${label}`
-    : `${castingTime.value} ${label}s`
-}
 
-function formatRange(spell: Spell): string {
-  const { range } = spell
-  if (range.origin === "self") return "Pessoal"
-  if (range.origin === "touch") return "Toque"
 
-  const originLabels: Record<string, string> = {
-    point: "Ponto",
-    target: "Alvo",
-    ally: "Aliado",
-    enemy: "Inimigo",
-  }
-  const origin = originLabels[range.origin] ?? range.origin
-  const base = range.distance > 0 ? `${origin}, ${range.distance} m` : origin
-  if (!range.area) return base
-  return `${base}; ${formatAreaShape(range.area.shape)} de ${range.area.size} m`
-}
 
-function formatDuration(spell: Spell): string {
-  const { value, unit } = spell.duration
-  const labels: Record<string, [string, string]> = {
-    instantaneous: ["Instantânea", "Instantânea"],
-    turn: ["turno", "turnos"],
-    round: ["rodada", "rodadas"],
-    minute: ["minuto", "minutos"],
-    hour: ["hora", "horas"],
-    day: ["dia", "dias"],
-    special: ["Especial", "Especial"],
-    untilDispelled: ["Até ser dissipada", "Até ser dissipada"],
-    "short rest": ["Até o próximo descanso curto", "Até o próximo descanso curto"],
-    "long rest": ["Até o próximo descanso longo", "Até o próximo descanso longo"],
-    permanent: ["Permanente", "Permanente"],
-  }
-  const [singular, plural] = labels[unit] ?? [unit, unit]
 
-  if (
-    unit === "instantaneous" ||
-    unit === "special" ||
-    unit === "untilDispelled" ||
-    unit === "short rest" ||
-    unit === "long rest" ||
-    unit === "permanent"
-  ) {
-    return singular
-  }
-  if (value <= 0) return singular
-  return `${value} ${value === 1 ? singular : plural}`
-}
 
-function formatTargeting(spell: Spell): string {
-  const target = spell.targeting
-  const selfSuffix = target.targetsSelf ? "; pode afetar o conjurador" : ""
 
-  if (target.kind === "self") return "Pessoal"
-  if (target.kind === "single-creature") return `Uma criatura${selfSuffix}`
-  if (target.kind === "multiple-creatures") {
-    const count = target.targetCount
-      ? `${target.targetCount} criaturas`
-      : "Múltiplas criaturas"
-    return `${count}${target.canTargetMoreAtHigherLevels ? "; mais alvos em níveis superiores" : ""}${selfSuffix}`
-  }
-  if (target.kind === "area") return formatArea(spell)
-  if (target.kind === "object") return "Objeto"
-  return "Especial"
-}
-
-function formatArea(spell: Spell): string {
-  const area = spell.range.area
-  if (area) return `${formatAreaShape(area.shape)} de ${area.size} m`
-
-  if (spell.targeting.affectsArea) {
-    if (spell.targeting.areaShape && spell.targeting.areaSize) {
-      return `${formatAreaShape(spell.targeting.areaShape)} de ${spell.targeting.areaSize} m`
-    }
-    return "Área especial"
-  }
-
-  return "Não se aplica"
-}
-
-function formatAreaShape(shape: "circle" | "square" | "cone" | "line") {
-  const names = {
-    circle: "círculo",
-    square: "quadrado",
-    cone: "cone",
-    line: "linha",
-  }
-  return names[shape] ?? shape
-}
-
-function formatAttackAndSave(spell: Spell): string {
-  const parts: string[] = []
-  if (spell.targeting.hasAttackRoll) parts.push("Jogada de ataque mágico")
-  if (spell.targeting.hasSavingThrow) {
-    parts.push(
-      spell.targeting.savingThrowAttribute
-        ? `Teste de resistência de ${attributeShort(spell.targeting.savingThrowAttribute)}`
-        : "Teste de resistência",
-    )
-  }
-  return parts.length ? parts.join("; ") : "Nenhum"
-}
 
 function formatRollModes(spell: Spell): string {
   if (!spell.rollMode.length) return "Nenhuma"

@@ -1,3 +1,4 @@
+import { getSpellInformation } from "../../../../../web/src/models/magic/spells/spellInformation";
 import type { CharacterTemplate } from "../../../../../web/src/models/characters/CharacterTemplate";
 import type { DamageType } from "../../../../../web/src/models/combat/Damage";
 import { getActiveAttackRiders } from "../../../../../web/src/models/combat/AttackRider";
@@ -67,6 +68,7 @@ export function resolveSpellCastAction(args: {
     sourceType: "spell" as const,
     title: spell.displayName || spell.name,
     subtitle: `${spell.slotLevel === 0 ? "Truque" : `Magia de nível ${spell.slotLevel}`} · ${source.name}`,
+    spellInformation: getSpellInformation(spell),
     description: joinDescription(
       spell.description,
       spell.higherLevelText?.trim()
