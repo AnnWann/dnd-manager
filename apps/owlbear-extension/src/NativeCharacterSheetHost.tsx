@@ -38,6 +38,7 @@ type Props = {
   runtimeConfig?: Raw | null
   inventoryState?: Raw | null
   spells?: Raw[]
+  loadOfficialSpells?: (indexes: readonly string[]) => Promise<Spell[]>
   role: "MASTER" | "PLAYER"
   sessionId: string
   connected: boolean
@@ -77,7 +78,7 @@ export function hydrateOwlbearCharacter(raw: Raw, hp: Raw | undefined, condition
  * Owlbear mounts that context independently, so load the selected character's
  * known and granted spells before rendering the spell cards. */
 function CharacterSpellDefinitionsLoader({ character }: { character: CharacterTemplate }) {
-  const { ensureOfficialSpells } = useMagicContext()
+  const { ensureOfficialSpells, officialSpellsError } = useMagicContext()
   const indexes = useMemo(() => {
     const known = character.get("magic")?.spells.knownSpells ?? []
     return Array.from(new Set([
@@ -90,13 +91,13 @@ function CharacterSpellDefinitionsLoader({ character }: { character: CharacterTe
     if (!indexes.length) return
     void ensureOfficialSpells(indexes)
   }, [ensureOfficialSpells, key])
-  return null
+  return officialSpellsError ? <p role="alert" className="error">{officialSpellsError}</p> : null
 }
 
 /** Adapter for the original website components, not a rewritten character sheet.
  * Every mutation goes to the authoritative DO; unsupported diffs are rejected.
  */
-export function NativeCharacterSheetHost({ characterId, raw, hp, conditions, runtimeConfig, inventoryState, spells, role, sessionId, connected, send }: Props) {
+export function NativeCharacterSheetHost({ characterId, raw, hp, conditions, runtimeConfig, inventoryState, spells, loadOfficialSpells, role, sessionId, connected, send }: Props) {
   const [notice, setNotice] = useState("")
   const character = useMemo(() => hydrateOwlbearCharacter(raw, hp, conditions), [raw, hp, conditions])
   const safeSend = useCallback((message: Raw) => {
@@ -332,7 +333,7 @@ export function NativeCharacterSheetHost({ characterId, raw, hp, conditions, run
       actor={actor} systemIds={[definition.id]}/>
   }
   return <MemoryRouter>
-    <MagicProvider spells={(spells ?? []) as Spell[]}>
+    <MagicProvider spells={(spells ?? []) as Spell[]} loadOfficialSpells={loadOfficialSpells}>
       <CharacterSpellDefinitionsLoader character={character} />
       <SessionRuntimeContext.Provider value={runtime}>
         <CharacterWorkspaceProvider value={workspace}>

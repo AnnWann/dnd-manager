@@ -1,3 +1,4 @@
+import { GET as getOfficialSpellPage } from "./compendium/spells.js"
 import { createHmac, timingSafeEqual } from "node:crypto"
 import { auth } from "../server/auth.js"
 import { prisma } from "../server/prisma.js"
@@ -62,6 +63,18 @@ export async function GET(request: Request): Promise<Response> {
   const grant = await validateGrant(request)
   if (!grant) return json({ error: "Authorization required or expired" }, 401, headers)
   const url = new URL(request.url), op = url.searchParams.get("op")
+  if (op === "official-spells") {
+    const indexes = (url.searchParams.get("indexes") ?? "").split(",").map(index => index.trim()).filter(Boolean)
+    if (!indexes.length || indexes.length > 100 || indexes.some(index => index.length > 200)) {
+      return json({ error: "Invalid spell indexes" }, 400, headers)
+    }
+    const query = new URL("/api/compendium/spells", url.origin)
+    query.searchParams.set("indexes", indexes.join(","))
+    query.searchParams.set("includeDetails", "true")
+    query.searchParams.set("pageSize", "100")
+    const response = await getOfficialSpellPage(new Request(query))
+    return json(await response.json(), response.status, headers)
+  }
   if (op === "creature-compendium") {
     const campaignId = url.searchParams.get("sessionId") ?? ""
     const campaign = await prisma.campaign.findUnique({

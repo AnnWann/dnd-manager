@@ -1,3 +1,4 @@
+import type { Spell } from "../../web/src/models/magic/spells/Spell"
 import { MagicProvider } from "../../web/src/contexts/magicContext"
 import { CreatureQuickSheet, quickSheetFromCompendiumCreature } from "../../web/src/features/creatures/CreatureQuickSheet"
 import type { CompendiumCreature } from "../../web/src/models/creatures/CompendiumCreature"
@@ -368,6 +369,14 @@ function App() {
    if (!response.ok) throw new Error(response.status === 401 ? "Autorização expirada. Reconecte sua conta." : "Erro da API: HTTP " + response.status)
    return response.json() as Promise<T>
  }, [])
+ const loadOfficialSpells = useCallback(async (indexes: readonly string[]): Promise<Spell[]> => {
+   const batches: string[][] = []
+   for (let start = 0; start < indexes.length; start += 100) batches.push(indexes.slice(start, start + 100))
+   const pages = await Promise.all(batches.map(batch => api<{ spells: Spell[] }>(
+     "?op=official-spells&indexes=" + encodeURIComponent(batch.join(",")),
+   )))
+   return pages.flatMap(page => page.spells)
+ }, [api])
  const refreshSessions = useCallback(async () => {
    setError("")
    try {
@@ -656,7 +665,7 @@ function App() {
   : <button type="button" disabled={Boolean(pendingCreatureAdd)||!initiativeSession} onClick={addCatalogToInitiative} className="rounded-lg border border-accentBorder bg-accentBg px-3 py-2 text-sm font-semibold disabled:opacity-40">{pendingCreatureAdd?"Aguardando confirmação...":"Adicionar à iniciativa"}</button>}</div></MagicProvider> : boundCreature ? <CreatureTokenInspector key={boundCreature.id} entry={boundCreature} creature={findOwlbearInitiativeCreature(availableCreatures,boundCreature)} spells={sessionSpells} serverSpellIndexes={serverSpellIndexes} creatureRollError={creatureRollError} connected={status==="Conectado à sessão"} onOperation={operation=>socket.current?.sendRaw(JSON.stringify({type:"session.initiative.operation",operation}))??false}/> : selectedId && chosen && <article className="character-panel">
  <CharacterSheetHeader name={String(raw.name ?? selectedId)} id={selectedId} />
  <NativeCharacterSheetHost
-   characterId={selectedId} raw={raw} hp={health as unknown as Record<string, unknown>} conditions={conditions[selectedId]} runtimeConfig={runtimeConfig} inventoryState={inventoryState} spells={spellLibrary} role={role === "MASTER" ? "MASTER" : "PLAYER"}
+   characterId={selectedId} raw={raw} hp={health as unknown as Record<string, unknown>} conditions={conditions[selectedId]} runtimeConfig={runtimeConfig} inventoryState={inventoryState} spells={sessionSpells as unknown as Record<string, unknown>[]} loadOfficialSpells={loadOfficialSpells} role={role === "MASTER" ? "MASTER" : "PLAYER"}
    sessionId={sessionId} connected={status === "Conectado à sessão"}
    send={message => socket.current?.sendRaw(JSON.stringify(message)) ?? false}
  />
