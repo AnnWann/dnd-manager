@@ -46,6 +46,7 @@ type MagicProviderProps = {
   children: ReactNode
   spells: Spell[]
   preloadedOfficialSpells?: Spell[]
+  loadOfficialSpells?: (indexes: readonly string[]) => Promise<Spell[]>
   setAppState?: React.Dispatch<React.SetStateAction<AppStateV1>>
   onSpellsChange?: (spells: Spell[]) => void
   onSaveSpell?: (spell: Spell) => void
@@ -56,6 +57,7 @@ export function MagicProvider({
   children,
   spells,
   preloadedOfficialSpells = [],
+  loadOfficialSpells = getOfficialSpellsByIndexes,
   setAppState,
   onSpellsChange,
   onSaveSpell,
@@ -126,7 +128,7 @@ export function MagicProvider({
 
     beginOfficialLoad()
     try {
-      mergeOfficialSpells(await getOfficialSpellsByIndexes(missing))
+      mergeOfficialSpells(await loadOfficialSpells(missing))
     } catch {
       setOfficialSpellsError("Não foi possível carregar algumas magias oficiais.")
     } finally {
@@ -136,6 +138,7 @@ export function MagicProvider({
     beginOfficialLoad,
     finishOfficialLoad,
     mergeOfficialSpells,
+    loadOfficialSpells,
   ])
 
   const spellByIndex = useMemo(() => {
