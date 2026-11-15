@@ -97,9 +97,12 @@ function App() {
  const [tokenLinkError, setTokenLinkError] = useState("")
  const [activeArea, setActiveArea] = useState<"sheet" | "dice">(isDicePopover ? "dice" : "sheet")
  const [rollHistory, setRollHistory] = useState<DiceHistoryEntry[]>([])
- const [sharedDice, setSharedDice] = useState<{connected:boolean; selectedCharacterId?:string; history:DiceHistoryEntry[]}>({connected:false,history:[]})
+ const characterNames = useMemo(() => Object.fromEntries(Object.values(characters).map(entry => [
+   entry.characterId, String(asRecord(abilities[entry.characterId]?.character ?? entry.character).name ?? "").trim(),
+ ])), [characters, abilities])
+ const [sharedDice, setSharedDice] = useState<{connected:boolean; selectedCharacterId?:string; history:DiceHistoryEntry[]; characterNames?:Record<string,string>}>({connected:false,history:[]})
  const diceChannel = useRef<BroadcastChannel | null>(null)
- const currentDiceState = useRef({connected:false,selectedCharacterId:undefined as string|undefined,history:[] as DiceHistoryEntry[]})
+ const currentDiceState = useRef({connected:false,selectedCharacterId:undefined as string|undefined,history:[] as DiceHistoryEntry[],characterNames:{} as Record<string,string>})
  const [sharedInitiative, setSharedInitiative] = useState<{session:InitiativeSession|null;role:string;connected:boolean;rollingEnabled:boolean}>({session:null,role:"",connected:false,rollingEnabled:true})
  const initiativeChannel = useRef<BroadcastChannel|null>(null)
  const initiativeBridge = useRef<{session:InitiativeSession|null;role:string;connected:boolean;rollingEnabled:boolean;resolveBonus:(entry:InitiativeEntry)=>number}>({
@@ -205,9 +208,9 @@ function App() {
  }, [])
  useEffect(()=>{
    if(isDicePopover||isInitiativePopover||isAssociatePopover)return
-   currentDiceState.current={connected:status==="Conectado à sessão",selectedCharacterId:selectedId||undefined,history:rollHistory}
+   currentDiceState.current={connected:status==="Conectado à sessão",selectedCharacterId:selectedId||undefined,history:rollHistory,characterNames}
    diceChannel.current?.postMessage({type:"state",value:currentDiceState.current})
- },[status,selectedId,rollHistory])
+ },[status,selectedId,rollHistory,characterNames])
  const [sheetMode, setSheetMode] = useState<"play" | "configuration">("play")
  const [error, setError] = useState("")
  const grant = useRef<string | null>(null)
@@ -360,7 +363,7 @@ function App() {
    if(!isAssociatePopover&&!isDicePopover&&!isInitiativePopover)void OBR.popover.close(INITIATIVE_POPOVER_ID).catch(()=>{})
    socket.current?.disconnect()
    socket.current = null
-   setCharacters({}); setAbilities({}); setHp({}); setConditions({}); setRuntimeConfig(null); setSpellLibrary([]); setCreatureRollError(""); setInventoryState(null);setInitiativeState(null);setCompendiumCreatures([]); setSelectedId(""); setRollHistory([]); currentDiceState.current={connected:false,selectedCharacterId:undefined,history:[]}; setStatus("Desconectado")
+   setCharacters({}); setAbilities({}); setHp({}); setConditions({}); setRuntimeConfig(null); setSpellLibrary([]); setCreatureRollError(""); setInventoryState(null);setInitiativeState(null);setCompendiumCreatures([]); setSelectedId(""); setRollHistory([]); currentDiceState.current={connected:false,selectedCharacterId:undefined,history:[],characterNames:{}}; setStatus("Desconectado")
  }, [])
  useEffect(() => () => { socket.current?.disconnect() }, [])
  const api = useCallback(async <T,>(path: string): Promise<T> => {
@@ -623,7 +626,7 @@ function App() {
        className="rounded-lg border border-border px-3 py-1 text-sm text-textH">Fechar ✕</button>
    </div>
    <SessionDicePanel connected={sharedDice.connected} selectedCharacterId={sharedDice.selectedCharacterId}
-     history={sharedDice.history} onRoll={request=>{
+     history={sharedDice.history} characterNames={sharedDice.characterNames} onRoll={request=>{
        if(!sharedDice.connected)return false
        diceChannel.current?.postMessage({type:"roll",request})
        return diceChannel.current!==null
@@ -658,7 +661,7 @@ function App() {
  <button type="button" role="tab" aria-selected={activeArea==="sheet"} onClick={()=>setActiveArea("sheet")} className={`flex-1 rounded-lg px-3 py-2 text-sm font-semibold ${activeArea==="sheet"?"bg-accentBg text-textH":"text-textMuted hover:bg-bg-subtle"}`}>Ficha</button>
  <button type="button" role="tab" aria-selected={activeArea==="dice"} onClick={()=>setActiveArea("dice")} className={`flex-1 rounded-lg px-3 py-2 text-sm font-semibold ${activeArea==="dice"?"bg-accentBg text-textH":"text-textMuted hover:bg-bg-subtle"}`}>Dados</button>
  </div>}
- <div role="tabpanel" hidden={activeArea!=="dice"}><SessionDicePanel connected={status==="Conectado à sessão"} selectedCharacterId={selectedId || undefined} history={rollHistory} onRoll={request=>socket.current?.sendRaw(JSON.stringify({type:"session.dice.roll",request}))??false}/></div>
+ <div role="tabpanel" hidden={activeArea!=="dice"}><SessionDicePanel connected={status==="Conectado à sessão"} selectedCharacterId={selectedId || undefined} history={rollHistory} characterNames={characterNames} onRoll={request=>socket.current?.sendRaw(JSON.stringify({type:"session.dice.roll",request}))??false}/></div>
  {!isDicePopover && <div role="tabpanel" hidden={activeArea!=="sheet"}>
  {catalogCreature && !boundCreature ? <MagicProvider spells={sessionSpells}><div className="grid gap-3"><CreatureQuickSheet data={quickSheetFromCompendiumCreature(catalogCreature,undefined,{enableRolls:false,serverSpellIndexes})} compact/>{catalogEntries.length>0 ? <p className="text-xs text-textMuted">Há várias criaturas deste tipo na iniciativa. Associe o token à instância correta para conjurar e consumir recursos.</p> : <p className="text-xs text-textMuted">Adicione esta criatura à iniciativa para habilitar conjuração e controle de recursos.</p>}{catalogEntries.length>0
   ? <button type="button" onClick={()=>{if(selectedToken)void OBR.popover.open({id:ASSOC_POPOVER_ID,url:"/?panel=associate&tokenId="+encodeURIComponent(selectedToken.id),width:420,height:520,anchorReference:"POSITION",anchorPosition:{left:window.screen.availWidth/2,top:140},anchorOrigin:{horizontal:"CENTER",vertical:"TOP"},transformOrigin:{horizontal:"CENTER",vertical:"TOP"}}).catch(error=>setTokenLinkError(String(error)))}} className="rounded-lg border border-accentBorder bg-accentBg px-3 py-2 text-sm font-semibold">Associar token à criatura</button>
