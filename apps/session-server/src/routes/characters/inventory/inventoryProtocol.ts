@@ -42,6 +42,9 @@ export function parseInventoryClientMessage(raw: string): SessionInventoryClient
   if (message.type !== "session.inventory.operation" || !message.operation || typeof message.operation !== "object") return null;
   const operation = message.operation as Record<string, unknown>;
   if (typeof operation.type !== "string" || typeof operation.characterId !== "string") return null;
+  if (operation.type === "party.supplies.day.consume" && (
+    operation.characterId !== "session" || !Number.isInteger(operation.expectedRevision) || Number(operation.expectedRevision) < 0
+  )) return null;
   if (
     operation.type === "character.ammunition.spend" &&
     (

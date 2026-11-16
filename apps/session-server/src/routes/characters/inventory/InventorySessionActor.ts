@@ -1,3 +1,6 @@
+import { planPartyDailySupplies } from "../../../../../web/src/models/supplies/partyDailySupplies";
+import { readRuntimeConfig } from "../../session/runtimeConfigAccess";
+import type { SessionCharacterLifecycleState } from "../../session/characterLifecycleProtocol";
 import { CharacterTemplate, type CharacterTemplateProps } from "../../../../../web/src/models/characters/CharacterTemplate";
 import { consumeCharacterInventoryItem } from "../../../../../web/src/models/characters/characterConsumables";
 import { equipInventoryItemWithRules, type EquipmentDestination } from "../../../../../web/src/models/characters/characterEquipmentInteractions";
@@ -22,7 +25,7 @@ import {
   createSessionLogRecord,
   readSessionLog,
 } from "../../session/sessionLog";
-import { reconcileSessionSupplyProjection } from "../../session/supplyProjection";
+import { buildAuthoritativeSupplyProjection, reconcileSessionSupplyProjection } from "../../session/supplyProjection";
 
 const ABILITIES_STATE_KEY = "abilities-state";
 const HP_STATE_KEY = "hp-state";
@@ -169,6 +172,22 @@ export class SessionActor extends EquipmentSessionActor {
       );
     }
 
+    let dailyPlan: ReturnType<typeof planPartyDailySupplies> | undefined;
+    if (operation.type === "party.supplies.day.consume") {
+      if (operation.expectedRevision !== inventory.revision) {
+        return sendError(webSocket, "SUPPLIES_STALE", "O estoque foi alterado. Confira os valores atualizados antes de consumir novamente.");
+      }
+      const [config, lifecycle] = await Promise.all([
+        readRuntimeConfig(this.ctx.storage),
+        this.ctx.storage.get<Record<string, SessionCharacterLifecycleState>>("characters-state"),
+      ]);
+      const projected = buildAuthoritativeSupplyProjection(abilities, lifecycle ?? {});
+      dailyPlan = planPartyDailySupplies(inventory.partyInventory, {
+        count: projected.consumers.length, food: projected.foodPerLongRest, drink: projected.drinkPerLongRest,
+      }, inventory.additionalSupplyConsumption ?? 0, config?.config.longRestSupplies);
+      if (dailyPlan.error) return sendError(webSocket, "SUPPLIES_CONSUMPTION_REJECTED", dailyPlan.error);
+    }
+
     const snapshotsAllCharacters = isPartySettingsOperation(operation);
     const beforeAbilities = snapshotsAllCharacters ? structuredClone(abilities) : pick(abilities, touchedIds);
     const beforeHp = snapshotsAllCharacters ? structuredClone(hp) : pick(hp, touchedIds);
@@ -176,7 +195,7 @@ export class SessionActor extends EquipmentSessionActor {
     const beforeInventory = structuredClone(inventory);
 
     let result: ApplyResult | null = null;
-    try { result = applyInventoryOperation(operation, abilities, hp, conditions, inventory); }
+    try { result = applyInventoryOperation(operation, abilities, hp, conditions, inventory, dailyPlan); }
     catch { result = null; }
     if (!result || !result.changed) return sendError(webSocket, "INVENTORY_OPERATION_REJECTED", "The requested inventory operation is invalid for the current state.");
 
@@ -264,6 +283,7 @@ function applyInventoryOperation(
   hp: Record<string, SessionHpState>,
   conditions: Record<string, SessionConditionsState>,
   inventory: SharedInventoryState,
+  dailyPlan?: ReturnType<typeof planPartyDailySupplies>,
 ): ApplyResult {
   const changedCharacters = new Set<string>();
   const hpChanged = new Set<string>();
@@ -300,6 +320,13 @@ function applyInventoryOperation(
   };
 
   switch (operation.type) {
+    case "party.supplies.day.consume": {
+      if (!dailyPlan || dailyPlan.error || !dailyPlan.consumption.valid) return result(false);
+      inventory.partyInventory = dailyPlan.consumption.items;
+      inventory.revision += 1;
+      sharedChanged = true;
+      return result(true);
+    }
     case "character.inventory.item.add":
       return result(updateCharacter(operation.characterId, (c) => c.addInventoryItem(operation.item as Itemmable)));
     case "character.inventory.item.update":
@@ -716,7 +743,7 @@ function canPerform(
   inventory: SharedInventoryState,
 ): boolean {
   if (connection.role === "MASTER") return true;
-  if (operation.type === "conditional.loot.resolve") return false;
+  if (operation.type === "conditional.loot.resolve" || operation.type === "party.supplies.day.consume") return false;
   if (isPartySettingsOperation(operation)) return false;
 
   const partyAccessible = inventory.partyInventoryAccessible !== false;

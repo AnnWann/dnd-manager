@@ -1,3 +1,4 @@
+import { planPartyDailySupplies } from "../models/supplies/partyDailySupplies"
 import { useMemo, useState } from "react"
 import {
   PackageOpen,
@@ -137,14 +138,14 @@ export function PartyInventoryView() {
   const foodPerLongRest =
     supplySettings.enabled && supplySettings.food.enabled
       ? (
-          rawFoodPerLongRest
+          (supplySettings.useRaceMultipliers ? rawFoodPerLongRest : supplyConsumers.length)
           + standardConsumerCount
         ) * supplySettings.food.portionsPerStandardRest
       : 0
   const drinkPerLongRest =
     supplySettings.enabled && supplySettings.drink.enabled
       ? (
-          rawDrinkPerLongRest
+          (supplySettings.useRaceMultipliers ? rawDrinkPerLongRest : supplyConsumers.length)
           + standardConsumerCount
         ) * supplySettings.drink.portionsPerStandardRest
       : 0
@@ -166,6 +167,28 @@ export function PartyInventoryView() {
     : Number.POSITIVE_INFINITY
   const hasSupplyConsumers =
     supplyConsumers.length > 0 || additionalSupplyConsumption > 0
+
+  const dailyPlan = planPartyDailySupplies(partyInventory, {
+    count: supplyConsumers.length, food: rawFoodPerLongRest, drink: rawDrinkPerLongRest,
+  }, additionalSupplyConsumption, supplySettings)
+  const [dailyConsumptionNotice, setDailyConsumptionNotice] = useState("")
+  function consumeDailySupplies() {
+    if (!isMaster || dailyPlan.error) return
+    if (runtime) {
+      if (runtime.status !== "connected" || !runtime.inventoryState?.initialized) return
+      runtime.dispatchInventoryOperation({
+        type: "party.supplies.day.consume", characterId: "session", expectedRevision: runtime.inventoryState.revision,
+      })
+      return
+    }
+    const next = new Map(dailyPlan.consumption.items.map(item => [item.id, item]))
+    for (const item of partyInventory) {
+      const updated = next.get(item.id)
+      if (!updated) removePartyItem(item.id)
+      else if (JSON.stringify(item) !== JSON.stringify(updated)) updatePartyItem(item.id, () => updated)
+    }
+    setDailyConsumptionNotice(dailyPlan.enough ? "Suprimentos do dia consumidos." : "Suprimentos disponíveis consumidos. O estoque não cobriu todo o dia do grupo.")
+  }
 
   const totalWeight = partyInventory.reduce((total, item) => total + getItemStackWeightKg(item), 0)
   const hasCapacity = carryCapacity > 0
@@ -441,6 +464,16 @@ export function PartyInventoryView() {
         </CardHeader>
 
         <CardContent className="grid gap-4">
+          {isMaster && supplySettings.enabled ? <div className="grid gap-2">
+            <button type="button" onClick={consumeDailySupplies}
+              disabled={Boolean(dailyPlan.error) || Boolean(runtime && (runtime.status !== "connected" || !runtime.inventoryState?.initialized))}
+              className="justify-self-start rounded-xl bg-accent px-4 py-2 text-sm font-semibold text-white disabled:opacity-40">
+              Consumir suprimentos do dia
+            </button>
+            <p className="text-xs text-textMuted">Consome comida e bebida do inventário do grupo para todos os consumidores, incluindo os adicionais. Não aplica descanso.</p>
+            {dailyPlan.error ? <p className="text-xs text-textMuted">{dailyPlan.error}</p> : !dailyPlan.enough ? <p className="text-xs text-warning">Estoque insuficiente: será consumido apenas o que estiver disponível, conforme a regra da campanha.</p> : null}
+            {dailyConsumptionNotice ? <p role="status" className="text-xs text-textH">{dailyConsumptionNotice}</p> : null}
+          </div> : null}
           {canEditAdditionalSupplyConsumption && supplySettings.enabled ? (
             <div className="rounded-xl border border-border bg-bg-subtle p-3">
               <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
