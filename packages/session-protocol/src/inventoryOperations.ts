@@ -15,6 +15,7 @@ export type SessionInventoryOperation<TItem, TDestination, TTransfer, TEquipped>
   | { type: "party.item.add"; characterId: string; item: TItem }
   | { type: "party.item.update"; characterId: string; itemId: string; item: TItem }
   | { type: "party.item.remove"; characterId: string; itemId: string }
+  | { type: "party.supplies.day.consume"; characterId: "session"; expectedRevision: number }
   | InventorySettingsOperation
   | { type: "ground.item.add"; characterId: string; item: TItem }
   | { type: "ground.item.update"; characterId: string; itemId: string; item: TItem }

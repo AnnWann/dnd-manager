@@ -64,7 +64,7 @@ export async function reconcileSessionSupplyProjection(
   return { state: next, changed: true };
 }
 
-function buildAuthoritativeSupplyProjection(
+export function buildAuthoritativeSupplyProjection(
   abilities: Record<string, SessionAbilityState>,
   lifecycle: Record<string, SessionCharacterLifecycleState>,
 ): {
