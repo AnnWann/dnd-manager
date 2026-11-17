@@ -7,8 +7,9 @@ import { SessionActor } from "./session/AmmunitionSessionActor";
 export { SessionActor };
 
 const SESSION_CONNECT_ROUTE = /^\/session\/([^/]+)\/connect\/?$/;
-const SESSION_PROTOCOL_VERSION = 7;
+const SESSION_PROTOCOL_VERSION = 8;
 const SESSION_PROTOCOL_CAPABILITIES = [
+  "session.roll.adjust",
   "character.damageAffinities.set",
   "character.bootstrap.guard",
   "character.legacy.reconcile",

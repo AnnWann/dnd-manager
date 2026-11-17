@@ -1,4 +1,4 @@
-import { broadcastRollResult } from "./rollAdjustment";
+import { handleRollAdjustment, broadcastRollResult } from "./rollAdjustment";
 import { canControlCompanion, hasPersistentCompanionState } from "../../../../web/src/shared/session-runtime/companionRuntime";
 import type { HiddenSpellCommitment } from "../../../../../packages/session-protocol/src/hiddenSpellcasting";
 import { applyCriticalDamageRule } from "../../../../web/src/shared/session-runtime/criticalDamage";
@@ -249,6 +249,14 @@ export class SessionActor extends DurableObject<Env> {
             connection,
             parsed.operation as Parameters<typeof applyCharacterStateOperation>[1],
           );
+        }
+        break;
+      case "session.roll.adjust":
+        try {
+          const config = await readRuntimeConfig(this.ctx.storage);
+          await handleRollAdjustment(this.ctx.storage, this.activeSockets(), connection, parsed.request, config?.config.criticalDamage);
+        } catch (error) {
+          this.sendError(webSocket, "ROLL_ADJUST_FAILED", error instanceof Error ? error.message : "Não foi possível ajustar a rolagem.");
         }
         break;
       case "session.dice.roll":

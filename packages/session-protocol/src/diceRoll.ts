@@ -224,3 +224,18 @@ export type SessionRollAdjustmentRequest = {
   mode?: SessionDiceRollMode
   critical?: boolean
 }
+
+export function parseRollAdjustment(value: unknown): SessionRollAdjustmentRequest | null {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null
+  const r = value as Record<string, unknown>
+  if (typeof r.rollId !== "string" || !r.rollId.trim() || r.rollId.length > 200) return null
+  if (typeof r.target !== "string" || !["dice", "attack", "primary", "damage"].includes(r.target)) return null
+  for (const field of ["instanceIndex", "damageIndex"]) {
+    if (r[field] !== undefined && (!Number.isInteger(r[field]) || Number(r[field]) < 0 || Number(r[field]) > 100)) return null
+  }
+  if (r.target === "damage") {
+    if (typeof r.critical !== "boolean" || r.mode !== undefined) return null
+  } else if (typeof r.mode !== "string" || !["normal", "advantage", "disadvantage"].includes(r.mode) || r.critical !== undefined || r.damageIndex !== undefined) return null
+  return { rollId: r.rollId, target: r.target, mode: r.mode, critical: r.critical,
+    instanceIndex: r.instanceIndex, damageIndex: r.damageIndex } as SessionRollAdjustmentRequest
+}
