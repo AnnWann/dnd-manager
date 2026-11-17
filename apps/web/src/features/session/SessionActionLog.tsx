@@ -793,6 +793,12 @@ export function ActionRollEntry({
           />
         ))}
 
+        <TotalDamage damages={[
+          ...(damage ? [damage] : []),
+          ...(roll.damages ?? []),
+          ...(roll.instances?.flatMap(instance => instance.damages ?? []) ?? []),
+        ]} />
+
         {roll.spellInformation?.length ? <SpellInformation entries={roll.spellInformation} /> : null}
 
         {roll.description ? (
@@ -875,6 +881,16 @@ function ResolvedAttackBlock({
       <RollResultValue className={`text-2xl font-black ${attackClass}`} adjustment={adjustment} onAdjust={onAdjust}>{attack.total}</RollResultValue>
     </div>
   )
+}
+
+function TotalDamage({ damages }: { damages: { total: number; damageType?: string }[] }) {
+  const components = damages.filter(damage => damage.damageType !== "healing")
+  if (!components.length) return null
+  const total = components.reduce((sum, damage) => sum + damage.total, 0)
+  return <div className="flex items-center justify-between gap-3 rounded-lg border border-accentBorder bg-accentBg px-3 py-2">
+    <span className="text-[11px] font-semibold text-textH">Dano total</span>
+    <span className="text-2xl font-black text-textH">{total}</span>
+  </div>
 }
 
 function ResolvedDamageBlock({
@@ -1036,6 +1052,11 @@ export function DiceRollEntry({
       {roll.damages?.length ? <div className="mt-2 grid gap-2">
         {roll.damages.map((damage, index) => <ResolvedDamageBlock key={`${damage.label ?? "rider"}:${index}`} damage={damage} onAdjust={onAdjust} adjustment={canAdjust && damage.damageType !== "healing" ? { rollId: roll.id, target: "damage", damageIndex: index + (roll.kind === "damage" ? 1 : 0), critical: !damage.critical } : undefined} />)}
       </div> : null}
+
+      <TotalDamage damages={[
+        ...(roll.kind === "damage" ? [roll] : []),
+        ...(roll.damages ?? []),
+      ]} />
 
       <div className="mt-2 flex items-center justify-between gap-2 border-t border-border pt-2 text-[10px] text-textMuted">
         <span className="truncate">
