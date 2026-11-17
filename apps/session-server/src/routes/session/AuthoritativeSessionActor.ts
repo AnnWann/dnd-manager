@@ -1,4 +1,3 @@
-import { handleRollAdjustment, parseRollAdjustment } from "./rollAdjustment";
 import { SessionActor as ComposedSessionActor } from "./ComposedSessionActor";
 import { SessionActor as MissionSessionActor, MISSIONS_SHARED_SCOPE, MISSIONS_STATE_KEY, readMissionState } from "../missions/MissionSessionActor";
 import { parseMissionClientMessage, type SessionMissionState } from "../missions/missionProtocol";
@@ -120,20 +119,6 @@ export class SessionActor extends ComposedSessionActor {
     const connection = readConnection(webSocket);
     if (!connection) {
       webSocket.close(1011, "Missing connection attachment");
-      return;
-    }
-
-    let adjustmentMessage: Record<string, unknown> | null = null;
-    try { adjustmentMessage = JSON.parse(raw); } catch {}
-    if (adjustmentMessage?.type === "session.roll.adjust") {
-      const request = parseRollAdjustment(adjustmentMessage.request);
-      if (!request) { sendError(webSocket, "ROLL_ADJUST_INVALID", "Ajuste de rolagem inválido."); return; }
-      try {
-        const config = await readRuntimeConfig(this.ctx.storage);
-        await handleRollAdjustment(this.ctx.storage, this.ctx.getWebSockets(), connection, request, config?.config.criticalDamage);
-      } catch (error) {
-        sendError(webSocket, "ROLL_ADJUST_FAILED", error instanceof Error ? error.message : "Não foi possível ajustar a rolagem.");
-      }
       return;
     }
 

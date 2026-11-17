@@ -32,20 +32,7 @@ export async function broadcastRollResult(storage: DurableObjectStorage, sockets
   broadcastVisibilityFiltered(sockets, message)
 }
 
-export function parseRollAdjustment(value: unknown): SessionRollAdjustmentRequest | null {
-  if (!value || typeof value !== "object" || Array.isArray(value)) return null
-  const r = value as Record<string, unknown>
-  if (typeof r.rollId !== "string" || !r.rollId.trim() || r.rollId.length > 200) return null
-  if (!["dice", "attack", "primary", "damage"].includes(String(r.target))) return null
-  for (const field of ["instanceIndex", "damageIndex"]) {
-    if (r[field] !== undefined && (!Number.isInteger(r[field]) || Number(r[field]) < 0 || Number(r[field]) > 100)) return null
-  }
-  if (r.target === "damage") {
-    if (typeof r.critical !== "boolean" || r.mode !== undefined) return null
-  } else if (!["normal", "advantage", "disadvantage"].includes(String(r.mode)) || r.critical !== undefined || r.damageIndex !== undefined) return null
-  return { rollId: r.rollId, target: r.target, mode: r.mode, critical: r.critical,
-    instanceIndex: r.instanceIndex, damageIndex: r.damageIndex } as SessionRollAdjustmentRequest
-}
+export { parseRollAdjustment } from "../../../../../packages/session-protocol/src/diceRoll"
 
 function randomDie(sides: number): number {
   const buffer = new Uint32Array(1), limit = 0x100000000 - (0x100000000 % sides)

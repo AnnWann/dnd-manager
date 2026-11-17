@@ -1,3 +1,4 @@
+import { parseRollAdjustment } from "../../../../../packages/session-protocol/src/diceRoll";
 import type { SessionHpOperation as SharedSessionHpOperation, SessionRestOperation as SharedSessionRestOperation, SessionAuthoritativeOperation as SharedSessionAuthoritativeOperation } from "../../../../../packages/session-protocol/src/sessionCore"
 import type { SessionDieSides as SharedSessionDieSides, SessionHitDicePool as SharedSessionHitDicePool, SessionHitDiceState as SharedSessionHitDiceState, SessionAttribute as SharedSessionAttribute, SessionAttributesState as SharedSessionAttributesState, SessionSavingThrowsState as SharedSessionSavingThrowsState, SessionSkill as SharedSessionSkill, SessionSkillProficiency as SharedSessionSkillProficiency, SessionSkillsState as SharedSessionSkillsState, SessionStatsState as SharedSessionStatsState, SessionConditionDuration as SharedSessionConditionDuration, SessionCondition as SharedSessionCondition, SessionConditionsState as SharedSessionConditionsState, SessionConditionSeed as SharedSessionConditionSeed, SessionHpState as SharedSessionHpState, SessionHpSeed as SharedSessionHpSeed, SessionHitDiceOperation as SharedSessionHitDiceOperation, SessionCalculatedStatOperation as SharedSessionCalculatedStatOperation, SessionSimpleStatOperation as SharedSessionSimpleStatOperation, SessionStatOperation as SharedSessionStatOperation, SessionAttributeOperation as SharedSessionAttributeOperation, SessionSavingThrowOperation as SharedSessionSavingThrowOperation, SessionSkillOperation as SharedSessionSkillOperation, SessionConditionOperation as SharedSessionConditionOperation, SessionConcentrationOperation as SharedSessionConcentrationOperation, SessionLoggedOperation as SharedSessionLoggedOperation } from "../../../../../packages/session-protocol/src/sessionCore"
 import { routeForSheetOperation, type CharacterSheetRoute } from "../characters/sheet";
@@ -196,6 +197,10 @@ export function parseClientSessionMessage(raw: string): ClientSessionMessage | n
     }
     case "session.log.undo":
       return nonEmpty(value.logId) ? { type: value.type, logId: value.logId } : null;
+    case "session.roll.adjust": {
+      const request = parseRollAdjustment(value.request);
+      return request ? { type: value.type, request } : null;
+    }
     case "session.dice.roll":
       return isDiceRollRequest(value.request)
         ? { type: value.type, request: value.request }

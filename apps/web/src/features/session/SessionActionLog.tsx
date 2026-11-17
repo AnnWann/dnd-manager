@@ -1,4 +1,4 @@
-import { RollAdjustmentControls } from "./RollAdjustmentControls"
+import { RollResultValue, nextRollMode, type RollValueAdjustment } from "./RollResultValue"
 import { SpellInformation } from "../characters/magic/SpellInformation"
 import { getProficiencyDisplayName } from "../../models/characters/applyManualProficiencies"
 import type { HiddenSpellPublicEntry } from "../../../../../packages/session-protocol/src/hiddenSpellcasting"
@@ -10,7 +10,7 @@ import { Select } from "../../components/ui/Select"
 import { useCharacterContext } from "../../contexts/characterContext"
 import { useInitiativeRollSelection } from "../initiative/initiativeRollSelection"
 import { ACTION_ROLL_RESULT_EVENT, DICE_ROLL_RESULT_EVENT, getRollVisibility, requestManualDiceRoll, setRollVisibility } from "../../lib/diceRoller"
-import type { SessionActionRollResult, SessionDiceRollResult } from "../../shared/session-runtime/diceRollProtocol"
+import type { SessionRollAdjustmentRequest, SessionDiceRollMode, SessionActionRollResult, SessionDiceRollResult } from "../../shared/session-runtime/diceRollProtocol"
 import { DAMAGE_TYPES, damageTypeLabel, type DamageType } from "../../models/combat/Damage"
 import { CREATURE_SKILL_OPTIONS, CREATURE_ATTRIBUTE_LABELS } from "../../models/creatures/CreatureRolls"
 import type {
@@ -675,11 +675,16 @@ export function ActionRollEntry({
 }: {
   roll: SessionActionRollResult
   canAdjust?: boolean
-  onAdjust?: (request: import("../../shared/session-runtime/diceRollProtocol").SessionRollAdjustmentRequest) => void
+  onAdjust?: (request: SessionRollAdjustmentRequest) => void
   characterName?: string
 }) {
   const attack = roll.attack
   const damage = roll.damage
+  const adjustMode = (target: "attack" | "primary", mode: SessionDiceRollMode, instanceIndex?: number) =>
+    canAdjust ? { rollId: roll.id, target, mode: nextRollMode(mode), instanceIndex } : undefined
+  const adjustDamage = (critical: boolean, damageIndex: number, instanceIndex?: number) =>
+    canAdjust ? { rollId: roll.id, target: "damage" as const, critical: !critical, damageIndex, instanceIndex } : undefined
+
   return (
     <article className="overflow-hidden rounded-xl border border-accentBorder bg-bg">
       <header className="border-b border-border bg-accentBg px-3 py-2.5">
@@ -720,22 +725,24 @@ export function ActionRollEntry({
                 <div className="text-[10px] font-semibold uppercase tracking-wide text-textMuted">
                   {instance.label}
                 </div>
-                {instance.attack ? <ResolvedAttackBlock attack={instance.attack} /> : null}
+                {instance.attack ? <ResolvedAttackBlock attack={instance.attack} adjustment={adjustMode("attack", instance.attack.mode, index)} onAdjust={onAdjust} /> : null}
                 {instance.damages?.map((entry, damageIndex) => (
                   <ResolvedDamageBlock
                     key={`${entry.label ?? "damage"}:${damageIndex}`}
                     damage={entry}
+                    adjustment={entry.damageType !== "healing" ? adjustDamage(entry.critical, damageIndex, index) : undefined}
+                    onAdjust={onAdjust}
                   />
                 ))}
               </div>
             ))}
           </div>
         ) : attack ? (
-          <ResolvedAttackBlock attack={attack} />
+          <ResolvedAttackBlock attack={attack} adjustment={adjustMode("attack", attack.mode)} onAdjust={onAdjust} />
         ) : null}
 
         {roll.primary ? (
-          <ResolvedPrimaryRollBlock primary={roll.primary} />
+          <ResolvedPrimaryRollBlock primary={roll.primary} adjustment={roll.primary.natural !== undefined && roll.primary.groups.length === 1 && roll.primary.groups[0].sides === 20 ? adjustMode("primary", roll.primary.mode) : undefined} onAdjust={onAdjust} />
         ) : null}
 
         {roll.save ? (
@@ -770,12 +777,14 @@ export function ActionRollEntry({
           </div>
         ) : null}
 
-        {damage ? <ResolvedDamageBlock damage={damage} /> : null}
+        {damage ? <ResolvedDamageBlock damage={damage} adjustment={damage.damageType !== "healing" ? adjustDamage(damage.critical, 0) : undefined} onAdjust={onAdjust} /> : null}
 
         {roll.damages?.map((entry, index) => (
           <ResolvedDamageBlock
             key={`${entry.label ?? "damage"}:${index}`}
             damage={entry}
+            adjustment={entry.damageType !== "healing" ? adjustDamage(entry.critical, index + (damage ? 1 : 0)) : undefined}
+            onAdjust={onAdjust}
             halfOnSave={
               (roll.save?.onSuccess === "half" || roll.check?.onSuccess === "half")
                 ? Math.floor(entry.total / 2)
@@ -783,8 +792,6 @@ export function ActionRollEntry({
             }
           />
         ))}
-
-        {canAdjust ? <RollAdjustmentControls roll={roll} onAdjust={onAdjust} /> : null}
 
         {roll.spellInformation?.length ? <SpellInformation entries={roll.spellInformation} /> : null}
 
@@ -811,10 +818,11 @@ export function ActionRollEntry({
 }
 
 function ResolvedPrimaryRollBlock({
+  adjustment, onAdjust,
   primary,
 }: {
   primary: NonNullable<SessionActionRollResult["primary"]>
-}) {
+} & RollValueAdjustment) {
   const naturalClass = primary.natural === 20
     ? "text-success"
     : primary.natural === 1
@@ -837,18 +845,19 @@ function ResolvedPrimaryRollBlock({
           {formatResolvedPrimary(primary)}
         </div>
       </div>
-      <div className={`text-2xl font-black ${naturalClass}`}>
+      <RollResultValue className={`text-2xl font-black ${naturalClass}`} adjustment={adjustment} onAdjust={onAdjust}>
         {primary.total}
-      </div>
+      </RollResultValue>
     </div>
   )
 }
 
 function ResolvedAttackBlock({
+  adjustment, onAdjust,
   attack,
 }: {
   attack: NonNullable<SessionActionRollResult["attack"]>
-}) {
+} & RollValueAdjustment) {
   const attackClass = attack.natural === 20
     ? "text-success"
     : attack.natural === 1
@@ -863,18 +872,19 @@ function ResolvedAttackBlock({
         </div>
         <div className="mt-0.5 text-[10px] text-textMuted">{formatResolvedD20(attack)}</div>
       </div>
-      <div className={`text-2xl font-black ${attackClass}`}>{attack.total}</div>
+      <RollResultValue className={`text-2xl font-black ${attackClass}`} adjustment={adjustment} onAdjust={onAdjust}>{attack.total}</RollResultValue>
     </div>
   )
 }
 
 function ResolvedDamageBlock({
+  adjustment, onAdjust,
   damage,
   halfOnSave,
 }: {
   damage: NonNullable<SessionActionRollResult["damage"]>
   halfOnSave?: number
-}) {
+} & RollValueAdjustment) {
   const label = damage.label?.trim() || (damage.critical ? "Dano crítico" : "Dano")
   const rawType = damage.damageType?.trim()
   const type = rawType
@@ -895,9 +905,9 @@ function ResolvedDamageBlock({
           </div>
         ) : null}
       </div>
-      <div className={damage.critical ? "text-2xl font-black text-success" : "text-2xl font-black text-textH"}>
+      <RollResultValue className={damage.critical ? "text-2xl font-black text-success" : "text-2xl font-black text-textH"} adjustment={adjustment} onAdjust={onAdjust}>
         {damage.total}
-      </div>
+      </RollResultValue>
     </div>
   )
 }
@@ -985,7 +995,7 @@ export function DiceRollEntry({
 }: {
   roll: SessionDiceRollResult
   canAdjust?: boolean
-  onAdjust?: (request: import("../../shared/session-runtime/diceRollProtocol").SessionRollAdjustmentRequest) => void
+  onAdjust?: (request: SessionRollAdjustmentRequest) => void
   characterName?: string
 }) {
   const naturalClass = roll.natural === 20
@@ -1010,9 +1020,13 @@ export function DiceRollEntry({
             {diceModeLabel(roll)}{roll.critical ? " · Crítico" : ""}
           </div>
         </div>
-        <div className={`shrink-0 text-2xl font-black ${naturalClass}`}>
+        <RollResultValue className={`shrink-0 text-2xl font-black ${naturalClass}`} onAdjust={onAdjust}
+          adjustment={!canAdjust ? undefined : roll.kind === "damage" && roll.damageType !== "healing"
+            ? { rollId: roll.id, target: "damage", damageIndex: 0, critical: !roll.critical }
+            : roll.natural !== undefined && roll.groups.length === 1 && roll.groups[0].sides === 20
+              ? { rollId: roll.id, target: "dice", mode: nextRollMode(roll.mode) } : undefined}>
           {roll.total}
-        </div>
+        </RollResultValue>
       </div>
 
       <div className="mt-1 text-[10px] text-textMuted">
@@ -1020,10 +1034,9 @@ export function DiceRollEntry({
         {roll.damageType ? ` · ${DAMAGE_TYPES.includes(roll.damageType as DamageType) ? damageTypeLabel(roll.damageType as DamageType) : roll.damageType}` : ""}
       </div>
       {roll.damages?.length ? <div className="mt-2 grid gap-2">
-        {roll.damages.map((damage, index) => <ResolvedDamageBlock key={`${damage.label ?? "rider"}:${index}`} damage={damage} />)}
+        {roll.damages.map((damage, index) => <ResolvedDamageBlock key={`${damage.label ?? "rider"}:${index}`} damage={damage} onAdjust={onAdjust} adjustment={canAdjust && damage.damageType !== "healing" ? { rollId: roll.id, target: "damage", damageIndex: index + (roll.kind === "damage" ? 1 : 0), critical: !damage.critical } : undefined} />)}
       </div> : null}
 
-      {canAdjust ? <RollAdjustmentControls roll={roll} onAdjust={onAdjust} /> : null}
       <div className="mt-2 flex items-center justify-between gap-2 border-t border-border pt-2 text-[10px] text-textMuted">
         <span className="truncate">
           {characterName || (roll.kind === "manual" && !roll.characterId ? "Sem identificador" : "Personagem")}
