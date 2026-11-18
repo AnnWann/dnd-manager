@@ -12,10 +12,12 @@ export type SessionInventoryOperation<TItem, TDestination, TTransfer, TEquipped>
   | { type: "character.inventory.attunement.toggle"; characterId: string; itemId: string }
   | { type: "character.ammunition.spend"; characterId: string; weaponId: string; ammunitionKey: string; ammunitionName: string; quantity: number }
   | { type: "inventory.item.transfer"; characterId: string; request: TTransfer }
-  | { type: "party.item.add"; characterId: string; item: TItem }
-  | { type: "party.item.update"; characterId: string; itemId: string; item: TItem }
-  | { type: "party.item.remove"; characterId: string; itemId: string }
+  | { type: "party.item.add"; characterId: string; depotId?: string; item: TItem }
+  | { type: "party.item.update"; characterId: string; depotId?: string; itemId: string; item: TItem }
+  | { type: "party.item.remove"; characterId: string; depotId?: string; itemId: string }
   | { type: "party.supplies.day.consume"; characterId: "session"; expectedRevision: number }
+  | { type: "party.depot.create"; characterId: "session"; depotId: string; name: string }
+  | { type: "party.depot.update"; characterId: "session"; depotId: string; patch: { name?: string; description?: string; accessible?: boolean; carryCapacity?: number; useForDailySupplies?: boolean } }
   | InventorySettingsOperation
   | { type: "ground.item.add"; characterId: string; item: TItem }
   | { type: "ground.item.update"; characterId: string; itemId: string; item: TItem }

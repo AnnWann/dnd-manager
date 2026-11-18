@@ -1,3 +1,4 @@
+import { getPartyDepots, DEFAULT_PARTY_DEPOT_ID, type PartyDepotState } from "../models/items/PartyDepot"
 import {
   createContext,
   useContext,
@@ -63,9 +64,12 @@ export type { InventoryLocation } from "../models/game/GameOperation"
 export type TransferItemRequest = TransferItemOperationRequest
 
 export type CharacterContextValue = {
+  isMaster?: boolean
   activeCharacter?: CharacterTemplate
   visibleCharacters: CharacterTemplate[]
   transferCharacters: CharacterTemplate[]
+  partyDepotState?: PartyDepotState
+  updatePartyDepotState?: (updater: (state: PartyDepotState) => PartyDepotState) => void
   partyInventory: Itemmable[]
   groundInventory: Itemmable[]
   operationLog: GameOperationRecord[]
@@ -557,6 +561,11 @@ function CharacterProviderInner({ children, appState, setAppState, userRole, use
   function transferItem(request: TransferItemRequest) {
     if (locationKey(request.from) === locationKey(request.to)) return
     setAppState((previous) => {
+      if (userRole !== "master") {
+        for (const location of [request.from, request.to]) {
+          if (location.type === "party" && !getPartyDepots(previous).some(depot => depot.id === (location.depotId || DEFAULT_PARTY_DEPOT_ID) && depot.accessible)) return previous
+        }
+      }
       const characterById = new Map(previous.characters.map((rawCharacter) => [rawCharacter.id, CharacterTemplate.fromJSON(rawCharacter)]))
       if (request.from.type === "character" && !canUseCharacterAsSource(characterById.get(request.from.characterId), userRole, normalizedUserKey)) return previous
       if (request.to.type === "character" && !canUseCharacterAsTarget(characterById.get(request.to.characterId), userRole, normalizedUserKey)) return previous
@@ -569,6 +578,9 @@ function CharacterProviderInner({ children, appState, setAppState, userRole, use
   return (
     <CharacterContext.Provider value={{
       activeCharacter, visibleCharacters, transferCharacters,
+      isMaster: userRole === "master",
+      partyDepotState: appState,
+      updatePartyDepotState: updater => setAppState(previous => ({ ...previous, ...updater({ ...previous }) })),
       partyInventory: appState.partyInventory ?? [], groundInventory: appState.groundInventory ?? [], operationLog,
       dispatchGameOperation, dispatchStatOperation, dispatchAttributeOperation, dispatchSavingThrowOperation, dispatchSkillOperation, dispatchConditionOperation,
       updateCharacter, updateCharacterDomain,
@@ -620,7 +632,7 @@ function isAuthoritativeHpOperation(operation: GameOperation): operation is Extr
 }
 
 function locationKey(location: InventoryLocation): string {
-  if (location.type === "party") return "party"
+  if (location.type === "party") return `party:${location.depotId || DEFAULT_PARTY_DEPOT_ID}`
   if (location.type === "ground") return "ground"
   return `character:${location.characterId}`
 }
@@ -644,3 +656,5 @@ export function useCharacterContext() {
   if (!context) throw new Error("useCharacterContext must be used inside CharacterProvider")
   return context
 }
+
+export function useOptionalCharacterContext() { return useContext(CharacterContext) }

@@ -1287,6 +1287,8 @@ function describeSessionOperation(
     case "character.inventory.currenciesBag.set": return `${characterName} ${operation.insideBagOfHolding ? "guardou" : "retirou"} as moedas da Bolsa Mágica.`
     case "character.inventory.attunement.toggle": return `${characterName} alterou a sintonia de um item.`
     case "inventory.item.transfer": return `Transferiu ${operation.request.quantity}× item de ${locationLabel(operation.request.from, characterNames)} para ${locationLabel(operation.request.to, characterNames)}.`
+    case "party.depot.create": return `Criou o depósito “${operation.name}”.`
+    case "party.depot.update": return "Atualizou as configurações de um depósito do grupo."
     case "party.supplies.day.consume": return "Consumiu os suprimentos de um dia de todo o grupo.";
     case "party.item.add": return `Adicionou um item ao inventário do grupo.`
     case "party.item.update": return `Atualizou um item do inventário do grupo.`

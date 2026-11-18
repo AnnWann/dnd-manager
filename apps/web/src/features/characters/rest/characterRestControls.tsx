@@ -1,3 +1,5 @@
+import { getPartyDepots, getDailyDepotSupplies } from "../../../models/items/PartyDepot"
+import { useOptionalCharacterContext } from "../../../contexts/characterContext"
 import {
   useEffect,
   useMemo,
@@ -87,6 +89,7 @@ export function CharacterRestControls({
   completeLongRest,
 }: Props) {
   const runtime = useOptionalSessionRuntime()
+  const localCharacters = useOptionalCharacterContext()
   const { inventoryAccessible: localPartyInventoryAccessible } =
     usePartyInventorySettings()
   const [shortRestOpen, setShortRestOpen] = useState(false)
@@ -96,12 +99,10 @@ export function CharacterRestControls({
   const longRestSupplySettings = normalizeLongRestSupplySettings(
     runtime?.runtimeConfigSnapshot?.config.longRestSupplies,
   )
-  const partyInventoryAccessible =
-    runtime?.inventoryState?.partyInventoryAccessible
-    ?? localPartyInventoryAccessible
-  const longRestInventory = partyInventoryAccessible
-    ? partyInventory
-    : character.get("inventory")
+  const supplyState = useMemo(() => runtime?.inventoryState ?? localCharacters?.partyDepotState ?? { partyInventory, partyInventoryAccessible: localPartyInventoryAccessible }, [runtime?.inventoryState, localCharacters?.partyDepotState, partyInventory, localPartyInventoryAccessible])
+  const partyInventoryAccessible = getPartyDepots(supplyState).some(depot => depot.accessible && depot.useForDailySupplies)
+  const sharedRestSupplies = useMemo(() => getDailyDepotSupplies(supplyState), [supplyState])
+  const longRestInventory = partyInventoryAccessible ? sharedRestSupplies : character.get("inventory")
 
   function completeShortRest(
     healing: number,

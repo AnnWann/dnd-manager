@@ -1,3 +1,6 @@
+import { getPartyDepots, DEFAULT_PARTY_DEPOT_ID, type PartyDepot } from "../../../models/items/PartyDepot"
+import { useOptionalSessionRuntime } from "../../session-runtime/useSessionRuntime"
+import { useOptionalCharacterContext } from "../../../contexts/characterContext"
 import { InventoryTransferForm } from "../../../../../../packages/game-ui/src/InventoryTransferForm"
 import { useEffect, useMemo, useState } from "react"
 
@@ -9,6 +12,8 @@ import type { CharacterTemplate } from "../../../models/characters/CharacterTemp
 import type { Itemmable } from "../../../models/items/item"
 
 type Props = {
+  depots?: PartyDepot[]
+  isMaster?: boolean
   open: boolean
   item: Itemmable | null
   from: InventoryLocation
@@ -19,6 +24,7 @@ type Props = {
 }
 
 export function TransferItemDialog({
+  depots: suppliedDepots, isMaster: masterOverride,
   open,
   item,
   from,
@@ -27,6 +33,10 @@ export function TransferItemDialog({
   onClose,
   onTransfer,
 }: Props) {
+  const runtime = useOptionalSessionRuntime()
+  const local = useOptionalCharacterContext()
+  const depots = useMemo(() => suppliedDepots ?? getPartyDepots(runtime?.inventoryState ?? local?.partyDepotState ?? {}), [suppliedDepots, runtime?.inventoryState, local?.partyDepotState])
+  const isMaster = masterOverride ?? (runtime ? runtime.role === "MASTER" : local?.isMaster === true)
   const destinations = useMemo(() => {
     const options: Array<{
       key: string
@@ -34,11 +44,13 @@ export function TransferItemDialog({
       location: InventoryLocation
     }> = []
 
-    if (from.type !== "party") {
+    for (const depot of depots) {
+      if (!isMaster && !depot.accessible) continue
+      if (from.type === "party" && (from.depotId || DEFAULT_PARTY_DEPOT_ID) === depot.id) continue
       options.push({
-        key: "party",
-        label: "Inventário do grupo",
-        location: { type: "party" },
+        key: "party:" + depot.id,
+        label: depot.name + (!depot.accessible ? " · Indisponível" : ""),
+        location: { type: "party", depotId: depot.id },
       })
     }
 
@@ -79,7 +91,7 @@ export function TransferItemDialog({
     }
 
     return options
-  }, [canViewCharacterDetails, characters, from])
+  }, [canViewCharacterDetails, characters, from, depots, isMaster])
 
   const [destinationKey, setDestinationKey] = useState("")
   const [quantity, setQuantity] = useState(1)

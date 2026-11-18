@@ -9,6 +9,7 @@ export { SessionActor };
 const SESSION_CONNECT_ROUTE = /^\/session\/([^/]+)\/connect\/?$/;
 const SESSION_PROTOCOL_VERSION = 8;
 const SESSION_PROTOCOL_CAPABILITIES = [
+  "party.depots",
   "session.roll.adjust",
   "character.damageAffinities.set",
   "character.bootstrap.guard",

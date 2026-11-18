@@ -1,3 +1,4 @@
+import { getPartyDepots, DEFAULT_PARTY_DEPOT_ID, getDailyDepotSupplies, applyDailyDepotSupplies } from "../items/PartyDepot"
 import type { AppStateV1 } from "../../lib/remoteState"
 import { normalizeItemText } from "../../lib/textNormalization"
 import {
@@ -257,9 +258,9 @@ function completeLongRest<TState extends AppStateV1>(
   const requiredSupply = getRequiredSupplyForRace(
     restedCharacter.get("sheet").race,
   )
-  const useSharedInventory = state.partyInventoryAccessible !== false
+  const useSharedInventory = getPartyDepots(state).some(depot => depot.accessible && depot.useForDailySupplies)
   const sourceInventory = useSharedInventory
-    ? state.partyInventory ?? []
+    ? getDailyDepotSupplies(state)
     : restedCharacter.get("inventory")
   const consumption = consumeSelectedSupplies(
     sourceInventory,
@@ -277,8 +278,10 @@ function completeLongRest<TState extends AppStateV1>(
         consumption.items.map((item) => touchItem(item, meta)),
       )
 
+  const supplyState = { ...state }
+  if (useSharedInventory) applyDailyDepotSupplies(supplyState, consumption.items.map(item => touchItem(item, meta)))
   return {
-    ...state,
+    ...supplyState,
     characters: state.characters.map((rawCharacter) => {
       if (rawCharacter.id !== characterId) return rawCharacter
 
@@ -289,9 +292,6 @@ function completeLongRest<TState extends AppStateV1>(
         meta,
       ).toJSON()
     }),
-    partyInventory: useSharedInventory
-      ? consumption.items.map((item) => touchItem(item, meta))
-      : state.partyInventory ?? [],
   }
 }
 
@@ -303,6 +303,7 @@ function transferItem<TState extends AppStateV1>(
   if (locationKey(request.from) === locationKey(request.to)) return state
 
   const partyInventory = [...(state.partyInventory ?? [])]
+  const depotInventories = new Map(getPartyDepots(state).filter(depot => depot.id !== DEFAULT_PARTY_DEPOT_ID).map(depot => [depot.id, [...depot.items]]))
   const groundInventory = [...(state.groundInventory ?? [])]
   const inventoryByCharacterId = new Map(
     state.characters.map((rawCharacter) => [
@@ -316,12 +317,14 @@ function transferItem<TState extends AppStateV1>(
     partyInventory,
     groundInventory,
     inventoryByCharacterId,
+    depotInventories,
   )
   const destinationInventory = getLocationInventory(
     request.to,
     partyInventory,
     groundInventory,
     inventoryByCharacterId,
+    depotInventories,
   )
 
   if (!sourceInventory || !destinationInventory) return state
@@ -402,6 +405,7 @@ function transferItem<TState extends AppStateV1>(
   return {
     ...state,
     partyInventory,
+    partyDepots: state.partyDepots?.map(depot => depot.id === DEFAULT_PARTY_DEPOT_ID ? depot : { ...depot, items: depotInventories.get(depot.id) ?? depot.items }),
     groundInventory,
     characters: state.characters.map((rawCharacter) => ({
       ...rawCharacter,
@@ -588,7 +592,7 @@ function getTouchedEntityKeys(operation: GameOperation): string[] {
 }
 
 function locationKey(location: InventoryLocation): string {
-  if (location.type === "party") return "party"
+  if (location.type === "party") return `party:${location.depotId || DEFAULT_PARTY_DEPOT_ID}`
   if (location.type === "ground") return "ground"
   return `character:${location.characterId}`
 }
@@ -598,8 +602,9 @@ function getLocationInventory(
   partyInventory: Itemmable[],
   groundInventory: Itemmable[],
   inventoryByCharacterId: Map<string, Itemmable[]>,
+  depotInventories: Map<string, Itemmable[]>,
 ): Itemmable[] | undefined {
-  if (location.type === "party") return partyInventory
+  if (location.type === "party") return location.depotId && location.depotId !== DEFAULT_PARTY_DEPOT_ID ? depotInventories.get(location.depotId) : partyInventory
   if (location.type === "ground") return groundInventory
   return inventoryByCharacterId.get(location.characterId)
 }

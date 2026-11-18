@@ -551,3 +551,8 @@ function normalizeName(value: string): string {
     .trim()
     .toLowerCase()
 }
+
+/** Preserve legacy ration identity before projecting an item into a combined stock. */
+export function canonicalizeSupplyItem(item: Itemmable): Itemmable {
+  return isSupplyItem(item) ? withCanonicalSupplyMetadata(item) : item
+}
