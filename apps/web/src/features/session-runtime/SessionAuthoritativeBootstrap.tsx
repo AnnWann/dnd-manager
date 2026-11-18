@@ -31,7 +31,7 @@ type LegacyImportState = "checking" | "legacy" | "regular"
  */
 export function SessionAuthoritativeBootstrap({ campaignId }: { campaignId: string }) {
   const runtime = useOptionalSessionRuntime()
-  const { visibleCharacters, partyInventory, groundInventory } = useCharacterContext()
+  const { visibleCharacters, partyInventory, groundInventory, partyDepotState } = useCharacterContext()
   const [legacyImportState, setLegacyImportState] = useState<LegacyImportState>("checking")
   const attemptedReconciliations = useRef(new Set<string>())
   const inventoryBootstrapSent = useRef(false)
@@ -49,10 +49,11 @@ export function SessionAuthoritativeBootstrap({ campaignId }: { campaignId: stri
     if (inventoryBootstrapSent.current) return
 
     inventoryBootstrapSent.current = true
-    const sent = runtime.initializeInventory(partyInventory, groundInventory)
+    const sent = runtime.initializeInventory(partyInventory, groundInventory, { partyDepots: partyDepotState?.partyDepots, carryCapacity: partyDepotState?.partyCarryCapacity, partyInventoryAccessible: partyDepotState?.partyInventoryAccessible })
     if (!sent) inventoryBootstrapSent.current = false
   }, [
     groundInventory,
+    partyDepotState?.partyDepots,
     partyInventory,
     runtime?.initializeInventory,
     runtime?.inventoryState?.initialized,

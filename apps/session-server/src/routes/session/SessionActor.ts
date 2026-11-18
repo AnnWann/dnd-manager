@@ -1,3 +1,4 @@
+import { getPartyDepots, getDailyDepotSupplies, applyDailyDepotSupplies, type PartyDepot } from "../../../../web/src/models/items/PartyDepot";
 import { handleRollAdjustment, broadcastRollResult } from "./rollAdjustment";
 import { canControlCompanion, hasPersistentCompanionState } from "../../../../web/src/shared/session-runtime/companionRuntime";
 import type { HiddenSpellCommitment } from "../../../../../packages/session-protocol/src/hiddenSpellcasting";
@@ -156,7 +157,9 @@ type StoredSessionHpState = SessionHpState & {
 type SharedInventoryState = {
   initialized: boolean;
   revision: number;
-  partyInventory: unknown[];
+  partyInventory: Itemmable[];
+  partyDepots?: PartyDepot[];
+  carryCapacity?: number;
   groundInventory: unknown[];
   partyInventoryAccessible?: boolean;
 };
@@ -1503,9 +1506,9 @@ export class SessionActor extends DurableObject<Env> {
         runtimeConfig?.config.longRestSupplies,
       );
       const useSharedInventory =
-        inventory.partyInventoryAccessible !== false;
+        getPartyDepots(inventory).some(depot => depot.accessible && depot.useForDailySupplies);
       const supplySource = useSharedInventory
-        ? inventory.partyInventory as Itemmable[]
+        ? getDailyDepotSupplies(inventory)
         : current.get("inventory");
 
       const requirements = getLongRestSupplyRequirements(
@@ -1569,9 +1572,9 @@ export class SessionActor extends DurableObject<Env> {
             ...inventory,
             initialized: true,
             revision: inventory.revision + 1,
-            partyInventory: consumption.items,
           }
         : inventory;
+      if (longRestUsedSharedInventory) applyDailyDepotSupplies(nextInventory, consumption.items);
       canonicalOperation = { ...operation, recovery };
       reverseOperation = {
         type: "session.rest.restore",
@@ -1598,7 +1601,7 @@ export class SessionActor extends DurableObject<Env> {
           restDefinitions,
           operation.type === "character.rest.short" ? "shortRestCompleted" : "longRestCompleted",
           undefined,
-          { partyInventoryAccessible: inventory.partyInventoryAccessible !== false },
+          { partyInventoryAccessible: getPartyDepots(inventory).some(depot => depot.accessible && depot.useForDailySupplies) },
         );
         next = automationResult.character;
         if (isDigitalDiceRollingEnabled(runtimeConfig)) {

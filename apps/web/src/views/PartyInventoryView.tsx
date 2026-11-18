@@ -1,3 +1,5 @@
+import { releaseCompartmentContents } from "../models/items/itemCompartments"
+import { getPartyDepots, setPartyDepotItems, updatePartyDepot, createPartyDepot, getDailyDepotSupplies, applyDailyDepotSupplies, DEFAULT_PARTY_DEPOT_ID, type PartyDepot } from "../models/items/PartyDepot"
 import { planPartyDailySupplies } from "../models/supplies/partyDailySupplies"
 import { useMemo, useState } from "react"
 import {
@@ -34,6 +36,7 @@ export function PartyInventoryView() {
   const runtime = useOptionalSessionRuntime()
   const {
     partyInventory: localPartyInventory,
+    partyDepotState: localDepotState, updatePartyDepotState,
     transferCharacters,
     canViewCharacterDetails,
     addPartyItem,
@@ -41,9 +44,13 @@ export function PartyInventoryView() {
     removePartyItem,
     transferItem,
   } = useCharacterContext()
-  const partyInventory = runtime?.inventoryState?.initialized
-    ? runtime.inventoryState.partyInventory
-    : localPartyInventory
+  const [selectedDepotId, setSelectedDepotId] = useState(DEFAULT_PARTY_DEPOT_ID)
+  const [newDepotName, setNewDepotName] = useState("")
+  const sharedState = runtime?.inventoryState?.initialized ? runtime.inventoryState : { ...localDepotState, partyInventory: localPartyInventory }
+  const depots = useMemo(() => getPartyDepots(sharedState), [sharedState])
+  const selectedDepot = depots.find(depot => depot.id === selectedDepotId) ?? depots[0]
+  const partyInventory = selectedDepot.items
+  const dailySupplies = getDailyDepotSupplies(sharedState)
   const {
     carryCapacity: localCarryCapacity,
     canEditCarryCapacity,
@@ -56,13 +63,12 @@ export function PartyInventoryView() {
     setInventoryAccessible: setLocalInventoryAccessible,
   } = usePartyInventorySettings()
   const carryCapacity =
-    runtime?.inventoryState?.carryCapacity ?? localCarryCapacity
+    selectedDepot.carryCapacity ?? localCarryCapacity
   const additionalSupplyConsumption =
     runtime?.inventoryState?.additionalSupplyConsumption
     ?? localAdditionalSupplyConsumption
   const inventoryAccessible =
-    runtime?.inventoryState?.partyInventoryAccessible
-    ?? localInventoryAccessible
+    selectedDepot.accessible ?? localInventoryAccessible
   const isMaster = runtime
     ? runtime.role === "MASTER"
     : canEditInventoryAccessible
@@ -78,8 +84,8 @@ export function PartyInventoryView() {
     runtime?.runtimeConfigSnapshot?.config.longRestSupplies,
   )
   const supplyCalculation = useMemo(
-    () => calculatePartySupplies(partyInventory, []),
-    [partyInventory],
+    () => calculatePartySupplies(dailySupplies, []),
+    [dailySupplies],
   )
   const visibleSupplyConsumerDetails = useMemo(
     () => new Map(
@@ -168,7 +174,7 @@ export function PartyInventoryView() {
   const hasSupplyConsumers =
     supplyConsumers.length > 0 || additionalSupplyConsumption > 0
 
-  const dailyPlan = planPartyDailySupplies(partyInventory, {
+  const dailyPlan = planPartyDailySupplies(dailySupplies, {
     count: supplyConsumers.length, food: rawFoodPerLongRest, drink: rawDrinkPerLongRest,
   }, additionalSupplyConsumption, supplySettings)
   const [dailyConsumptionNotice, setDailyConsumptionNotice] = useState("")
@@ -181,12 +187,10 @@ export function PartyInventoryView() {
       })
       return
     }
-    const next = new Map(dailyPlan.consumption.items.map(item => [item.id, item]))
-    for (const item of partyInventory) {
-      const updated = next.get(item.id)
-      if (!updated) removePartyItem(item.id)
-      else if (JSON.stringify(item) !== JSON.stringify(updated)) updatePartyItem(item.id, () => updated)
-    }
+    updatePartyDepotState?.(previous => {
+      applyDailyDepotSupplies(previous, dailyPlan.consumption.items)
+      return previous
+    })
     setDailyConsumptionNotice(dailyPlan.enough ? "Suprimentos do dia consumidos." : "Suprimentos disponíveis consumidos. O estoque não cobriu todo o dia do grupo.")
   }
 
@@ -206,13 +210,13 @@ export function PartyInventoryView() {
         return
       }
       runtime.dispatchInventoryOperation({
-        type: "party.settings.carryCapacity.set",
-        characterId: "session",
-        value: next,
+        type: "party.depot.update",
+        characterId: "session", depotId: selectedDepot.id, patch: { carryCapacity: next },
       })
       return
     }
-    setLocalCarryCapacity(next)
+    if (updatePartyDepotState) updatePartyDepotState(previous => { updatePartyDepot(previous, selectedDepot.id, { carryCapacity: next }); return previous })
+    else setLocalCarryCapacity(next)
   }
 
   function setAuthoritativeAdditionalSupplyConsumption(value: number) {
@@ -241,21 +245,40 @@ export function PartyInventoryView() {
         return
       }
       runtime.dispatchInventoryOperation({
-        type: "party.settings.accessible.set",
-        characterId: "session",
-        value,
+        type: "party.depot.update",
+        characterId: "session", depotId: selectedDepot.id, patch: { accessible: value },
       })
       return
     }
-    setLocalInventoryAccessible(value)
+    if (updatePartyDepotState) updatePartyDepotState(previous => { updatePartyDepot(previous, selectedDepot.id, { accessible: value }); return previous })
+    else setLocalInventoryAccessible(value)
+  }
+
+  function patchDepot(patch: Partial<Omit<PartyDepot, "id" | "items">>) {
+    if (!isMaster) return
+    if (runtime) {
+      runtime.dispatchInventoryOperation({ type: "party.depot.update", characterId: "session", depotId: selectedDepot.id, patch })
+    } else updatePartyDepotState?.(previous => { updatePartyDepot(previous, selectedDepot.id, patch); return previous })
+  }
+  function addDepot() {
+    const name = newDepotName.trim()
+    if (!isMaster || !name || name.length > 80) return
+    const id = crypto.randomUUID()
+    if (runtime) {
+      if (runtime.status !== "connected") return
+      runtime.dispatchInventoryOperation({ type: "party.depot.create", characterId: "session", depotId: id, name })
+    } else updatePartyDepotState?.(previous => { createPartyDepot(previous, id, name); return previous })
+    setSelectedDepotId(id)
+    setNewDepotName("")
   }
 
   function addItem(item: Itemmable) {
     if (runtime) {
-      runtime.dispatchInventoryOperation({ type: "party.item.add", characterId: "session", item })
+      runtime.dispatchInventoryOperation({ type: "party.item.add", characterId: "session", depotId: selectedDepot.id, item })
       return
     }
-    addPartyItem(item)
+    if (selectedDepot.id !== DEFAULT_PARTY_DEPOT_ID) updatePartyDepotState?.(previous => { setPartyDepotItems(previous, selectedDepot.id, [...partyInventory, item]); return previous })
+    else addPartyItem(item)
   }
 
   function updateItem(itemId: string, updater: (item: Itemmable) => Itemmable) {
@@ -263,18 +286,20 @@ export function PartyInventoryView() {
     if (!item) return
     const next = updater(item)
     if (runtime) {
-      runtime.dispatchInventoryOperation({ type: "party.item.update", characterId: "session", itemId, item: next })
+      runtime.dispatchInventoryOperation({ type: "party.item.update", characterId: "session", depotId: selectedDepot.id, itemId, item: next })
       return
     }
-    updatePartyItem(itemId, updater)
+    if (selectedDepot.id !== DEFAULT_PARTY_DEPOT_ID) updatePartyDepotState?.(previous => { setPartyDepotItems(previous, selectedDepot.id, partyInventory.map(entry => entry.id === itemId ? next : entry)); return previous })
+    else updatePartyItem(itemId, updater)
   }
 
   function removeItem(itemId: string) {
     if (runtime) {
-      runtime.dispatchInventoryOperation({ type: "party.item.remove", characterId: "session", itemId })
+      runtime.dispatchInventoryOperation({ type: "party.item.remove", characterId: "session", depotId: selectedDepot.id, itemId })
       return
     }
-    removePartyItem(itemId)
+    if (selectedDepot.id !== DEFAULT_PARTY_DEPOT_ID) updatePartyDepotState?.(previous => { setPartyDepotItems(previous, selectedDepot.id, releaseCompartmentContents(partyInventory, itemId)); return previous })
+    else removePartyItem(itemId)
   }
 
   function consumePartyItem(itemId: string) {
@@ -300,10 +325,40 @@ export function PartyInventoryView() {
   return (
     <div className="grid w-full min-w-0 max-w-full gap-4 overflow-hidden">
       <Card>
+        <CardHeader><h2 className="text-sm font-semibold text-textH">Depósitos do grupo</h2></CardHeader>
+        <CardContent className="grid gap-3">
+          <div className="flex flex-wrap gap-2">
+            {depots.map(depot => <button type="button" key={depot.id} onClick={() => { setSelectedDepotId(depot.id); setTransferringItem(null) }}
+              aria-pressed={selectedDepot.id === depot.id}
+              className={"rounded-xl border px-3 py-2 text-left text-sm " + (selectedDepot.id === depot.id ? "border-accentBorder bg-accentBg text-textH" : "border-border bg-bg-subtle text-textMuted")}>
+              <span className="block font-semibold">{depot.name}</span>
+              <span className="text-xs">{depot.accessible ? "Acessível" : "Indisponível"} · {depot.items.length} item(ns){depot.accessible && depot.useForDailySupplies ? " · Suprimentos" : ""}</span>
+            </button>)}
+          </div>
+          {isMaster ? <>
+            <form className="flex flex-wrap gap-2" onSubmit={event => { event.preventDefault(); addDepot() }}>
+              <Input aria-label="Nome do novo depósito" maxLength={80} placeholder="Ex.: Casa em Luskan, Carroça, Navio…" value={newDepotName} onChange={event => setNewDepotName(event.target.value)} />
+              <button type="submit" disabled={!newDepotName.trim() || Boolean(runtime && runtime.status !== "connected")} className="rounded-xl bg-accent px-3 py-2 text-sm font-semibold text-white disabled:opacity-40">Criar depósito</button>
+            </form>
+            <label className="grid gap-1 text-xs text-textMuted">Nome do depósito
+              <Input key={selectedDepot.id + selectedDepot.name} aria-label="Nome do depósito" defaultValue={selectedDepot.name} maxLength={80} onBlur={event => { const name = event.target.value.trim(); if (name && name !== selectedDepot.name) patchDepot({ name }) }} onKeyDown={event => { if (event.key === "Enter") event.currentTarget.blur() }} />
+            </label>
+            <label className="grid gap-1 text-xs text-textMuted">Descrição
+              <Input key={selectedDepot.id + selectedDepot.description} defaultValue={selectedDepot.description} maxLength={2000} placeholder="Localização ou observações" onBlur={event => { if (event.target.value !== selectedDepot.description) patchDepot({ description: event.target.value }) }} />
+            </label>
+            <label className="flex items-center gap-2 text-xs text-textH">
+              <input type="checkbox" checked={selectedDepot.useForDailySupplies} onChange={event => patchDepot({ useForDailySupplies: event.target.checked })} />
+              Usar este estoque no consumo diário e nos descansos, enquanto acessível
+            </label>
+          </> : selectedDepot.description ? <p className="text-xs text-textMuted">{selectedDepot.description}</p> : null}
+        </CardContent>
+      </Card>
+
+      <Card>
         <CardHeader>
           <div className="flex min-w-0 items-center gap-2 text-sm font-semibold text-textH">
             <PackageOpen className="h-4 w-4 shrink-0 text-accent" />
-            <span className="break-words">Inventário compartilhado</span>
+            <span className="break-words">{selectedDepot.name}</span>
           </div>
           <p className="mt-1 break-words text-xs leading-5 text-textMuted">
             Itens deste espaço pertencem ao grupo. A capacidade representa o
@@ -327,16 +382,16 @@ export function PartyInventoryView() {
                 }
               >
                 <option value="accessible">
-                  Acessível — jogadores podem usar o inventário do grupo
+                  Acessível — jogadores podem usar este depósito
                 </option>
                 <option value="inaccessible">
-                  Inacessível — jogadores usam apenas o que carregam
+                  Inacessível — jogadores podem apenas consultar
                 </option>
               </Select>
               <span className="text-[11px] leading-4 text-textMuted">
                 Quando inacessível, jogadores não podem retirar, guardar ou
                 consumir itens e suprimentos daqui. Descansos usam apenas o
-                inventário pessoal do personagem.
+                inventário pessoal se nenhum estoque acessível estiver selecionado para suprimentos.
               </span>
             </label>
           ) : null}
@@ -387,8 +442,12 @@ export function PartyInventoryView() {
         </CardContent>
       </Card>
 
-      {canUseSharedInventory ? (
-        <>
+      {!canUseSharedInventory ? <Card><CardContent className="grid gap-2">
+        <p className="text-xs text-textMuted">Este depósito está indisponível para movimentação e consumo.</p>
+        {partyInventory.map(item => <div key={item.id} className="rounded-xl border border-border p-3 text-sm text-textH">{item.name} · ×{item.quantity ?? 1}</div>)}
+        {!partyInventory.length ? <p className="text-xs text-textMuted">Depósito vazio.</p> : null}
+      </CardContent></Card> : null}
+      <>
       <Card>
         <CardHeader>
           <div className="flex min-w-0 items-center gap-2 text-sm font-semibold text-textH">
@@ -470,8 +529,9 @@ export function PartyInventoryView() {
               className="justify-self-start rounded-xl bg-accent px-4 py-2 text-sm font-semibold text-white disabled:opacity-40">
               Consumir suprimentos do dia
             </button>
-            <p className="text-xs text-textMuted">Consome comida e bebida do inventário do grupo para todos os consumidores, incluindo os adicionais. Não aplica descanso.</p>
+            <p className="text-xs text-textMuted">Consome os estoques acessíveis selecionados para suprimentos, para todos os consumidores e adicionais. Não aplica descanso.</p>
             {dailyPlan.error ? <p className="text-xs text-textMuted">{dailyPlan.error}</p> : !dailyPlan.enough ? <p className="text-xs text-warning">Estoque insuficiente: será consumido apenas o que estiver disponível, conforme a regra da campanha.</p> : null}
+            <p className="text-xs text-textMuted">Estoques usados: {depots.filter(depot => depot.accessible && depot.useForDailySupplies).map(depot => depot.name).join(", ") || "nenhum"}.</p>
             {dailyConsumptionNotice ? <p role="status" className="text-xs text-textH">{dailyConsumptionNotice}</p> : null}
           </div> : null}
           {canEditAdditionalSupplyConsumption && supplySettings.enabled ? (
@@ -659,8 +719,8 @@ export function PartyInventoryView() {
       </Card>
 
       <div className="w-full min-w-0 max-w-full overflow-hidden">
-        <InventoryEditor
-          title="Inventário do grupo"
+        {canUseSharedInventory ? <InventoryEditor
+          title={selectedDepot.name}
           description={hasCapacity
             ? `Peso compartilhado: ${formatNumber(totalWeight)} de ${formatNumber(carryCapacity)}.`
             : `Peso compartilhado: ${formatNumber(totalWeight)}. A capacidade ainda não foi definida pelo mestre.`}
@@ -671,18 +731,18 @@ export function PartyInventoryView() {
           onRemoveItem={removeItem}
           onConsumeItem={consumePartyItem}
           onTransferItem={setTransferringItem}
-          transferLabel="Enviar a personagem"
-        />
+          transferLabel="Transferir item"
+        /> : null}
       </div>
 
 
-        </>
-      ) : null}
+      </>
 
       <TransferItemDialog
         open={canUseSharedInventory && transferringItem !== null}
         item={transferringItem}
-        from={{ type: "party" }}
+        from={{ type: "party", depotId: selectedDepot.id }}
+        depots={depots} isMaster={isMaster}
         characters={transferCharacters}
         canViewCharacterDetails={canViewCharacterDetails}
         onClose={() => setTransferringItem(null)}

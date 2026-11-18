@@ -14,7 +14,7 @@ export type GameEntityMetadata = {
 }
 
 export type InventoryLocation =
-  | { type: "party" }
+  | { type: "party"; depotId?: string }
   | { type: "ground" }
   | { type: "character"; characterId: string }
 

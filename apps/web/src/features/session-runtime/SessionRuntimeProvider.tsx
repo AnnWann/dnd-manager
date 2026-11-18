@@ -1,3 +1,4 @@
+import type { PartyDepot } from "../../models/items/PartyDepot"
 import { Button } from "../../components/ui/Button"
 import {
   canProjectAbilityOperation, canProjectInitiativeOperation, canProjectMagicOperation, canProjectResourceOperation, canProjectSheetOperation,
@@ -82,6 +83,7 @@ type OptionalViteImportMeta = ImportMeta & {
 }
 
 type SessionInventoryBootstrapSettings = {
+  partyDepots?: PartyDepot[]
   carryCapacity?: number
   additionalSupplyConsumption?: number
   partyInventoryAccessible?: boolean
@@ -460,6 +462,7 @@ function SessionRuntimeProviderInner({ sessionId, userId, role, children }: {
       carryCapacity: settings.carryCapacity,
       additionalSupplyConsumption: settings.additionalSupplyConsumption,
       partyInventoryAccessible: settings.partyInventoryAccessible,
+      partyDepots: settings.partyDepots,
     }) ?? false, [])
   const initializeMissions = useCallback((missions: Mission[]) =>
     socketRef.current?.send({ type: "session.missions.initialize", missions }) ?? false, [])

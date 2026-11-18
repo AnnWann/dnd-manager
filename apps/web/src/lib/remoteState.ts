@@ -1,3 +1,4 @@
+import type { PartyDepot } from "../models/items/PartyDepot"
 import {
   useCallback,
   useEffect,
@@ -29,6 +30,7 @@ export type AppStateV1 = {
   operations?: GameOperationRecord[]
   characters: CharacterTemplateProps[]
   activeCharacterId: string
+  partyDepots?: PartyDepot[]
   partyInventory?: Itemmable[]
   /** Shared items currently lying on the ground. */
   groundInventory?: Itemmable[]
@@ -540,6 +542,7 @@ function normalizeState(state: unknown): AppStateV1 {
         typeof raw.activeCharacterId === 'string'
           ? raw.activeCharacterId
           : '',
+      partyDepots: Array.isArray(raw.partyDepots) ? raw.partyDepots : undefined,
       partyInventory: Array.isArray(raw.partyInventory)
         ? raw.partyInventory
         : [],

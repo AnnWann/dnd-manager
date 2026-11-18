@@ -1,3 +1,4 @@
+import type { PartyDepot } from "../../models/items/PartyDepot"
 import type { SessionInventoryOperation as SharedInventoryOperation } from "../../../../../packages/session-protocol/src/inventoryOperations"
 import type { InventorySettingsOperation } from "../../../../../packages/session-protocol/src/inventorySettings"
 import type { EquipmentDestination } from "../../models/characters/characterEquipmentInteractions"
@@ -26,6 +27,7 @@ export type PendingConditionalLoot = {
 export type SessionSharedInventoryState = {
   initialized: boolean
   revision: number
+  partyDepots?: PartyDepot[]
   partyInventory: Itemmable[]
   groundInventory: Itemmable[]
   /** DM-only decisions waiting to be resolved. Server delivery filters this for players. */
@@ -49,6 +51,7 @@ export type SessionInventoryOperation = SharedInventoryOperation<Itemmable, Equi
 export type SessionInventoryClientMessage =
   | {
       type: "session.inventory.initialize"
+      partyDepots?: PartyDepot[]
       partyInventory: Itemmable[]
       groundInventory: Itemmable[]
       carryCapacity?: number

@@ -1,3 +1,4 @@
+import { getPartyDepots, setPartyDepotItems, updatePartyDepot, createPartyDepot, getDailyDepotSupplies, applyDailyDepotSupplies, DEFAULT_PARTY_DEPOT_ID, type PartyDepot } from "../../../../../web/src/models/items/PartyDepot";
 import { planPartyDailySupplies } from "../../../../../web/src/models/supplies/partyDailySupplies";
 import { readRuntimeConfig } from "../../session/runtimeConfigAccess";
 import type { SessionCharacterLifecycleState } from "../../session/characterLifecycleProtocol";
@@ -36,6 +37,7 @@ type SharedInventoryState = {
   initialized: boolean;
   revision: number;
   partyInventory: Itemmable[];
+  partyDepots?: PartyDepot[];
   groundInventory: Itemmable[];
   pendingConditionalLoot?: Array<{ id: string; creatureName: string; item: Itemmable; dmHint?: string }>;
   carryCapacity?: number;
@@ -85,6 +87,7 @@ export class SessionActor extends EquipmentSessionActor {
           initialized: true,
           revision: 0,
           partyInventory: parsed.partyInventory as Itemmable[],
+          partyDepots: parsed.partyDepots,
           groundInventory: parsed.groundInventory as Itemmable[],
           ...(parsed.carryCapacity !== undefined
             ? { carryCapacity: parsed.carryCapacity }
@@ -182,7 +185,7 @@ export class SessionActor extends EquipmentSessionActor {
         this.ctx.storage.get<Record<string, SessionCharacterLifecycleState>>("characters-state"),
       ]);
       const projected = buildAuthoritativeSupplyProjection(abilities, lifecycle ?? {});
-      dailyPlan = planPartyDailySupplies(inventory.partyInventory, {
+      dailyPlan = planPartyDailySupplies(getDailyDepotSupplies(inventory), {
         count: projected.consumers.length, food: projected.foodPerLongRest, drink: projected.drinkPerLongRest,
       }, inventory.additionalSupplyConsumption ?? 0, config?.config.longRestSupplies);
       if (dailyPlan.error) return sendError(webSocket, "SUPPLIES_CONSUMPTION_REJECTED", dailyPlan.error);
@@ -285,6 +288,14 @@ function applyInventoryOperation(
   inventory: SharedInventoryState,
   dailyPlan?: ReturnType<typeof planPartyDailySupplies>,
 ): ApplyResult {
+  if ((operation.type === "party.item.add" || operation.type === "party.item.update" || operation.type === "party.item.remove") && operation.depotId && operation.depotId !== DEFAULT_PARTY_DEPOT_ID) {
+    const depot = getPartyDepots(inventory).find(depot => depot.id === operation.depotId);
+    if (!depot) return { changed: false, changedCharacters: new Set(), hpChanged: new Set(), conditionsChanged: new Set(), sharedChanged: false };
+    const scoped = { ...inventory, partyInventory: [...depot.items] };
+    const result = applyInventoryOperation({ ...operation, depotId: undefined }, abilities, hp, conditions, scoped);
+    if (result.changed) { setPartyDepotItems(inventory, depot.id, scoped.partyInventory); inventory.revision = scoped.revision; }
+    return result;
+  }
   const changedCharacters = new Set<string>();
   const hpChanged = new Set<string>();
   const conditionsChanged = new Set<string>();
@@ -320,9 +331,20 @@ function applyInventoryOperation(
   };
 
   switch (operation.type) {
+    case "party.depot.create":
+    case "party.depot.update": {
+      if (operation.type === "party.depot.create" && getPartyDepots(inventory).length >= 100) return result(false);
+      const changed = operation.type === "party.depot.create"
+        ? createPartyDepot(inventory, operation.depotId, operation.name)
+        : updatePartyDepot(inventory, operation.depotId, operation.patch);
+      if (!changed) return result(false);
+      inventory.revision += 1;
+      sharedChanged = true;
+      return result(true);
+    }
     case "party.supplies.day.consume": {
       if (!dailyPlan || dailyPlan.error || !dailyPlan.consumption.valid) return result(false);
-      inventory.partyInventory = dailyPlan.consumption.items;
+      applyDailyDepotSupplies(inventory, dailyPlan.consumption.items);
       inventory.revision += 1;
       sharedChanged = true;
       return result(true);
@@ -462,6 +484,7 @@ function transferInventoryItem(
   if (locationKey(request.from) === locationKey(request.to)) return null;
 
   const partyInventory = [...shared.partyInventory];
+  const depotInventories = new Map(getPartyDepots(shared).filter(depot => depot.id !== DEFAULT_PARTY_DEPOT_ID).map(depot => [depot.id, [...depot.items]]));
   const groundInventory = [...shared.groundInventory];
   const inventoryByCharacterId = new Map<string, Itemmable[]>();
 
@@ -471,8 +494,8 @@ function transferInventoryItem(
     inventoryByCharacterId.set(raw.id, [...(raw.inventory ?? [])]);
   }
 
-  const sourceInventory = getLocationInventory(request.from, partyInventory, groundInventory, inventoryByCharacterId);
-  const destinationInventory = getLocationInventory(request.to, partyInventory, groundInventory, inventoryByCharacterId);
+  const sourceInventory = getLocationInventory(request.from, partyInventory, groundInventory, inventoryByCharacterId, depotInventories);
+  const destinationInventory = getLocationInventory(request.to, partyInventory, groundInventory, inventoryByCharacterId, depotInventories);
   if (!sourceInventory || !destinationInventory) return null;
 
   const itemIndex = sourceInventory.findIndex((item) => item.id === request.itemId);
@@ -550,6 +573,7 @@ function transferInventoryItem(
   }
 
   shared.partyInventory = partyInventory;
+  for (const [id, items] of depotInventories) setPartyDepotItems(shared, id, items);
   shared.groundInventory = groundInventory;
   return changedCharacters;
 }
@@ -559,14 +583,15 @@ function getLocationInventory(
   partyInventory: Itemmable[],
   groundInventory: Itemmable[],
   inventoryByCharacterId: Map<string, Itemmable[]>,
+  depotInventories: Map<string, Itemmable[]>,
 ): Itemmable[] | null {
-  if (location.type === "party") return partyInventory;
+  if (location.type === "party") return location.depotId && location.depotId !== DEFAULT_PARTY_DEPOT_ID ? depotInventories.get(location.depotId) ?? null : partyInventory;
   if (location.type === "ground") return groundInventory;
   return inventoryByCharacterId.get(location.characterId) ?? null;
 }
 
 function locationKey(location: InventoryLocation): string {
-  return location.type === "character" ? `character:${location.characterId}` : location.type;
+  return location.type === "character" ? `character:${location.characterId}` : location.type === "party" ? `party:${location.depotId || DEFAULT_PARTY_DEPOT_ID}` : location.type;
 }
 
 function addOrMergeStack(inventory: Itemmable[], movedItem: Itemmable): void {
@@ -640,6 +665,10 @@ function findCompartmentViolation(
     const afterInventory = (after[characterId]?.character as unknown as CharacterTemplateProps | undefined)?.inventory ?? []
     const error = changed(beforeInventory, afterInventory)
     if (error) return error
+  }
+  for (const depot of getPartyDepots(afterShared).filter(depot => depot.id !== DEFAULT_PARTY_DEPOT_ID)) {
+    const error = changed(getPartyDepots(beforeShared).find(previous => previous.id === depot.id)?.items ?? [], depot.items);
+    if (error) return error;
   }
   return changed(beforeShared.partyInventory, afterShared.partyInventory)
     ?? changed(beforeShared.groundInventory, afterShared.groundInventory)
@@ -743,7 +772,7 @@ function canPerform(
   inventory: SharedInventoryState,
 ): boolean {
   if (connection.role === "MASTER") return true;
-  if (operation.type === "conditional.loot.resolve" || operation.type === "party.supplies.day.consume") return false;
+  if (operation.type === "conditional.loot.resolve" || operation.type.startsWith("party.depot.") || operation.type === "party.supplies.day.consume") return false;
   if (isPartySettingsOperation(operation)) return false;
 
   const partyAccessible = inventory.partyInventoryAccessible !== false;
@@ -753,17 +782,20 @@ function canPerform(
     operation.type === "party.item.update" ||
     operation.type === "party.item.remove"
   ) {
-    return partyAccessible;
+    return getPartyDepots(inventory).some(depot => depot.id === (operation.depotId || DEFAULT_PARTY_DEPOT_ID) && depot.accessible);
   }
 
   if (operation.type.startsWith("ground.")) return false;
 
   if (operation.type === "inventory.item.transfer") {
+    for (const location of [operation.request.from, operation.request.to]) {
+      if (location.type === "party" && !getPartyDepots(inventory).some(depot => depot.id === (location.depotId || DEFAULT_PARTY_DEPOT_ID) && depot.accessible)) return false;
+    }
     if (
       !partyAccessible
       && (
-        operation.request.from.type === "party"
-        || operation.request.to.type === "party"
+        (operation.request.from.type === "party" && (!operation.request.from.depotId || operation.request.from.depotId === DEFAULT_PARTY_DEPOT_ID))
+        || (operation.request.to.type === "party" && (!operation.request.to.depotId || operation.request.to.depotId === DEFAULT_PARTY_DEPOT_ID))
       )
     ) {
       return false;

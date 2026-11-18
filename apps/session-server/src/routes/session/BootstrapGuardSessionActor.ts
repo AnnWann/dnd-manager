@@ -1,3 +1,4 @@
+import { getPartyDepots, DEFAULT_PARTY_DEPOT_ID, type PartyDepotState } from "../../../../web/src/models/items/PartyDepot";
 import { SessionActor as BaseSessionActor } from "./LegacyReconciliationSessionActor";
 import type { SessionConnection } from "./protocol";
 import { readRuntimeConfig } from "./runtimeConfigAccess";
@@ -141,6 +142,18 @@ export class SessionActor extends BaseSessionActor {
       && connection.canWriteAnyCharacter === true
       && isCharacterWriteMessage(raw)
     ) {
+      // Character moderation does not grant access to unavailable shared depots.
+      let envelope: any;
+      try { envelope = JSON.parse(raw); } catch {}
+      if (envelope?.type === "session.inventory.operation" && envelope.operation?.type === "inventory.item.transfer") {
+        const inventory = await this.ctx.storage.get<PartyDepotState>("inventory-state");
+        const depots = getPartyDepots(inventory ?? {});
+        const locations = [envelope.operation.request?.from, envelope.operation.request?.to];
+        if (locations.some(location => location?.type === "party" && !depots.some(depot => depot.id === (location.depotId || DEFAULT_PARTY_DEPOT_ID) && depot.accessible))) {
+          sendError(webSocket, "CHARACTER_ACCESS_DENIED", "Este depósito está indisponível para movimentação.");
+          return;
+        }
+      }
       await super.webSocketMessage(
         createCharacterWriteAuthorizedSocket(webSocket, connection),
         message,
