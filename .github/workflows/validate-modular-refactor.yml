@@ -13,6 +13,7 @@ on:
       - "prisma/**"
       - "package.json"
       - "apps/**"
+      - "scripts/build-game-core-runtime.mjs"
       - "scripts/check-workspace-layout.mjs"
       - "scripts/audit-workspace-imports.mjs"
       - "package-lock.json"
@@ -38,6 +39,8 @@ jobs:
           cache: npm
       - name: Install reproducible workspace dependencies
         run: npm ci --ignore-scripts --no-audit --no-fund
+      - name: Build game-core runtime modules
+        run: npm run build:game-core-runtime
       - name: Check npm workspace registration
         run: npm run check:workspace-boundaries && npm ls --workspaces --depth=0
       - name: Audit scoped workspace imports

@@ -1,3 +1,4 @@
+import { signOwlbearRoomBinding, verifyOwlbearRoomBinding } from "../server/owlbearRoomBinding.js"
 import { GET as getOfficialSpellPage } from "./compendium/spells.js"
 import { createHmac, timingSafeEqual } from "node:crypto"
 import { auth } from "../server/auth.js"
@@ -7,7 +8,7 @@ import { canReadAnyCharacter, canWriteAnyCharacter, normalizeCampaignCapabilityO
 import { isValidSessionConnectionSecret, signSessionConnectionToken } from "../src/shared/session-runtime/sessionConnectionToken.js"
 
 const ALLOWED_EXTENSION_ORIGINS = new Set(["https://dnd-manager-owlbear-annwanns-projects.vercel.app", "https://dnd-manager-seven.vercel.app"])
-const TOKEN_TTL_SECONDS = 15 * 60
+const TOKEN_TTL_SECONDS = 30 * 24 * 60 * 60
 const SECRET = process.env.BETTER_AUTH_SECRET
 type Grant = { userId: string; sessionId: string; expires: number; scope: "owlbear:characters" }
 const json = (data: unknown, status = 200, headers: Record<string, string> = {}) =>
@@ -55,7 +56,7 @@ export async function POST(request: Request): Promise<Response> {
   if (!body?.extensionOrigin || !ALLOWED_EXTENSION_ORIGINS.has(body.extensionOrigin)) return json({ error: "Extension not allowed" }, 403)
   const session = await auth.api.getSession({ headers: request.headers })
   if (!session) return json({ error: "Login required" }, 401)
-  return json({ token: createGrant({ userId: session.user.id, sessionId: session.session.id, expires: Date.now() + TOKEN_TTL_SECONDS * 1000, scope: "owlbear:characters" }), expiresIn: TOKEN_TTL_SECONDS })
+  return json({ token: createGrant({ userId: session.user.id, sessionId: session.session.id, expires: Math.min(new Date(session.session.expiresAt).getTime(), Date.now() + TOKEN_TTL_SECONDS * 1000), scope: "owlbear:characters" }), expiresIn: TOKEN_TTL_SECONDS })
 }
 export async function GET(request: Request): Promise<Response> {
   const origin = request.headers.get("Origin"), headers = cors(origin)
@@ -63,6 +64,12 @@ export async function GET(request: Request): Promise<Response> {
   const grant = await validateGrant(request)
   if (!grant) return json({ error: "Authorization required or expired" }, 401, headers)
   const url = new URL(request.url), op = url.searchParams.get("op")
+  if (op === "refresh") {
+    const session = await prisma.session.findUnique({ where: { id: grant.sessionId }, select: { expiresAt: true } })
+    if (!session) return json({ error: "Authorization expired" }, 401, headers)
+    const expiresAt = Math.min(session.expiresAt.getTime(), Date.now() + TOKEN_TTL_SECONDS * 1000)
+    return json({ token: createGrant({ ...grant, expires: expiresAt }), userId: grant.userId, expiresAt }, 200, headers)
+  }
   if (op === "official-spells") {
     const indexes = (url.searchParams.get("indexes") ?? "").split(",").map(index => index.trim()).filter(Boolean)
     if (!indexes.length || indexes.length > 100 || indexes.some(index => index.length > 200)) {
@@ -120,16 +127,27 @@ export async function GET(request: Request): Promise<Response> {
     })
     return json({ sessions: campaigns.map(c => ({ id: c.id, name: c.name, role: c.ownerId === grant.userId || c.members[0]?.role === CampaignRole.MASTER ? "MASTER" : "PLAYER" })) }, 200, headers)
   }
-  if (op === "connect") {
-    const sessionId = url.searchParams.get("sessionId") ?? ""
+  if (op === "connect" || op === "bind-room" || op === "resolve-room") {
+    const roomId = url.searchParams.get("roomId") ?? ""
+    let resolvedBinding: unknown
+    if (op === "resolve-room") {
+      try { resolvedBinding = JSON.parse(url.searchParams.get("binding") ?? "") } catch {}
+      if (!SECRET || !verifyOwlbearRoomBinding(resolvedBinding, roomId, SECRET)) return json({ error: "Invalid room binding" }, 400, headers)
+    }
+    const sessionId = op === "resolve-room" ? (resolvedBinding as { sessionId: string }).sessionId : url.searchParams.get("sessionId") ?? ""
     if (!sessionId || sessionId.length > 256) return json({ error: "Invalid session" }, 400, headers)
     const campaign = await prisma.campaign.findUnique({
       where: { id: sessionId },
-      select: { ownerId: true, members: { where: { userId: grant.userId, status: CampaignMemberStatus.ACTIVE }, select: { role: true, permissions: true }, take: 1 } },
+      select: { name: true, ownerId: true, members: { where: { userId: grant.userId, status: CampaignMemberStatus.ACTIVE }, select: { role: true, permissions: true }, take: 1 } },
     })
     if (!campaign || (campaign.ownerId !== grant.userId && !campaign.members.length)) return json({ error: "Session access denied" }, 403, headers)
     const isOwner = campaign.ownerId === grant.userId
     const role = isOwner ? CampaignRole.MASTER : campaign.members[0]!.role
+    if (op === "bind-room") {
+      if (role !== CampaignRole.MASTER || !roomId || roomId.length > 256 || !SECRET) return json({ error: "Master access required" }, 403, headers)
+      return json({ binding: signOwlbearRoomBinding(roomId, sessionId, campaign.name, SECRET) }, 200, headers)
+    }
+    if (op === "resolve-room") return json({ sessionId, sessionName: campaign.name }, 200, headers)
     const permissions = isOwner ? {} : normalizeCampaignCapabilityOverrides(campaign.members[0]!.permissions)
     const secret = process.env.SESSION_CONNECTION_SECRET?.trim()
     if (!isValidSessionConnectionSecret(secret)) return json({ error: "Session authentication not configured" }, 503, headers)

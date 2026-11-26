@@ -29,6 +29,8 @@
     "postinstall": "prisma generate --config apps/web/prisma.config.ts",
     "spells:enrich-resolution": "node scripts/enrich-spell-resolution.mjs",
     "check:workspace-boundaries": "node scripts/check-workspace-layout.mjs",
+    "build:game-core-runtime": "node scripts/build-game-core-runtime.mjs",
+    "pretest:shared": "npm run build:game-core-runtime",
     "test:shared": "node --test packages/game-core/tests/*.test.mjs packages/session-protocol/tests/*.test.mjs packages/session-client/tests/*.test.mjs",
     "build:app-web": "npm run --workspace @dnd-manager/web build",
     "typecheck:app-session-server": "npm run --workspace @dnd-manager/session-server-app typecheck",

@@ -15,6 +15,8 @@ export type SessionTransportOptions = {
   onMessage: (raw: string) => void
   onKicked: () => void
   onDisconnected?: () => void
+  /** Optional host watchdog for stalled handshakes and missing heartbeat responses. */
+  healthTimeoutMs?: number
   /** Optional host-provided token supplier; default uses the existing endpoint. */
   getConnectionToken?: () => Promise<string>
 }
@@ -27,6 +29,7 @@ export class SessionTransport {
   private socket: WebSocket | null = null
   private heartbeatTimer: ReturnType<typeof setTimeout> | null = null
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null
+  private healthTimer: ReturnType<typeof setTimeout> | null = null
   private reconnectAttempt = 0
   private connectionAttempt = 0
   private stopped = false
@@ -44,6 +47,7 @@ export class SessionTransport {
     this.stopped = false
     this.connectionAttempt++
     this.clearHeartbeatTimer()
+    this.clearHealthTimer()
     this.clearReconnectTimer()
     const previousSocket = this.socket
     this.socket = null
@@ -61,6 +65,7 @@ export class SessionTransport {
     this.stopped = true
     this.connectionAttempt++
     this.clearHeartbeatTimer()
+    this.clearHealthTimer()
     this.clearReconnectTimer()
     const socket = this.socket
     this.socket = null
@@ -94,12 +99,16 @@ export class SessionTransport {
       return
     }
     this.socket = socket
+    this.watchHealth(socket)
+    let ready = false
     socket.onmessage = (event) => {
       if (this.socket !== socket || this.stopped) return
       if (typeof event.data !== "string") return
       // Session readiness is delivered in-band before the first heartbeat.
       try {
         const packet = JSON.parse(event.data) as { type?: string }
+        if (packet?.type === "session.ready") ready = true
+        if (ready && packet?.type) this.clearHealthTimer()
         if (packet?.type === "session.ready") {
           this.hasConnectedOnce = true
           this.reconnectAttempt = 0
@@ -113,6 +122,7 @@ export class SessionTransport {
       if (this.socket !== socket) return
       this.socket = null
       this.clearHeartbeatTimer()
+      this.clearHealthTimer()
       if (event.code === SESSION_KICKED_CLOSE_CODE) {
         this.stopped = true
         this.connectionAttempt++
@@ -127,6 +137,7 @@ export class SessionTransport {
     socket.onerror = () => {
       if (this.socket !== socket || this.stopped) return
       if (!this.stopped) this.options.onStatusChange("error")
+      if (this.options.healthTimeoutMs) socket.close(4000, "Session connection error")
     }
   }
 
@@ -169,6 +180,7 @@ export class SessionTransport {
       this.heartbeatTimer = null
       if (!this.connected) return
       this.sendRaw(JSON.stringify({ type: "session.heartbeat", clientId: this.options.clientId }))
+      if (this.socket) this.watchHealth(this.socket)
       this.scheduleHeartbeat()
     }, delay)
   }
@@ -182,6 +194,19 @@ export class SessionTransport {
       this.reconnectTimer = null
       void this.openSocket()
     }, delay)
+  }
+
+  private watchHealth(socket: WebSocket): void {
+    this.clearHealthTimer()
+    if (!this.options.healthTimeoutMs) return
+    this.healthTimer = setTimeout(() => {
+      this.healthTimer = null
+      if (this.socket === socket && !this.stopped) socket.close(4000, "Session response timeout")
+    }, this.options.healthTimeoutMs)
+  }
+  private clearHealthTimer(): void {
+    if (this.healthTimer !== null) clearTimeout(this.healthTimer)
+    this.healthTimer = null
   }
 
   private clearHeartbeatTimer(): void {
