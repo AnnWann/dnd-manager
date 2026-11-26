@@ -1,4 +1,4 @@
-import { useEffect } from "react"
+import { useEffect, useState } from "react"
 import { Outlet, useLocation, useParams } from "react-router-dom"
 
 import { getCreationSnapshot } from "../../api/creation"
@@ -7,6 +7,7 @@ import { getLocalUser } from "../../auth/local-auth"
 import { useCharacterContext } from "../../contexts/characterContext"
 import { SessionMissionAuthorityProvider } from "../../contexts/missionContext"
 import { useSyncContext } from "../../contexts/syncContext"
+import { SESSION_CONTENT_CHANGED_EVENT } from "../../lib/sessionEvents"
 import { rememberActiveSession } from "../../lib/activeCampaign"
 import {
   buildSessionRuntimeConfigSnapshot,
@@ -61,6 +62,12 @@ export function SessionRouteOutlet() {
 
 function MasterRuntimeConfigPublisher({ campaignId }: { campaignId: string }) {
   const runtime = useOptionalSessionRuntime()
+  const [contentRevision, setContentRevision] = useState(0)
+  useEffect(() => {
+    const refresh = () => setContentRevision(revision => revision + 1)
+    window.addEventListener(SESSION_CONTENT_CHANGED_EVENT, refresh)
+    return () => window.removeEventListener(SESSION_CONTENT_CHANGED_EVENT, refresh)
+  }, [])
   const { visibleCharacters } = useCharacterContext()
   // CharacterTemplate instances can be updated while the surrounding
   // collection keeps the same reference. Recompute spell references on every
@@ -97,6 +104,7 @@ function MasterRuntimeConfigPublisher({ campaignId }: { campaignId: string }) {
     }
   }, [
     campaignId,
+    contentRevision,
     runtime?.publishRuntimeConfig,
     runtime?.role,
     runtime?.status,
