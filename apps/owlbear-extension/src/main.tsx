@@ -1,3 +1,5 @@
+import { NativeSessionToolsHost, type SessionToolsArea } from "./NativeSessionToolsHost"
+import type { SessionRuntimeContextValue } from "../../web/src/features/session-runtime/SessionRuntimeProvider"
 import { CreatureSpawner } from "./CreatureSpawner"
 import { spawnCompendiumTokens } from "./spawnCreatureTokens"
 import { ROOM_SESSION_METADATA, readRoomBinding, accountStorageKey, characterStorageKey, readRememberedAccount, shouldOpenDicePopover, type RoomSessionBinding } from "./connectionPreferences"
@@ -76,6 +78,7 @@ function App() {
  const [runtimeConfig, setRuntimeConfig] = useState<Record<string, unknown> | null>(null)
  const [spellLibrary, setSpellLibrary] = useState<Record<string, unknown>[]>([])
  const [creatureRollError, setCreatureRollError] = useState("")
+ const [companionsById, setCompanionsById] = useState<SessionRuntimeContextValue["companionsById"]>({})
  const [inventoryState, setInventoryState] = useState<Record<string, unknown> | null>(null)
  const [selectedId, setSelectedId] = useState("")
  const [associationState, setAssociationState] = useState<{sessionId:string;connected:boolean;characters:{id:string;name:string}[];role?:string;creatures?:{id:string;name:string;hp?:number;maxHp?:number;armorClass?:number}[];catalog?:{id:string;name:string}[]}>({sessionId:"",connected:false,characters:[],creatures:[],catalog:[]})
@@ -110,7 +113,7 @@ function App() {
  }, [compendiumCreatures, runtimeConfig])
  const [selectedToken, setSelectedToken] = useState<{id:string;name:string;link:{sessionId:string;characterId:string}|null;creatureLink:{sessionId:string;entryId:string}|null;catalogId:string|null;catalogSessionId:string|null}|null>(null)
  const [tokenLinkError, setTokenLinkError] = useState("")
- const [activeArea, setActiveArea] = useState<"sheet" | "dice" | "compendium">(isDicePopover ? "dice" : "sheet")
+ const [activeArea, setActiveArea] = useState<"sheet" | "dice" | "compendium" | SessionToolsArea>(isDicePopover ? "dice" : "sheet")
  const activeAreaRef = useRef(activeArea)
  activeAreaRef.current = activeArea
  const [rollHistory, setRollHistory] = useState<DiceHistoryEntry[]>([])
@@ -410,7 +413,7 @@ function App() {
    if(!isAssociatePopover&&!isDicePopover&&!isInitiativePopover)void OBR.popover.close(INITIATIVE_POPOVER_ID).catch(()=>{})
    socket.current?.disconnect()
    socket.current = null
-   setCharacters({}); setAbilities({}); setHp({}); setConditions({}); setRuntimeConfig(null); setSpellLibrary([]); setCreatureRollError(""); setInventoryState(null);setInitiativeState(null);setCompendiumCreatures([]); setSelectedId(""); setRole(""); setRollHistory([]); currentDiceState.current={connected:false,selectedCharacterId:undefined,history:[],characterNames:{},canAdjust:false}; setStatus("Desconectado")
+   setCompanionsById({}); setCharacters({}); setAbilities({}); setHp({}); setConditions({}); setRuntimeConfig(null); setSpellLibrary([]); setCreatureRollError(""); setInventoryState(null);setInitiativeState(null);setCompendiumCreatures([]); setSelectedId(""); setRole(""); setRollHistory([]); currentDiceState.current={connected:false,selectedCharacterId:undefined,history:[],characterNames:{},canAdjust:false}; setStatus("Desconectado")
  }, [])
  useEffect(() => () => { socket.current?.disconnect() }, [])
  const api = useCallback(async <T,>(path: string): Promise<T> => {
@@ -584,6 +587,8 @@ function App() {
          setInitiativeState(state)
          for(const notify of initiativeWaiters.current)notify(state)
        }
+       if (message.type === "session.companions.snapshot") setCompanionsById(Object.fromEntries((message.companions as {creatureId:string}[]).map(entry => [entry.creatureId, entry])) as SessionRuntimeContextValue["companionsById"])
+       if (message.type === "session.companions.updated") setCompanionsById(previous => ({...previous, [String(asRecord(message.companion).creatureId)]: message.companion}) as SessionRuntimeContextValue["companionsById"])
        if (message.type === "session.inventory.snapshot" || message.type === "session.inventory.updated") setInventoryState(asRecord(message.state))
        if (message.type === "session.config.snapshot") setRuntimeConfig(asRecord(message.snapshot))
        if (message.type === "session.conditions.snapshot") setConditions(Object.fromEntries(entries.map((v: unknown) => { const c = v as {characterId: string}; return [c.characterId, asRecord(c)] })))
@@ -853,11 +858,24 @@ function App() {
  <button type="button" className="inline-flex items-center gap-2 rounded-lg border border-accentBorder bg-accentBg px-3 py-2 text-xs font-semibold text-textH" onClick={()=>void openInitiativePopover()}>Abrir iniciativa no mapa ↗</button>
  <button type="button" className="inline-flex items-center gap-2 rounded-lg border border-accentBorder bg-accentBg px-3 py-2 text-xs font-semibold text-textH" onClick={()=>void openDicePopover()}>Abrir rolador separado ↗</button>
  </div>
- {!isDicePopover && <div className="mb-3 flex gap-2 rounded-xl border border-border bg-bg p-1" role="tablist" aria-label="Ferramentas da sessão">
+ {!isDicePopover && <div className="mb-3 flex flex-wrap gap-2 rounded-xl border border-border bg-bg p-1" role="tablist" aria-label="Ferramentas da sessão">
  <button type="button" role="tab" aria-selected={activeArea==="sheet"} onClick={()=>setActiveArea("sheet")} className={`flex-1 rounded-lg px-3 py-2 text-sm font-semibold ${activeArea==="sheet"?"bg-accentBg text-textH":"text-textMuted hover:bg-bg-subtle"}`}>Ficha</button>
+ {([['party','Inventário do grupo'],['ground','Chão'],['companions','Acompanhantes']] as const).map(([area,label]) => <button key={area} type="button" role="tab" aria-selected={activeArea===area} onClick={()=>setActiveArea(area)} className={`flex-1 rounded-lg px-3 py-2 text-sm font-semibold ${activeArea===area?'bg-accentBg text-textH':'text-textMuted hover:bg-bg-subtle'}`}>{label}</button>)}
  <button type="button" role="tab" aria-selected={activeArea==="dice"} onClick={()=>setActiveArea("dice")} className={`flex-1 rounded-lg px-3 py-2 text-sm font-semibold ${activeArea==="dice"?"bg-accentBg text-textH":"text-textMuted hover:bg-bg-subtle"}`}>Dados</button>
  {role==="MASTER" && owlbearRole==="GM" ? <button type="button" role="tab" aria-selected={activeArea==="compendium"} onClick={()=>setActiveArea("compendium")} className={`flex-1 rounded-lg px-3 py-2 text-sm ${activeArea==="compendium"?"bg-accentBg text-textH":"text-textMuted"}`}>Compêndio</button>:null}
  </div>}
+ {(activeArea === "party" || activeArea === "ground" || activeArea === "companions") && sessionId ? <div role="tabpanel">
+   {status !== "Conectado à sessão" ? <p role="status" className="text-textMuted">Reconectando à sessão…</p> : (activeArea !== "companions" && !inventoryState?.initialized) || !runtimeConfig ? <p role="status" className="text-textMuted">Carregando dados da sessão…</p> : <NativeSessionToolsHost key={sessionId} area={activeArea} userId={accountUserId} spells={sessionSpells} runtime={{
+     status: "connected", sessionId, role: role === "MASTER" ? "MASTER" : "PLAYER",
+     runtimeConfigSnapshot: runtimeConfig, inventoryState, initiativeState, companionsById,
+     sessionCharactersById: characters, abilitiesByCharacterId: abilities, hpByCharacterId: hp, conditionsByCharacterId: conditions,
+     characterSnapshotReady: true,
+     initializeHp: () => false, initializeConditions: () => false, initializeInventory: () => false, initializeInitiative: () => false,
+     dispatchInventoryOperation: (operation: unknown) => socket.current?.sendRaw(JSON.stringify({type:"session.inventory.operation",operation})) ?? false,
+     dispatchCompanionOperation: (operation: unknown) => socket.current?.sendRaw(JSON.stringify({type:"session.companions.operation",operation})) ?? false,
+     dispatchInitiativeOperation: (operation: unknown) => socket.current?.sendRaw(JSON.stringify({type:"session.initiative.operation",operation})) ?? false,
+   } as unknown as SessionRuntimeContextValue} />}
+ </div>:null}
  <div role="tabpanel" hidden={activeArea!=="dice"}><SessionDicePanel connected={status==="Conectado à sessão"} selectedCharacterId={selectedId || undefined} history={rollHistory} canAdjust={role==="MASTER"} onAdjust={request=>{
    const old=currentDiceState.current.history.find(entry=>entry.result.id===request.rollId)
    if(old)dedicatedDiceRequests.current.add(old.result.requestId)
@@ -869,7 +887,7 @@ function App() {
  }}/></div>
  {role==="MASTER" && owlbearRole==="GM" ? <div role="tabpanel" hidden={activeArea!=="compendium"}><CreatureSpawner creatures={availableCreatures} connected={status==="Conectado à sessão"} onSpawn={spawnCreatureTokens}/></div>:null}
  {!isDicePopover && <div role="tabpanel" hidden={activeArea!=="sheet"}>
- {catalogCreature && !boundCreature ? <MagicProvider spells={sessionSpells}><div className="grid gap-3"><CreatureQuickSheet data={quickSheetFromCompendiumCreature(catalogCreature,undefined,{enableRolls:false,serverSpellIndexes})} compact/>{catalogEntries.length>0 ? <p className="text-xs text-textMuted">Há várias criaturas deste tipo na iniciativa. Associe o token à instância correta para conjurar e consumir recursos.</p> : <p className="text-xs text-textMuted">Adicione esta criatura à iniciativa para habilitar conjuração e controle de recursos.</p>}{catalogEntries.length>0
+ {activeArea !== "sheet" ? null : catalogCreature && !boundCreature ? <MagicProvider spells={sessionSpells}><div className="grid gap-3"><CreatureQuickSheet data={quickSheetFromCompendiumCreature(catalogCreature,undefined,{enableRolls:false,serverSpellIndexes})} compact/>{catalogEntries.length>0 ? <p className="text-xs text-textMuted">Há várias criaturas deste tipo na iniciativa. Associe o token à instância correta para conjurar e consumir recursos.</p> : <p className="text-xs text-textMuted">Adicione esta criatura à iniciativa para habilitar conjuração e controle de recursos.</p>}{catalogEntries.length>0
   ? <button type="button" onClick={()=>{if(selectedToken)void OBR.popover.open({id:ASSOC_POPOVER_ID,url:"/?panel=associate&tokenId="+encodeURIComponent(selectedToken.id),width:420,height:520,anchorReference:"POSITION",anchorPosition:{left:window.screen.availWidth/2,top:140},anchorOrigin:{horizontal:"CENTER",vertical:"TOP"},transformOrigin:{horizontal:"CENTER",vertical:"TOP"}}).catch(error=>setTokenLinkError(String(error)))}} className="rounded-lg border border-accentBorder bg-accentBg px-3 py-2 text-sm font-semibold">Associar token à criatura</button>
   : <button type="button" disabled={Boolean(pendingCreatureAdd)||!initiativeSession} onClick={addCatalogToInitiative} className="rounded-lg border border-accentBorder bg-accentBg px-3 py-2 text-sm font-semibold disabled:opacity-40">{pendingCreatureAdd?"Aguardando confirmação...":"Adicionar à iniciativa"}</button>}</div></MagicProvider> : boundCreature ? <CreatureTokenInspector key={boundCreature.id} entry={boundCreature} creature={findOwlbearInitiativeCreature(availableCreatures,boundCreature)} spells={sessionSpells} serverSpellIndexes={serverSpellIndexes} creatureRollError={creatureRollError} connected={status==="Conectado à sessão"} onOperation={operation=>socket.current?.sendRaw(JSON.stringify({type:"session.initiative.operation",operation}))??false}/> : selectedId && chosen && <article className="character-panel">
  <CharacterSheetHeader name={String(raw.name ?? selectedId)} id={selectedId} />
