@@ -9,7 +9,7 @@ import { FileImage, Plus, Users, X } from "lucide-react"
 import { useOptionalSessionRuntime } from "../features/session-runtime/useSessionRuntime"
 import { projectCompanionPortraits } from "../shared/session-runtime/companionPortraits"
 
-export function CompanionsView() {
+export function CompanionsView({ allowPresentationEditing = true }: { allowPresentationEditing?: boolean } = {}) {
   const runtime = useOptionalSessionRuntime()
   const [viewingId, setViewingId] = useState<string>()
   const [adding, setAdding] = useState(false)
@@ -66,7 +66,7 @@ export function CompanionsView() {
             <h1 className="font-heading text-xl font-semibold text-textH">Acompanhantes</h1>
             <p className="mt-1 text-sm text-text">Quem acompanha o grupo. As fichas permanecem privadas.</p>
           </div>
-          {isMaster ? <Button className="ml-auto" disabled={!canEdit || saving || !config} onClick={() => { setError(""); setAdding(true) }}>
+          {isMaster && allowPresentationEditing ? <Button className="ml-auto" disabled={!canEdit || saving || !config} onClick={() => { setError(""); setAdding(true) }}>
             <Plus className="h-4 w-4" /> Adicionar acompanhante
           </Button> : null}
         </div>
@@ -79,13 +79,13 @@ export function CompanionsView() {
           {companions.map(companion => (
             <CreaturePortraitCard key={companion.id} name={companion.name} imageUrl={companion.imageUrl}
               onOpen={isMaster ? () => setViewingId(companion.id) : undefined}
-              actions={isMaster ? <Button variant="ghost" size="sm" aria-label={`Remover ${companion.name} dos acompanhantes`} disabled={!canEdit || saving} onClick={() => void setVisible(companion.id, false)}><X className="h-4 w-4" /></Button> : undefined}
+              actions={isMaster && allowPresentationEditing ? <Button variant="ghost" size="sm" aria-label={`Remover ${companion.name} dos acompanhantes`} disabled={!canEdit || saving} onClick={() => void setVisible(companion.id, false)}><X className="h-4 w-4" /></Button> : undefined}
             />
           ))}
         </div>
       ) : (
         <section className="rounded-xl border border-dashed border-border bg-bg p-10 text-center text-textMuted">
-          Nenhum acompanhante apresentado.{isMaster ? " Use Adicionar acompanhante para escolher uma criatura." : " O mestre pode adicionar acompanhantes ao grupo."}
+          Nenhum acompanhante apresentado.{isMaster && allowPresentationEditing ? " Use Adicionar acompanhante para escolher uma criatura." : " O mestre pode adicionar acompanhantes ao grupo."}
         </section>
       )}
       {isMaster && viewingId && config?.creatureCompendium.find(creature => creature.id === viewingId) ? <CreatureStateDialog creature={config.creatureCompendium.find(creature => creature.id === viewingId)!} onClose={() => setViewingId(undefined)} /> : null}
