@@ -99,3 +99,24 @@ test("missing selected entries reject the operation without changing HP", () => 
   assert.equal(result.code, "INITIATIVE_ENTRY_NOT_FOUND")
   assert.deepEqual(before.entries.map(e => e.currentHp), [52, 52])
 })
+
+for (const started of [false, true]) {
+  test(`creature addition preserves extension confirmation ID (started=${started})`, () => {
+    const input = { ...entry('owlbear-token-entry', 'boss'), initiativeBonus: 2 }
+    const before = { ...session([]), started }
+    const operation = { type: 'initiative.entries.add', characterId: 'session', entries: [input] }
+    const added = applyInitiativeOperation(before, operation, null, {}, {})
+    assert.equal(added.ok, true)
+    assert.equal(added.session.entries[0].id, input.id)
+    assert.equal(added.operation.entries[0].id, input.id)
+    const duplicate = applyInitiativeOperation(added.session, operation, null, {}, {})
+    assert.equal(duplicate.ok, false)
+    assert.equal(duplicate.code, 'INITIATIVE_ENTRY_ID_CONFLICT')
+    const batch = applyInitiativeOperation(before, { ...operation, entries: [input, input] }, null, {}, {})
+    assert.equal(batch.ok, false)
+    const legacy = { ...input }; delete legacy.id
+    const generated = applyInitiativeOperation(before, { ...operation, entries: [legacy] }, null, {}, {})
+    assert.equal(generated.ok, true)
+    assert.ok(generated.session.entries[0].id)
+  })
+}

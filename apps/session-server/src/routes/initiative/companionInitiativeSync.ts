@@ -1,5 +1,5 @@
 import type { SessionRuntimeConfigSnapshot } from "../../../../web/src/shared/session-runtime/sessionRuntimeConfig"
-import { allCreatureFeatures, defaultCompanionState, hasPersistentCompanionState, type CompanionState } from "../../../../web/src/shared/session-runtime/companionRuntime"
+import { allCreatureFeatures, reconcileCompanionState, hasPersistentCompanionState, type CompanionState } from "../../../../web/src/shared/session-runtime/companionRuntime"
 import type { InitiativeEntry, InitiativeSession } from "../../../../web/src/models/initiative/Initiative"
 
 /**
@@ -27,7 +27,7 @@ export function synchronizeCompanionInitiative(
     const creatureId = entry.sourceId?.startsWith("compendium:") ? entry.sourceId.slice("compendium:".length) : undefined
     const creature = creatureId ? controlled.get(creatureId) : undefined
     if (!creature) return entry
-    const existing = nextStates[creature.id] ?? defaultCompanionState(creature)
+    const existing = reconcileCompanionState(creature, nextStates[creature.id])
     const previousEntry = previous.get(entry.id)
     if (!previousEntry) {
       // All copies/turns of the same controlled creature share one persistent pool.

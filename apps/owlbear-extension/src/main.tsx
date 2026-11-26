@@ -90,7 +90,7 @@ function App() {
  const assocChannel = useRef<BroadcastChannel|null>(null)
  const associationSnapshot = useRef({sessionId:"",connected:false,characters:[] as {id:string;name:string}[],role:"",catalog:[] as {id:string;name:string}[],creatures:[] as {id:string;name:string;hp?:number;maxHp?:number;armorClass?:number}[]})
  const [compendiumCreatures,setCompendiumCreatures] = useState<CompendiumCreature[]>([])
- const [pendingCreatureAdd,setPendingCreatureAdd] = useState<{tokenId:string;entryId:string;sessionId:string}|null>(null)
+ const [pendingCreatureAdd,setPendingCreatureAdd] = useState<{tokenId:string;entryId:string;sessionId:string;revision:number}|null>(null)
  const [initiativeState,setInitiativeState] = useState<Record<string,unknown>|null>(null)
  const sessionSpells = useMemo(() => resolveOwlbearSpellDefinitions(runtimeConfig, spellLibrary), [runtimeConfig, spellLibrary])
  const serverSpellIndexes = useMemo<ReadonlySet<string>>(() => {
@@ -242,6 +242,11 @@ function App() {
  },[status,selectedId,rollHistory,characterNames,role])
  const [sheetMode, setSheetMode] = useState<"play" | "configuration">("play")
  const [error, setError] = useState("")
+ useEffect(()=>{
+   if(!error)return
+   const timeout=window.setTimeout(()=>setError(""),8000)
+   return()=>window.clearTimeout(timeout)
+ },[error])
  const grant = useRef<string | null>(null)
  const socket = useRef<SessionTransport | null>(null)
  const initiativeSnapshotRef = useRef<Record<string,unknown>|null>(null)
@@ -530,6 +535,7 @@ function App() {
        onKicked:()=>{setError("Acesso à sessão revogado.");disconnect()},
        onStatusChange:state=>{
          if(socket.current !== ws)return
+         if(state === "reconnecting" || state === "error" || state === "disconnected")setPendingCreatureAdd(null)
          setStatus(state === "connected" ? "Conectado à sessão"
            : state === "reconnecting" ? "Reconectando à sessão..."
            : state === "error" ? "Erro de conexão; tentando novamente..."
@@ -569,6 +575,8 @@ function App() {
          const messageText = String(message.message ?? "Erro na sessão.")
          setError(messageText)
          for(const notify of initiativeWaiters.current)notify(null,new Error(messageText))
+         if (String(message.code ?? "").startsWith("INITIATIVE_")) setPendingCreatureAdd(null)
+
          if (String(message.code ?? "").startsWith("CREATURE_")) setCreatureRollError(messageText)
        }
        if (message.type === "session.ready") {
@@ -742,13 +750,28 @@ function App() {
    })
    const entryId = entries[0]?.id
    if (!entryId) { setError("Esta criatura única já está na iniciativa."); return }
-   if(socket.current?.sendRaw(JSON.stringify({type:"session.initiative.operation",operation:{type:"initiative.entries.add",characterId:"session",entries}})))setPendingCreatureAdd({tokenId:selectedToken.id,entryId,sessionId})
+   if(socket.current?.sendRaw(JSON.stringify({type:"session.initiative.operation",operation:{type:"initiative.entries.add",characterId:"session",entries}})))setPendingCreatureAdd({tokenId:selectedToken.id,entryId,sessionId,revision:Number(initiativeState?.revision??0)})
    else setError("Não foi possível enviar a criatura à iniciativa.")
  }
  useEffect(()=>{
+   if(!pendingCreatureAdd)return
+   if(pendingCreatureAdd.sessionId!==sessionId||status!=="Conectado à sessão"||initiativeState?.initialized!==true){
+     setPendingCreatureAdd(null)
+     return
+   }
+   const timeout=window.setTimeout(()=>{
+     setPendingCreatureAdd(null)
+     setError("A confirmação da criatura demorou demais. Verifique a iniciativa antes de tentar novamente.")
+   },15000)
+   return()=>window.clearTimeout(timeout)
+ },[pendingCreatureAdd,sessionId,status,initiativeState?.initialized])
+ useEffect(()=>{
    if(!pendingCreatureAdd||pendingCreatureAdd.sessionId!==sessionId)return
    const entries=Array.isArray(asRecord(initiativeState?.session).entries)?asRecord(initiativeState?.session).entries as Record<string,unknown>[]:[]
-   if(!entries.some(entry=>entry.id===pendingCreatureAdd.entryId))return
+   if(!entries.some(entry=>entry.id===pendingCreatureAdd.entryId)){
+     if(Number(initiativeState?.revision)>pendingCreatureAdd.revision&&entries.length===0)setPendingCreatureAdd(null)
+     return
+   }
    void setTokenCreatureLink(pendingCreatureAdd.tokenId,{sessionId,entryId:pendingCreatureAdd.entryId})
      .then(()=>setPendingCreatureAdd(null))
      .catch(error=>{setError("Criatura adicionada, mas token não foi vinculado: "+String(error));setPendingCreatureAdd(null)})
@@ -822,7 +845,10 @@ function App() {
  return <main className="owlbear-shell">
  <header><strong>{isDicePopover ? "D&D Manager · Dados" : "D&D Manager"}</strong><span>{ready ? "Owlbear conectado" : "Pré-visualização"}</span></header>
  <section>
- {error && <p role="alert" className="error">{error}<button type="button" onClick={()=>setError("")}>Fechar</button></p>}
+ {error && <div role="alert" className="error flex items-start justify-between gap-3">
+   <span className="min-w-0 break-words">{error}</span>
+   <button type="button" aria-label="Fechar aviso de erro" onClick={()=>setError("")} className="shrink-0 rounded border border-current px-2 py-1 text-xs hover:bg-white/10 focus-visible:outline-2 focus-visible:outline-offset-2">Fechar ✕</button>
+ </div>}
  {!connected ? <button type="button" onClick={connectAccount}>Conectar minha conta</button> : <details className="mb-3 rounded-xl border border-border p-3" onToggle={event=>{if(event.currentTarget.open&&owlbearRole==="GM")void refreshSessions()}}>
    <summary className="cursor-pointer text-sm text-textH">Configurações {roomBinding ? "· "+roomBinding.sessionName : "da sala"}</summary>
    <div className="mt-3 grid gap-3">

@@ -134,7 +134,7 @@ import {
 } from "./visibilityDelivery";
 import { resolveCreatureSpellCastAction } from "./creatureSpellCastResolution";
 import type { SessionInitiativeState } from "../../../../web/src/features/session-runtime/initiativeSessionProtocol";
-import { allCreatureFeatures, defaultCompanionState, type CompanionOperation, type CompanionState } from "../../../../web/src/shared/session-runtime/companionRuntime";
+import { allCreatureFeatures, reconcileCompanionState, type CompanionOperation, type CompanionState } from "../../../../web/src/shared/session-runtime/companionRuntime";
 import { applyHitPointDamage } from "../../../../../packages/game-core/src/hitPoints";
 import { resolveDamage } from "../../../../web/src/models/combat/Damage";
 
@@ -345,9 +345,17 @@ export class SessionActor extends DurableObject<Env> {
       readRuntimeConfig(this.ctx.storage),
       this.ctx.storage.get<Record<string, CompanionState>>(COMPANIONS_STATE_KEY),
     ]);
+    const states = { ...saved };
+    let reconciled = false;
+    for (const creature of config?.config.creatureCompendium ?? []) {
+      if (!states[creature.id]) continue;
+      const next = reconcileCompanionState(creature, states[creature.id]);
+      if (next !== states[creature.id]) { states[creature.id] = next; reconciled = true; }
+    }
+    if (reconciled) await this.ctx.storage.put(COMPANIONS_STATE_KEY, states);
     const companions = (config?.config.creatureCompendium ?? [])
       .filter(creature => hasPersistentCompanionState(creature) && canControlCompanion(creature, connection.role, connection.userId))
-      .map(creature => saved?.[creature.id] ?? defaultCompanionState(creature));
+      .map(creature => reconcileCompanionState(creature, states[creature.id]));
     this.send(webSocket, { type: "session.companions.snapshot", companions });
   }
 
@@ -362,7 +370,7 @@ export class SessionActor extends DurableObject<Env> {
   private async persistCompanionResources(creature: CompendiumCreature, entry: InitiativeEntry): Promise<void> {
     if (!hasPersistentCompanionState(creature)) return;
     const stored = (await this.ctx.storage.get<Record<string, CompanionState>>(COMPANIONS_STATE_KEY)) ?? {};
-    const previous = stored[creature.id] ?? defaultCompanionState(creature);
+    const previous = reconcileCompanionState(creature, stored[creature.id]);
     const featureUses = Object.fromEntries(Object.entries(entry.creatureFeatureResources ?? {})
       .map(([id, resource]) => [id, resource.used]));
     const spellSlots = Object.fromEntries(Object.entries(entry.creatureSpellResources?.slots ?? {})
@@ -396,7 +404,7 @@ export class SessionActor extends DurableObject<Env> {
       return;
     }
     const states = (await this.ctx.storage.get<Record<string, CompanionState>>(COMPANIONS_STATE_KEY)) ?? {};
-    const current = states[creature.id] ?? defaultCompanionState(creature);
+    const current = reconcileCompanionState(creature, states[creature.id]);
     let next: CompanionState = { ...current, revision: current.revision + 1 };
     if (operation.type === "hp") {
       const amount = operation.amount;
@@ -514,7 +522,7 @@ export class SessionActor extends DurableObject<Env> {
 
     if (!entry && !request.initiativeEntryId && hasPersistentCompanionState(creature)) {
       const saved = (await this.ctx.storage.get<Record<string, CompanionState>>(COMPANIONS_STATE_KEY)) ?? {};
-      const state = saved[creature.id] ?? defaultCompanionState(creature);
+      const state = reconcileCompanionState(creature, saved[creature.id]);
       entry = createInitiativeEntry({
         sourceId: `compendium:${creature.id}`,
         sourceType: "monster", name: creature.name,

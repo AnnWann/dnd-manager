@@ -4,7 +4,7 @@ import type { OnUseHpEffect } from "../../../../../web/src/models/bonuses/Bonus"
 import { normalizeDamageAffinities, resolveDamage, type DamageAffinity } from "../../../../../web/src/models/combat/Damage"
 import type { CompendiumCreature } from "../../../../../web/src/models/creatures/CompendiumCreature"
 import { normalizeInitiativeSession, updateInitiativeEntry, synchronizeSharedCombatantState, type InitiativeSession } from "../../../../../web/src/models/initiative/Initiative"
-import { defaultCompanionState, type CompanionState } from "../../../../../web/src/shared/session-runtime/companionRuntime"
+import { reconcileCompanionState, type CompanionState } from "../../../../../web/src/shared/session-runtime/companionRuntime"
 import type { SessionHpState } from "../../session/protocol"
 import type { SessionInitiativeState } from "../../initiative/initiativeProtocol"
 
@@ -133,7 +133,7 @@ export function applyHpToReferences(
       }
     } else if (kind === "companion") {
       const creature = targets.creatures.find(entry => entry.id === id)!
-      const prev = targets.companions[id] ?? defaultCompanionState(creature)
+      const prev = reconcileCompanionState(creature, targets.companions[id])
       const affinities = normalizeDamageAffinities([...(creature.damageAffinities ?? []), ...(prev.conditions ?? []).flatMap(condition => condition.bonuses?.damageAffinities ?? [])]);
       const nextHp = applyDamageOrHealing(prev.currentHp, prev.temporaryHp, prev.maxHp, effect, amount, affinities)
       const next = { ...prev, currentHp: nextHp.current, temporaryHp: nextHp.temporary, revision: prev.revision + 1 }

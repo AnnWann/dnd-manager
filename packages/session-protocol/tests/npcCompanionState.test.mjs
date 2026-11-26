@@ -89,3 +89,45 @@ test('master can roll monster damage while only the master receives the descript
   assert.equal(revealed.description, 'Segredo do mestre')
   assert.equal(revealed.damages, undefined)
 })
+
+test('editing Agulha maximum HP reconciles old persistent HP before damage and healing', async () => {
+  const { actor, sockets, data } = setup({ maxHp: 200 })
+  data.set('companions-state', { npc: { creatureId: 'npc', currentHp: 300, maxHp: 350, temporaryHp: 4, conditions: [], featureUses: { feature: 1 }, spellSlots: { 1: 1 }, spellPerDay: {}, revision: 2 } })
+  await actor.sendCompanionsSnapshot(sockets[0])
+  assert.equal(sockets[0].messages.at(-1).companions[0].maxHp, 200)
+  assert.equal(data.get('companions-state').npc.currentHp, 200)
+  await actor.handleCompanionOperation(sockets[0], sockets[0].deserializeAttachment(), { type: 'hp', creatureId: 'npc', mode: 'damage', amount: 20 })
+  const saved = data.get('companions-state').npc
+  assert.equal(saved.maxHp, 200)
+  assert.equal(saved.currentHp, 184)
+  assert.equal(saved.featureUses.feature, 1)
+  assert.equal(saved.spellSlots[1], 1)
+  await actor.handleCompanionOperation(sockets[0], sockets[0].deserializeAttachment(), { type: 'hp', creatureId: 'npc', mode: 'heal', amount: 100 })
+  assert.equal(data.get('companions-state').npc.currentHp, 200)
+})
+test('HP operation directly repairs legacy companion state without reconnecting', async () => {
+  const { actor, sockets, data } = setup({ maxHp: 200 })
+  data.set('companions-state', { npc: { creatureId: 'npc', currentHp: 300, maxHp: 350, temporaryHp: 0, conditions: [], featureUses: {}, spellSlots: {}, spellPerDay: {}, revision: 2 } })
+  await actor.handleCompanionOperation(sockets[0], sockets[0].deserializeAttachment(), { type: 'hp', creatureId: 'npc', mode: 'damage', amount: 16 })
+  assert.equal(data.get('companions-state').npc.currentHp, 184)
+  assert.equal(data.get('companions-state').npc.maxHp, 200)
+})
+
+test('entering initiative after a sheet edit uses updated maximum without restoring resources', () => {
+  const { snapshot } = setup({ maxHp: 200 })
+  const saved = { npc: { creatureId: 'npc', currentHp: 284, maxHp: 350, temporaryHp: 3, featureUses: { feature: 1 }, spellSlots: { 1: 1 }, spellPerDay: {}, revision: 1 } }
+  const entry = createInitiativeEntry({ id: 'turn', sourceId: 'compendium:npc', sourceType: 'monster', name: 'Agulha', currentHp: 350, maxHp: 350, side: 'ally', initiative: 10, initiativeBonus: 0 })
+  const added = synchronizeCompanionInitiative({ entries: [] }, { entries: [entry] }, snapshot, saved)
+  assert.equal(added.session.entries[0].maxHp, 200)
+  assert.equal(added.session.entries[0].currentHp, 200)
+  assert.equal(added.session.entries[0].temporaryHp, 3)
+  assert.equal(added.session.entries[0].creatureFeatureResources.feature.used, 1)
+})
+test('increasing maximum HP preserves current HP instead of healing', async () => {
+  const { actor, sockets, data } = setup({ maxHp: 400 })
+  data.set('companions-state', { npc: { creatureId: 'npc', currentHp: 184, maxHp: 200, temporaryHp: 0, conditions: [], featureUses: {}, spellSlots: {}, spellPerDay: {}, revision: 2 } })
+  await actor.sendCompanionsSnapshot(sockets[0])
+  assert.equal(data.get('companions-state').npc.currentHp, 184)
+  assert.equal(data.get('companions-state').npc.maxHp, 400)
+
+})
