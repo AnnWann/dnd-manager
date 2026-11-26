@@ -4,7 +4,7 @@ import { Modal } from "../components/ui/Modal"
 import { Button } from "../components/ui/Button"
 import { Input } from "../components/ui/Input"
 import { Select } from "../components/ui/Select"
-import { allCreatureFeatures, reconcileCompanionState } from "../shared/session-runtime/companionRuntime"
+import { allCreatureFeatures, defaultCompanionState } from "../shared/session-runtime/companionRuntime"
 import { DAMAGE_TYPE_OPTIONS, type DamageType } from "../models/combat/Damage"
 import {
   CreatureQuickSheet,
@@ -33,7 +33,7 @@ export function CreatureStateDialog({ creature, onClose }: { creature: Compendiu
   }, [session.entries])
 
   const viewingCreature = creature
-  const viewingCompanion = viewingCreature ? reconcileCompanionState(viewingCreature, runtime?.companionsById[viewingCreature.id]) : undefined
+  const viewingCompanion = viewingCreature ? runtime?.companionsById[viewingCreature.id] ?? defaultCompanionState(viewingCreature) : undefined
   const viewingEntry = viewingCreature
     ? initiativeByCreatureId.get(viewingCreature.id)
     : undefined

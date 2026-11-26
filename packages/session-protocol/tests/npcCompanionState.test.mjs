@@ -2,11 +2,11 @@ import assert from 'node:assert/strict'
 import test from 'node:test'
 import { build } from 'esbuild'
 import { fileURLToPath } from 'node:url'
-const built = await build({ stdin: { contents: `export { SessionActor } from './apps/session-server/src/routes/session/SessionActor'; export { createCompendiumCreature } from './apps/web/src/models/creatures/CompendiumCreature'; export { synchronizeCompanionInitiative } from './apps/session-server/src/routes/initiative/companionInitiativeSync'; export { createInitiativeEntry } from './apps/web/src/models/initiative/Initiative'; export { visibleRuntimeConfigSnapshot } from './apps/session-server/src/routes/session/runtimeConfigAccess';`, loader: 'ts', resolveDir: fileURLToPath(new URL('../../../', import.meta.url)) }, bundle: true, platform: 'node', format: 'esm', write: false, conditions: ['types'], plugins: [{ name: 'workers', setup(b) {
+const built = await build({ stdin: { contents: `export { SessionActor } from './apps/session-server/src/routes/session/SessionActor'; export { SessionActor as AuthoritativeSessionActor } from './apps/session-server/src/routes/session/AuthoritativeSessionActor'; export { createCompendiumCreature } from './apps/web/src/models/creatures/CompendiumCreature'; export { synchronizeCompanionInitiative } from './apps/session-server/src/routes/initiative/companionInitiativeSync'; export { createInitiativeEntry } from './apps/web/src/models/initiative/Initiative'; export { visibleRuntimeConfigSnapshot } from './apps/session-server/src/routes/session/runtimeConfigAccess';`, loader: 'ts', resolveDir: fileURLToPath(new URL('../../../', import.meta.url)) }, bundle: true, platform: 'node', format: 'esm', write: false, conditions: ['types'], plugins: [{ name: 'workers', setup(b) {
   b.onResolve({ filter: /^cloudflare:workers$/ }, () => ({ path: 'workers', namespace: 'test-workers' }))
   b.onLoad({ filter: /.*/, namespace: 'test-workers' }, () => ({ contents: 'export class DurableObject { constructor(ctx) { this.ctx = ctx } }' }))
 } }] })
-const { SessionActor, createCompendiumCreature, synchronizeCompanionInitiative, createInitiativeEntry, visibleRuntimeConfigSnapshot } = await import('data:text/javascript;base64,' + Buffer.from(built.outputFiles[0].contents).toString('base64'))
+const { SessionActor, AuthoritativeSessionActor, createCompendiumCreature, synchronizeCompanionInitiative, createInitiativeEntry, visibleRuntimeConfigSnapshot } = await import('data:text/javascript;base64,' + Buffer.from(built.outputFiles[0].contents).toString('base64'))
 function setup(extra = {}) {
   const npc = createCompendiumCreature({ id: 'npc', name: 'Rosa', maxHp: 20, showInCompanions: true, ...extra })
   npc.actions = [{ id: 'feature', name: 'Comando', usage: { max: 2, reset: 'longRest' } }]
@@ -16,7 +16,7 @@ function setup(extra = {}) {
   const sockets = ['MASTER', 'PLAYER'].map(role => ({ messages: [], deserializeAttachment: () => ({ role, userId: role === 'MASTER' ? 'dm' : 'owner', visibleCharacterIds: [], lastHeartbeatAt: Date.now() }), send(raw) { this.messages.push(JSON.parse(raw)) } }))
   const ctx = { storage: { get: async key => structuredClone(data.get(key)), put: async (key, value) => { if (typeof key === 'string') data.set(key, structuredClone(value)); else for (const [k, v] of Object.entries(key)) data.set(k, structuredClone(v)) } }, getWebSockets: () => sockets }
   ctx.storage.transaction = async callback => callback(ctx.storage)
-  return { npc, snapshot, data, sockets, actor: new SessionActor(ctx) }
+  return { npc, snapshot, data, sockets, ctx, actor: new SessionActor(ctx) }
 }
 test('master maintains unassigned NPC HP, feature uses and spell slots outside initiative', async () => {
   const { actor, sockets, data } = setup()
@@ -130,4 +130,30 @@ test('increasing maximum HP preserves current HP instead of healing', async () =
   assert.equal(data.get('companions-state').npc.currentHp, 184)
   assert.equal(data.get('companions-state').npc.maxHp, 400)
 
+})
+
+test('publishing edited compendium updates stored HP and existing initiative before three damage operations', async () => {
+  const { snapshot, sockets, data, ctx } = setup({ maxHp: 350 })
+  for (const socket of sockets) socket.serializeAttachment = () => {}
+  const authority = new AuthoritativeSessionActor(ctx)
+  const saved = { creatureId: 'npc', currentHp: 350, maxHp: 350, temporaryHp: 0, conditions: [], featureUses: { feature: 1 }, spellSlots: { 1: 1 }, spellPerDay: {}, revision: 2 }
+  data.set('companions-state', { npc: saved })
+  const entry = createInitiativeEntry({ id: 'turn', sourceId: 'compendium:npc', sourceType: 'monster', name: 'Agulha', currentHp: 350, maxHp: 350, side: 'ally', initiative: 10, initiativeBonus: 0 })
+  data.set('initiative-state', { initialized: true, revision: 1, session: { version: 1, id: 'combat', entries: [entry], started: false, round: 1 } })
+  const edited = structuredClone(snapshot)
+  edited.creationRevision += 1
+  edited.config.creatureCompendium[0].maxHp = 200
+  await authority.handleRuntimeConfigPublish(sockets[0], edited)
+  assert.equal(data.get('runtime-config-state').config.creatureCompendium[0].maxHp, 200)
+  assert.equal(data.get('companions-state').npc.maxHp, 200)
+  assert.equal(data.get('companions-state').npc.currentHp, 200)
+  assert.equal(data.get('initiative-state').session.entries[0].maxHp, 200)
+  assert.equal(data.get('initiative-state').session.entries[0].currentHp, 200)
+  for (let i = 0; i < 3; i++) {
+    await authority.handleCompanionOperation(sockets[0], sockets[0].deserializeAttachment(), { type: 'hp', creatureId: 'npc', mode: 'damage', amount: 52 })
+  }
+  assert.equal(data.get('companions-state').npc.currentHp, 44)
+  assert.equal(data.get('initiative-state').session.entries[0].currentHp, 44)
+  assert.equal(data.get('companions-state').npc.featureUses.feature, 1)
+  assert.equal(data.get('companions-state').npc.spellSlots[1], 1)
 })

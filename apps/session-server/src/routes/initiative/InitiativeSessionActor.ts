@@ -139,7 +139,9 @@ export class SessionActor {
       return;
     }
 
-    const current = normalizeInitiativeSession(state.session as Partial<InitiativeSession>);
+    const current = projectInitiativeSessionFromCreatureState(
+      normalizeInitiativeSession(state.session as Partial<InitiativeSession>), runtimeConfig,
+    ).session;
     if (connection.role !== "MASTER" && operation.type === "initiative.deathSaves.set") {
       const entry = current.entries.find((candidate) => candidate.id === operation.entryId);
       const linkedCharacterId = linkedCharacterIdForInitiativeEntry(entry);

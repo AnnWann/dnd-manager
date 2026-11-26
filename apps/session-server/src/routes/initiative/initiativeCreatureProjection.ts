@@ -2,6 +2,8 @@ import type { SessionRuntimeConfigSnapshot } from "../../../../web/src/shared/se
 import { getCreatureEffectiveArmorClass } from "../../../../web/src/models/creatures/CreatureCombatRuntime";
 import type { InitiativeSession } from "../../../../web/src/models/initiative/Initiative";
 
+import { hasPersistentCompanionState } from "../../../../web/src/shared/session-runtime/companionRuntime";
+
 export const COMPENDIUM_SOURCE_PREFIX = "compendium:";
 
 export function projectInitiativeSessionFromCreatureState(
@@ -15,9 +17,15 @@ export function projectInitiativeSessionFromCreatureState(
     const creature = creatureForEntry(entry.sourceId, creatures);
     if (!creature) return entry;
     const armorClass = getCreatureEffectiveArmorClass(creature, entry.conditions, entry);
-    if (entry.armorClass === armorClass) return entry;
+    // Controlled creatures use the edited sheet maximum in both combat and
+    // persistent state. Project it before damage, never just after rendering.
+    const maxHp = hasPersistentCompanionState(creature)
+      ? Math.max(1, Math.trunc(creature.maxHp ?? 1)) : entry.maxHp;
+    const currentHp = maxHp === undefined || entry.currentHp === undefined
+      ? entry.currentHp : Math.max(0, Math.min(entry.currentHp, maxHp));
+    if (entry.armorClass === armorClass && entry.maxHp === maxHp && entry.currentHp === currentHp) return entry;
     changed = true;
-    return { ...entry, armorClass };
+    return { ...entry, armorClass, maxHp, currentHp };
   });
   return {
     changed,
