@@ -57,3 +57,11 @@ export function canControlCompanion(creature: Pick<CompendiumCreature, "ownerUse
 export function hasPersistentCompanionState(creature: Pick<CompendiumCreature, "ownerUserId" | "showInCompanions">): boolean {
   return Boolean(creature.ownerUserId) || creature.showInCompanions === true
 }
+
+/** The edited sheet owns maximum HP; persistent combat resources remain intact. */
+export function reconcileCompanionState(creature: CompendiumCreature, saved?: CompanionState): CompanionState {
+  if (!saved) return defaultCompanionState(creature)
+  const maxHp = Math.max(1, Math.trunc(creature.maxHp ?? 1))
+  if (saved.maxHp === maxHp) return saved
+  return { ...saved, maxHp, currentHp: Math.max(0, Math.min(saved.currentHp, maxHp)), revision: saved.revision + 1 }
+}

@@ -589,6 +589,10 @@ export function applyInitiativeOperation(
       const inputs = operation.entries.flatMap((entry) => normalizeEntryInput(entry));
       if (inputs.length !== operation.entries.length) return invalid("INITIATIVE_ENTRY_INVALID", "One or more initiative entries are invalid.");
       const existingIds = new Set(current.entries.map((entry) => entry.id));
+      const requestedIds = inputs.flatMap(entry => entry.id ? [entry.id] : []);
+      if (new Set(requestedIds).size !== requestedIds.length || requestedIds.some(id => existingIds.has(id))) {
+        return invalid("INITIATIVE_ENTRY_ID_CONFLICT", "Initiative entry IDs must be unique.");
+      }
       const session = current.started
         ? addEntriesDuringCombat(current, inputs)
         : addInitiativeEntries(current, inputs);
@@ -1032,6 +1036,7 @@ function normalizeEntryInput(value: Record<string, unknown>): NewInitiativeEntry
   if (sourceType !== "character" && sourceType !== "npc" && sourceType !== "monster" && sourceType !== "custom") return [];
   if (side !== "ally" && side !== "enemy" && side !== "neutral") return [];
   return [{
+    id: optionalString(value.id),
     sourceId: optionalString(value.sourceId),
     combatantId: optionalString(value.combatantId),
     sourceType,
